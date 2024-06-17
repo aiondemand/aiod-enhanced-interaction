@@ -38,7 +38,7 @@ class ConvertJsonToString:
         return json.dumps(data)
     
     @classmethod
-    def extract_relevant_info(cls, data: dict, stringify: bool = True) -> str:
+    def extract_relevant_info(cls, data: dict, stringify: bool = False) -> str:
         simple_data = cls._extract_relevant_fields(data)
         if stringify:
             return json.dumps(simple_data)

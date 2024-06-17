@@ -78,8 +78,5 @@ if __name__ == "__main__":
 
     process_documents_and_store_to_filesystem(
         client, collection_name, savedir=savedir,
-        extraction_function=partial(
-            ConvertJsonToString.extract_relevant_info, 
-            stringify=False
-        )
+        extraction_function=ConvertJsonToString.extract_relevant_info,
     )

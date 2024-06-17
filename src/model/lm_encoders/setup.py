@@ -31,6 +31,7 @@ class ModelSetup:
         "sentence-transformers/all-MiniLM-L12-v2",
 
         "BAAI/bge-large-en-v1.5",
+        "BAAI/bge-base-en-v1.5",
         "BAAI/bge-small-en-v1.5",
         "llmrails/ember-v1",
         "thenlper/gte-large",
@@ -230,7 +231,6 @@ class ModelSetup:
         model.eval()
         return model
     
-
     @staticmethod
     def _init_chunk_transformer(
         hidden_size: int, max_num_chunks: int, num_layers: int = 6,

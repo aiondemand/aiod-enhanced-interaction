@@ -6,13 +6,17 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 
 import utils
-
+from model.base import EmbeddingModel
 
 class TokenizerTextSplitter:
     def __init__(
-        self, tokenizer: PreTrainedTokenizer, chunk_size: int, chunk_overlap: float
+        self, tokenizer: PreTrainedTokenizer, 
+        chunk_size: int = None, chunk_overlap: float = 0.25
     ) -> None:
         self.tokenizer = tokenizer
+        if chunk_size is None:
+            chunk_size = tokenizer.model_max_length - 2
+
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
@@ -35,13 +39,7 @@ class TokenizerTextSplitter:
         return chunks
 
 
-class RepresentationModel(ABC):
-    """
-    Abstract class that represents "representation model" used for training using
-    TrainingModule class
-
-    "Representation models" calculate embeddings/representations of input documents
-    """
+class RepresentationModel(EmbeddingModel):
     @abstractmethod
     def forward(self, texts: list[str]) -> torch.Tensor:
         """
@@ -203,10 +201,7 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
         self.max_supported_chunks = max_supported_chunks
 
         if text_splitter is None:
-            text_splitter = TokenizerTextSplitter(
-                self.tokenizer, self.tokenizer.model_max_length - 2, 
-                chunk_overlap=0.25
-            )
+            text_splitter = TokenizerTextSplitter(self.tokenizer)
         self.text_splitter = text_splitter
 
     def forward(self, texts: dict) -> torch.Tensor:
