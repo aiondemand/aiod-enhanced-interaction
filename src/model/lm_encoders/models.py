@@ -1,6 +1,6 @@
 from typing import Callable
 import torch
-from abc import ABC, abstractmethod 
+from abc import abstractmethod 
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from sentence_transformers import SentenceTransformer
 import numpy as np

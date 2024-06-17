@@ -7,7 +7,6 @@ import os
 import os
 from torch.utils.data import Dataset, DataLoader
 from chromadb.api.client import Client
-from functools import partial
 import numpy as np
 
 import utils
@@ -28,9 +27,9 @@ class AIoD_Documents(Dataset):
         
     def __getitem__(self, idx: int) -> tuple[str, int]:
         doc_id = self.split_document_ids[idx]
-    
         with open(os.path.join(self.dirpath, f"{doc_id}.txt")) as f:
             text = f.read()
+            
         return text, str(doc_id)
 
     def __len__(self) -> int:

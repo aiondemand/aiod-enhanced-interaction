@@ -1,5 +1,5 @@
-from pymilvus import MilvusClient
-from pymilvus import DataType
+import os
+import sys
 from torch.utils.data import DataLoader
 from chromadb.api.client import Client
 from chromadb import Collection
@@ -12,6 +12,9 @@ from model.lm_encoders.setup import ModelSetup
 from model.base import EmbeddingModel
 import utils
 from dataset import AIoD_Documents
+
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(src_dir)
 
 
 class Chroma_EmbeddingStore:
@@ -117,11 +120,9 @@ class Chroma_EmbeddingStore:
 def compute_embeddings_wrapper(
     client: Client, model: EmbeddingModel, text_dirpath: str, new_collection_name: str
 ) -> None:
-    text_dirpath = "./data/extracted_data"
     ds = AIoD_Documents(text_dirpath)
-    loader = ds.build_loader({"batch_size": 4, "num_workers": 2})
+    loader = ds.build_loader({"batch_size": 16, "num_workers": 2})
 
-    new_collection_name = "test_collection"
     store = Chroma_EmbeddingStore(client, verbose=True)
     store.store_embeddings(model, loader, new_collection_name)
     
@@ -135,6 +136,7 @@ if __name__ == "__main__":
         pooling="mean", 
         parallel_chunk_processing=True
     )
-    text_dirpath = "data/extracted_data"
+    text_dirpath = "data/texts"
+    collection_name = "embeddings-BAAI-simple"
 
-    compute_embeddings_wrapper(client, model, text_dirpath, "testing")
+    compute_embeddings_wrapper(client, model, text_dirpath, collection_name)

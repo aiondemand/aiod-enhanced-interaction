@@ -12,9 +12,6 @@ from utils import init
 
 
 def parse_function_string(function_str: str) -> Callable[[dict], str]:
-    # posledna part -> funkcia
-    # predposlena part -> module/class
-    # ostatne -> module
     str_parts = function_str.split(".")
     module_names, function_name = (
         str_parts[:-1], str_parts[-1]
