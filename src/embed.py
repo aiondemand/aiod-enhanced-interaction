@@ -1,3 +1,5 @@
+import json
+import pandas as pd
 import os
 import sys
 from torch.utils.data import DataLoader
@@ -82,13 +84,17 @@ class Chroma_EmbeddingStore:
 
     def semantic_search(
         self, model: EmbeddingModel, query_list: list[tuple[str, int]],
-        collection_name: str, topk: int = 10, chroma_batch_size: int = 50
+        emb_collection_name: str, topk: int = 10, chroma_batch_size: int = 50
     ) -> list:
         was_training = model.training
         model.eval()
-        collection = self._get_collection(collection_name)
+        collection = self._get_collection(emb_collection_name)
 
-        all_results = []
+        all_results = {
+            "doc_ids": [],
+            "distances": [],
+
+        }
         all_embeddings = []        
         query_loader = DataLoader(
             query_list, collate_fn=AIoD_Documents._collate_fn, batch_size=4, num_workers=2
@@ -108,13 +114,41 @@ class Chroma_EmbeddingStore:
                     n_results=topk,
                     include=["metadatas", "distances"]
                 )
-                # TODO postprocess the retrieved results
-                all_results.extend(sem_search_results)
+                doc_ids = [
+                    [
+                        doc["doc_id"] for doc in q_docs
+                    ] 
+                    for q_docs in sem_search_results["metadatas"]
+                ]
+
+                all_results["doc_ids"].extend(doc_ids)
+                all_results["distances"].extend(sem_search_results["distances"])
+
                 all_embeddings = []
         
         if was_training:
             model.train()
         return all_results
+    
+    def retrieve_documents_from_result_set(
+        self, result_set: dict[str, list[list[str] | list[int]]],
+        document_collection_name: str
+    ) -> None:
+        all_docs = []
+        col = self.client.get_collection(document_collection_name)
+
+        for doc_ids in result_set["doc_ids"]:
+            revert_indices = np.argsort(
+                pd.Series(doc_ids).sort_values().index
+            )
+            response = col.get(result_set["doc_ids"][0])["metadatas"]
+            documents = [
+                json.loads(meta["json_string"])
+                for meta in np.array(response)[revert_indices]
+            ]
+            all_docs.append(documents)
+
+        return all_docs
 
 
 def compute_embeddings_wrapper(
@@ -140,3 +174,12 @@ if __name__ == "__main__":
     collection_name = "embeddings-BAAI-simple"
 
     compute_embeddings_wrapper(client, model, text_dirpath, collection_name)
+
+    # Perform semantic search
+    # store = Chroma_EmbeddingStore(client, verbose=True)
+    # QUERY = "I want a dataset about movies reviews"
+    # query_list = [(QUERY, 0)]
+    # results = store.semantic_search(model, query_list, collection_name)
+    # top_docs = store.retrieve_documents_from_result_set(
+    #     results, document_collection_name="datasets"
+    # )

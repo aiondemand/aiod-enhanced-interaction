@@ -81,6 +81,10 @@ For instance, ChromaDB collection `embeddings-BAAI-simple` contains embeddings c
 }
 ```
 
+### Embedding pipeline
+
+[![Embedding pipeline](./emb_pipeline.png)]
+
 ## Enhancing tasks
 
 In this section, we can find descriptions of tasks we want to perform in efforts to enhance the AIoD search experience
