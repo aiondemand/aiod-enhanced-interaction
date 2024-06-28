@@ -110,6 +110,7 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
     def __init__(
         self, transformer: PreTrainedModel | SentenceTransformerToHF, 
         tokenizer: PreTrainedTokenizer, pooling: str = "max", 
+        document_max_length: int = -1,
         global_attention_mask: bool = False, 
         preprocess_text_fn: Callable[[str], str] = None
     ) -> None:
@@ -124,6 +125,7 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         self.transformer = transformer
         self.tokenizer = tokenizer
         self.pooling = pooling
+        self.document_max_length = document_max_length
         self.global_attention_mask = global_attention_mask
         self.preprocess_text_fn = preprocess_text_fn
 
@@ -143,6 +145,10 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         encodings = self.tokenizer(
             texts, return_tensors="pt", padding=True, truncation=True
         ).to(utils.get_device())
+
+        if self.document_max_length > 0:
+            for k, v in encodings.items():
+                encodings[k] = v[:, :self.document_max_length]
         if self.global_attention_mask:
             encodings["global_attention_mask"] = torch.zeros_like(
                 encodings["attention_mask"], device=utils.get_device()
