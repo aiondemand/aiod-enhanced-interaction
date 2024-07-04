@@ -8,6 +8,7 @@ import numpy as np
 import utils
 from model.base import EmbeddingModel
 
+
 class TokenizerTextSplitter:
     def __init__(
         self, tokenizer: PreTrainedTokenizer, 

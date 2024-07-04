@@ -163,7 +163,7 @@ def compute_embeddings_wrapper(
 
 if __name__ == "__main__":
     client = utils.init()
-    model = ModelSetup._setup_sentence_transformer_hierarchical(
+    model = ModelSetup.setup_hierarchical_model(
         model_path="BAAI/bge-base-en-v1.5",
         max_num_chunks=5,
         use_chunk_transformer=False,
@@ -171,7 +171,6 @@ if __name__ == "__main__":
         chunk_pooling="mean", 
         parallel_chunk_processing=True
     )
-
     text_dirpath = "data/texts"
     collection_name = "embeddings-BAAI-simple"
 
