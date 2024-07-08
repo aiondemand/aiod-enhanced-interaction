@@ -163,16 +163,13 @@ def compute_embeddings_wrapper(
 
 if __name__ == "__main__":
     client = utils.init()
-    model = ModelSetup.setup_hierarchical_model(
-        model_path="BAAI/bge-base-en-v1.5",
-        max_num_chunks=5,
-        use_chunk_transformer=False,
-        token_pooling="CLS_token",
-        chunk_pooling="mean", 
-        parallel_chunk_processing=True
-    )
-    text_dirpath = "data/texts"
-    collection_name = "embeddings-BAAI-simple"
+
+    model = ModelSetup._setup_gte_large()
+    # model = ModelSetup._setup_gte_qwen2()
+    # model = ModelSetup._setup_multilingual_e5_large()
+
+    text_dirpath = "data/extracted_data"
+    collection_name = "gte_large"
 
     compute_embeddings_wrapper(client, model, text_dirpath, collection_name)
 

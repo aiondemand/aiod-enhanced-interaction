@@ -74,10 +74,9 @@ class SentenceTransformerToHF(torch.nn.Module):
     'hf_transformer': HuggingFace model
     'tokenizer': HuggingFace tokenizer
     """
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.model_path = model_path
-        self.sentence_transformer = SentenceTransformer(model_path, device="cpu")
+        self.sentence_transformer = SentenceTransformer(*args, **kwargs, device="cpu")
 
         self.hf_transformer = self.sentence_transformer[0].auto_model
         self.tokenizer = self.sentence_transformer[0].tokenizer
@@ -172,7 +171,8 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
         chunk_pooling: str = "mean", 
         parallel_chunk_processing: bool = True,
         max_supported_chunks: int = -1,
-        text_splitter: TokenizerTextSplitter = None
+        text_splitter: TokenizerTextSplitter = None,
+        preprocess_text_fn: Callable[[str], str] = None
     ) -> None:
         """
         Arguments:
@@ -210,6 +210,8 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
         if text_splitter is None:
             text_splitter = TokenizerTextSplitter(self.tokenizer)
         self.text_splitter = text_splitter
+
+        self.preprocess_text_fn = preprocess_text_fn
 
     def forward(self, texts: dict) -> torch.Tensor:
         encoding = self.preprocess_input(texts)
@@ -290,6 +292,8 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
         return doc_embedding
 
     def preprocess_input(self, texts: list[str]) -> dict:
+        if self.preprocess_text_fn is not None:
+            texts = [self.preprocess_text_fn(t) for t in texts]
         chunked_texts = [self.text_splitter(t) for t in texts]
             
         # apply chunk cap limit

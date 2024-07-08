@@ -10,11 +10,15 @@ from .models import (
     RepresentationModel, 
     Basic_RepresentationModel, 
     HierarchicalLM_TrainingModel,
-    SentenceTransformerToHF
+    SentenceTransformerToHF,
+    TokenizerTextSplitter
 )
 
 import utils
 
+# TODO this model setup is still pretty ugly for my taste...
+# For now we are interested in only the following functions initializing LM
+    # 
 
 class ModelSetup:
     """
@@ -34,6 +38,7 @@ class ModelSetup:
         "llmrails/ember-v1",
         "thenlper/gte-large",
         "intfloat/e5-large-v2",
+        "Alibaba-NLP/gte-large-en-v1.5",
     ]
     tested_hf_hierarchical_transformers = [
         "WhereIsAI/UAE-Large-V1",
@@ -58,7 +63,7 @@ class ModelSetup:
             raise ValueError(f"{model_path} model is not supported yet")
         
         if model_path in cls.tested_sentence_transformers:
-            transformer = SentenceTransformerToHF(model_path=model_path)
+            transformer = SentenceTransformerToHF(model_path)
             tokenizer = transformer.tokenizer
             token_pooling = "none"
         elif model_path in cls.tested_hf_hierarchical_transformers:
@@ -111,7 +116,7 @@ class ModelSetup:
     def _setup_sentence_transformer_no_hierarchical(
         cls, model_path: str, document_max_length: int = -1
     ) -> Basic_RepresentationModel:
-        transformer = SentenceTransformerToHF(model_path=model_path)
+        transformer = SentenceTransformerToHF(model_path)
         model = Basic_RepresentationModel(
             transformer, transformer.tokenizer, pooling="none",
             document_max_length=document_max_length
@@ -160,6 +165,66 @@ class ModelSetup:
         model.to(utils.get_device())
         return model
     
+    @classmethod
+    def _setup_multilingual_e5_large(cls) -> HierarchicalLM_TrainingModel:    
+        transformer = SentenceTransformerToHF("intfloat/multilingual-e5-large")
+        prepend_prompt_fn = lambda t: "query: " + t
+
+        text_splitter = TokenizerTextSplitter(transformer.tokenizer, chunk_size=512)
+
+        model = HierarchicalLM_TrainingModel(
+            transformer, 
+            tokenizer=transformer.tokenizer,
+            token_pooling="none",
+            chunk_pooling="mean",
+            max_supported_chunks=8,
+            text_splitter=text_splitter,
+            preprocess_text_fn=prepend_prompt_fn
+        )
+        model.eval()
+        model.to(utils.get_device())
+        return model
+
+    @classmethod
+    def _setup_gte_large(cls) -> Basic_RepresentationModel: 
+        transformer = SentenceTransformerToHF(
+            "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
+        )
+        model = Basic_RepresentationModel(
+            transformer, 
+            transformer.tokenizer, 
+            pooling="none", 
+            document_max_length=transformer.tokenizer.model_max_length
+        )
+        model.eval()
+        model.to(utils.get_device())
+        return model
+        
+    @classmethod
+    def _setup_gte_qwen2(
+        cls, prepend_prompt: str = None,
+    ) -> Basic_RepresentationModel:
+        transformer = SentenceTransformerToHF(
+            "Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True
+        )
+        if prepend_prompt is None:
+            prepend_prompt = (
+                "Instruct: Given a search query, "
+                + "retrieve relevant assets defined in the query\nQuery: "
+            )
+        prepend_prompt_fn = lambda t: prepend_prompt + t
+
+        model = Basic_RepresentationModel(
+            transformer, 
+            transformer.tokenizer,
+            pooling="none",
+            document_max_length=transformer.tokenizer.model_max_length,
+            preprocess_text_fn=prepend_prompt_fn
+        )
+        model.eval()
+        model.to(utils.get_device())
+        return model
+        
     @staticmethod
     def _init_chunk_transformer(
         hidden_size: int, max_num_chunks: int, num_layers: int = 6

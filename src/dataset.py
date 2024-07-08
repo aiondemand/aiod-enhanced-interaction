@@ -72,7 +72,7 @@ def process_documents_and_store_to_filesystem(
 
 if __name__ == "__main__":
     client = utils.init(return_chroma_client=True)
-    savedir = "./data/extracted_data2"
+    savedir = "./data/extracted_data"
     collection_name = "datasets"
 
     process_documents_and_store_to_filesystem(
