@@ -12,7 +12,7 @@ from model.base import EmbeddingModel
 class TokenizerTextSplitter:
     def __init__(
         self, tokenizer: PreTrainedTokenizer, 
-        chunk_size: int = None, chunk_overlap: float = 0.25
+        chunk_size: int | None = None, chunk_overlap: float = 0.25
     ) -> None:
         self.tokenizer = tokenizer
         if chunk_size is None:
@@ -112,7 +112,7 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         tokenizer: PreTrainedTokenizer, pooling: str = "max", 
         document_max_length: int = -1,
         global_attention_mask: bool = False, 
-        preprocess_text_fn: Callable[[str], str] = None
+        preprocess_text_fn: Callable[[str], str] | None = None
     ) -> None:
         """
         Arguments:
@@ -142,13 +142,17 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         if self.preprocess_text_fn is not None:
             texts = [self.preprocess_text_fn(t) for t in texts]
 
+        doc_max_length = (
+            self.document_max_length 
+            if self.document_max_length > 0 
+            else self.tokenizer.model_max_length
+        )
         encodings = self.tokenizer(
-            texts, return_tensors="pt", padding=True, truncation=True
+            texts, return_tensors="pt", 
+            padding=True, truncation=True,
+            max_length=doc_max_length
         ).to(utils.get_device())
 
-        if self.document_max_length > 0:
-            for k, v in encodings.items():
-                encodings[k] = v[:, :self.document_max_length]
         if self.global_attention_mask:
             encodings["global_attention_mask"] = torch.zeros_like(
                 encodings["attention_mask"], device=utils.get_device()
@@ -165,14 +169,14 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
     """
     def __init__(
         self, input_transformer: PreTrainedTokenizer, 
-        chunk_transformer: PreTrainedTokenizer = None, 
-        tokenizer: PreTrainedTokenizer = None, 
+        chunk_transformer: PreTrainedTokenizer | None = None, 
+        tokenizer: PreTrainedTokenizer | None = None, 
         token_pooling: str = "CLS_token", 
         chunk_pooling: str = "mean", 
         parallel_chunk_processing: bool = True,
         max_supported_chunks: int = -1,
-        text_splitter: TokenizerTextSplitter = None,
-        preprocess_text_fn: Callable[[str], str] = None
+        text_splitter: TokenizerTextSplitter | None = None,
+        preprocess_text_fn: Callable[[str], str] | None = None
     ) -> None:
         """
         Arguments:
@@ -220,7 +224,7 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
     def _forward(self, encodings: dict) -> torch.Tensor:
         chunk_embeddings = self._first_level_forward(
             encodings["input_encodings"],
-            encodings.get("max_num_chunks", None)
+            encodings["max_num_chunks"]
         )
         return self._second_level_forward(
             chunk_embeddings, 
@@ -228,7 +232,7 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
         )
     
     def _first_level_forward(
-            self, input_encodings: list[dict] | dict, max_num_chunks: int = None
+            self, input_encodings: list[dict] | dict, max_num_chunks: int
         ) -> list[torch.Tensor]:
         """Function representing a forward pass of the first-level transformer"""
         if self.parallel_chunk_processing:

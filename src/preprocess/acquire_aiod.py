@@ -12,10 +12,10 @@ import utils
 
 
 def populate_database_with_assets(base_url: str, asset_name: str, savedir: str) -> None:
-    new_collection_name = f"{asset_name}-docs"
-    
+    new_collection_name = f"{asset_name}-docs"    
     chroma_client = utils.init(return_chroma_client=True)
     collection_names = [col.name for col in chroma_client.list_collections()]
+
     if new_collection_name in collection_names:
         raise ValueError(f"Collection '{new_collection_name}' already exists")
 
@@ -43,8 +43,13 @@ def get_aiod_assets(
         datasets = _perform_request(url, queries)
 
         if (
-            len(datasets) != win_size or 
+            (
+                # all but the last request
+                offset + win_size <= total_number and
+                len(datasets) != win_size 
+            ) or
             (   
+                # last get request 
                 offset + win_size > total_number and 
                 len(datasets) != total_number % win_size
             )
@@ -57,7 +62,7 @@ def get_aiod_assets(
 
 
 def _perform_request(
-    url: str, params: dict = None, num_retries: int = 3, 
+    url: str, params: dict | None = None, num_retries: int = 3, 
     timeout_sleep_duration: int = 60
 ) -> dict | None:
     for _ in range(num_retries):

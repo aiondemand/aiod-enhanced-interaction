@@ -164,20 +164,21 @@ class ModelSetup:
         model.eval()
         model.to(utils.get_device())
         return model
-    
+        
     @classmethod
     def _setup_multilingual_e5_large(cls) -> HierarchicalLM_TrainingModel:    
         transformer = SentenceTransformerToHF("intfloat/multilingual-e5-large")
         prepend_prompt_fn = lambda t: "query: " + t
 
-        text_splitter = TokenizerTextSplitter(transformer.tokenizer, chunk_size=512)
-
+        text_splitter = TokenizerTextSplitter(
+            transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
+        )
         model = HierarchicalLM_TrainingModel(
             transformer, 
             tokenizer=transformer.tokenizer,
             token_pooling="none",
             chunk_pooling="mean",
-            max_supported_chunks=8,
+            max_supported_chunks=11, # to cover 4k document
             text_splitter=text_splitter,
             preprocess_text_fn=prepend_prompt_fn
         )
@@ -186,15 +187,20 @@ class ModelSetup:
         return model
 
     @classmethod
-    def _setup_gte_large(cls) -> Basic_RepresentationModel: 
+    def _setup_gte_large(
+        cls, model_max_length: int | None = None
+    ) -> Basic_RepresentationModel: 
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
         )
+        if model_max_length is None:
+            model_max_length = transformer.tokenizer.model_max_length
+
         model = Basic_RepresentationModel(
             transformer, 
             transformer.tokenizer, 
             pooling="none", 
-            document_max_length=transformer.tokenizer.model_max_length
+            document_max_length=model_max_length
         )
         model.eval()
         model.to(utils.get_device())
@@ -202,7 +208,7 @@ class ModelSetup:
         
     @classmethod
     def _setup_gte_qwen2(
-        cls, prepend_prompt: str = None,
+        cls, prepend_prompt: str | None = None,
     ) -> Basic_RepresentationModel:
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True

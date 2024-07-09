@@ -8,13 +8,18 @@ import os
 from torch.utils.data import Dataset, DataLoader
 from chromadb.api.client import Client
 import numpy as np
+import random
+from nltk.corpus import words
 
 import utils
 from preprocess.text_operations import ConvertJsonToString
 
 
 class AIoD_Documents(Dataset):
-    def __init__(self, dirpath: str, include_ids: np.ndarray = None) -> None:
+    def __init__(
+    self, dirpath: str, include_ids: np.ndarray | None = None, 
+    testing_random_texts: bool = False
+) -> None:
         self.dirpath = dirpath
         self.all_document_ids = np.array(
             [int(f[:f.rfind(".")]) for f in sorted(os.listdir(dirpath))]
@@ -24,18 +29,30 @@ class AIoD_Documents(Dataset):
         if include_ids is not None:
             mask = np.isin(include_ids, self.all_document_ids)
             self.split_document_ids = include_ids[mask]
+
+        self.testing_random_texts = testing_random_texts
         
     def __getitem__(self, idx: int) -> tuple[str, int]:
         doc_id = self.split_document_ids[idx]
         with open(os.path.join(self.dirpath, f"{doc_id}.txt")) as f:
             text = f.read()
-            
+
+        if self.testing_random_texts:
+            word_list = words.words()
+            random_words = random.sample(word_list, 10_000)
+            text = " ".join(random_words)
+        
         return text, str(doc_id)
 
     def __len__(self) -> int:
         return len(self.split_document_ids)
     
-    def build_loader(self, loader_kwargs: dict) -> DataLoader:
+    def build_loader(self, loader_kwargs: dict | None) -> DataLoader:
+        if loader_kwargs is None:
+            loader_kwargs = {
+                "batch_size": 1,
+                "num_workers": 1
+            }
         return DataLoader(self, collate_fn=self._collate_fn, **loader_kwargs)
     
     @staticmethod

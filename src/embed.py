@@ -97,10 +97,13 @@ class Chroma_EmbeddingStore:
         }
         all_embeddings = []        
         query_loader = DataLoader(
-            query_list, collate_fn=AIoD_Documents._collate_fn, batch_size=4, num_workers=2
+            query_list, collate_fn=AIoD_Documents._collate_fn, 
+            batch_size=4, num_workers=2
         )
         for it, (texts, _) in tqdm(
-            enumerate(query_loader), total=len(query_loader), disable=self.verbose is False
+            enumerate(query_loader), 
+            total=len(query_loader), 
+            disable=self.verbose is False
         ):
             with torch.no_grad():
                 embeddings = model(texts)
@@ -152,26 +155,52 @@ class Chroma_EmbeddingStore:
 
 
 def compute_embeddings_wrapper(
-    client: Client, model: EmbeddingModel, text_dirpath: str, new_collection_name: str
+    client: Client, model: EmbeddingModel, 
+    text_dirpath: str, new_collection_name: str,
+    loader_kwargs: dict | None = None
 ) -> None:
-    ds = AIoD_Documents(text_dirpath)
-    loader = ds.build_loader({"batch_size": 16, "num_workers": 2})
+    ds = AIoD_Documents(text_dirpath, testing_random_texts=False)
+    loader = ds.build_loader(loader_kwargs)
 
     store = Chroma_EmbeddingStore(client, verbose=True)
-    store.store_embeddings(model, loader, new_collection_name)
+    store.store_embeddings(model, loader, new_collection_name, chroma_batch_size=50)
     
-
 if __name__ == "__main__":
     client = utils.init()
 
-    model = ModelSetup._setup_gte_large()
-    # model = ModelSetup._setup_gte_qwen2()
-    # model = ModelSetup._setup_multilingual_e5_large()
+    # 6h20m
 
-    text_dirpath = "data/extracted_data"
-    collection_name = "gte_large"
+    batch_size = 8
+    model = ModelSetup._setup_gte_large(model_max_length=4096) # batch: 8 (non-hierarchical)
+    
+    text_dirpath = "data/texts"
+    collection_name = "embeddings-gte_large-simple-v0"
 
-    compute_embeddings_wrapper(client, model, text_dirpath, collection_name)
+    compute_embeddings_wrapper(
+        client, model, text_dirpath, collection_name, 
+        loader_kwargs={
+            "batch_size": batch_size,
+            "num_workers": 2
+        }
+    )
+
+    #######################
+
+    # 6h40m
+
+    batch_size = 32
+    model = ModelSetup._setup_multilingual_e5_large() # batch: 32 (hierarchical)
+
+    text_dirpath = "data/texts"
+    collection_name = "embeddings-multilingual_e5_large-simple-v0"
+
+    compute_embeddings_wrapper(
+        client, model, text_dirpath, collection_name, 
+        loader_kwargs={
+            "batch_size": batch_size,
+            "num_workers": 2
+        }
+    )
 
     # Perform semantic search
     # store = Chroma_EmbeddingStore(client, verbose=True)
