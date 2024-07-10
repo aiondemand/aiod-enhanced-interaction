@@ -55,6 +55,20 @@ class AIoD_Documents(Dataset):
             }
         return DataLoader(self, collate_fn=self._collate_fn, **loader_kwargs)
     
+    def filter_out_already_computed_docs(
+        self, client: Client, collection_name: str
+    ) -> None:
+        try:
+            collection = client.get_collection(collection_name)
+            metadatas = collection.get(include=["metadatas"])["metadatas"]
+            computed_doc_ids = np.array([m["doc_id"] for m in metadatas])
+
+            self.split_document_ids = self.split_document_ids[
+                ~np.isin(self.split_document_ids, computed_doc_ids)
+            ]
+        except:
+            return    
+        
     @staticmethod
     def _collate_fn(
         batch: list[tuple[str, int]]
