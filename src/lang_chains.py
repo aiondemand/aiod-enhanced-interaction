@@ -24,45 +24,59 @@ class ChainOutputOpts:
     different interface compared to traditional LLMs
     """
     def __init__(
-        self, langchain_parser: BaseOutputParser | None = None,
-        prompt_placeholder_name: str | None = None,
-        openai_funcion_calling_schema_class: Type[BaseModel] | None = None
+        self, langchain_parser_class: Type[BaseOutputParser] | None = None,
+        pydantic_model: Type[BaseModel] | None = None,
+        schema_placeholder_name: str | None = None,
+        use_openai_bind_tools: bool = False
     ) -> None:
-        self.langchain_parser = langchain_parser
-        if self.langchain_parser is None:
-            self.langchain_parser = StrOutputParser()
+        self.pydantic_model = pydantic_model
+        self.schema_placeholder_name = schema_placeholder_name
+        self.use_openai_bind_tools = use_openai_bind_tools
 
-        self.prompt_placeholder_name = prompt_placeholder_name
-        self.openai_funcion_calling_schema_class = openai_funcion_calling_schema_class
-
-        self.is_json_parser = (
-            isinstance(langchain_parser, JsonOutputParser) and
-            openai_funcion_calling_schema_class is None
-        )
-        if self.is_json_parser and prompt_placeholder_name is None:
-            raise ValueError("Define prompt placeholder name for JSON schema")
+        # we want to output JSON (perform function calling)
+        if langchain_parser_class is JsonOutputParser or use_openai_bind_tools:
+            # we utilize OpenAI bind tools function
+            if use_openai_bind_tools:
+                if pydantic_model is None:
+                    raise ValueError("You need to define Pydantic model that will be adhered to using OpenAI 'bind_tools' function")
+                if langchain_parser_class is not None:
+                    print("Warning: 'langchain_parser_class' argument is being ignored since we shall use OpenAI 'bind_tools' function instead")
+                self.langchain_parser = None
+            
+            # we use a simple JsonOutputParser
+            else:
+                if pydantic_model is None:
+                    raise ValueError("You need to define Pydantic model that will be adhered to using JsonOutputParser")
+                if schema_placeholder_name is None:
+                    raise ValueError("You need to define Schema placeholder name for JSON schema utilized in model prompt")
+                self.langchain_parser = langchain_parser_class(pydantic_model=pydantic_model)
         
+        # we utilize a different parser 
+        else:
+            if langchain_parser_class is None:
+                langchain_parser_class = StrOutputParser()
+            self.langchain_parser = langchain_parser_class()
+
     def augment_prompt_with_json_schema(
         self, prompt: ChatPromptTemplate
     ) -> ChatPromptTemplate:
-        if self.is_json_parser is False:
+        if isinstance(self.langchain_parser, JsonOutputParser) is False:
             return prompt
-    
+
         schema = self.langchain_parser.get_format_instructions()
         return prompt.partial(**{
-            self.prompt_placeholder_name: schema
+            self.schema_placeholder_name: schema
         })
     
     def augment_llm_with_openai_function_calling_tool(
         self, llm: BaseLLM
     ) -> tuple[BaseLLM, BaseOutputParser]:
-        clz_type = self.openai_funcion_calling_schema_class
-        if clz_type is None:
+        if self.use_openai_bind_tools is False:
             return llm, self.langchain_parser
-
-        clz_name = clz_type.__name__
-        llm_fc = llm.bind_tools([clz_type], tool_choice=clz_name)
-        return llm_fc, JsonOutputKeyToolsParser(key_name=clz_name)
+        
+        schema_name = self.pydantic_model.__name__
+        llm_fc = llm.bind_tools([self.pydantic_model], tool_choice=schema_name)
+        return llm_fc, JsonOutputKeyToolsParser(key_name=schema_name)
     
 
 class Chain:
@@ -180,9 +194,9 @@ class SimpleChain(Chain):
     def __init__(
         self, llm: BaseLLM, 
         prompt_templates: tuple[str, str],
-        fewshot_examples: list[dict[str, str]] = None, 
-        fewshot_prompt_templates: str = None,
-        chain_output_opts: ChainOutputOpts = None,
+        fewshot_examples: list[dict[str, str]] | None = None, 
+        fewshot_prompt_templates: str | None = None,
+        chain_output_opts: ChainOutputOpts | None = None,
         postprocess_lambda: Callable[[dict | str], dict | str] = None
     ) -> None:
         super().__init__(
@@ -208,7 +222,7 @@ def build_prompt(
     fewshot_examples: list[dict[str, str]], 
     fewshot_prompt_templates: tuple[str],
     chain_output_opts: ChainOutputOpts
-) -> FewShotChatMessagePromptTemplate | None:
+) -> FewShotChatMessagePromptTemplate | ChatPromptTemplate:
     """
     Function for building initial prompts for Langchain chains
 
@@ -244,6 +258,7 @@ def build_prompt(
     return chain_output_opts.augment_prompt_with_json_schema(prompt)
 
 
+# TODO make it work with dataLoader perhaps -> might be more accessible then...
 def apply_chains_on_files_in_directory(
     primary_chain: Chain, 
     dirpath: str, savedir: str,

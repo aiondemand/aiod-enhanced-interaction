@@ -47,7 +47,7 @@ class AIoD_Documents(Dataset):
     def __len__(self) -> int:
         return len(self.split_document_ids)
     
-    def build_loader(self, loader_kwargs: dict | None) -> DataLoader:
+    def build_loader(self, loader_kwargs: dict | None = None) -> DataLoader:
         if loader_kwargs is None:
             loader_kwargs = {
                 "batch_size": 1,

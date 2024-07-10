@@ -10,6 +10,8 @@ import torch
 import uuid
 import numpy as np
 from abc import ABC, abstractmethod 
+from sentence_transformers.util import semantic_search
+from sklearn.metrics import ndcg_score
 
 from model.lm_encoders.setup import ModelSetup
 from model.base import EmbeddingModel
@@ -29,8 +31,8 @@ class EmbeddingStore(ABC):
 
     @abstractmethod
     def retrieve_topk_documents(
-        self, model: EmbeddingModel, query_loader: DataLoader, **kwargs
-    ) -> None:
+        self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, **kwargs
+    ) -> dict[str, list[list[str] | list[float]]]:
         pass
         
 
@@ -99,9 +101,9 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             model.train()
 
     def retrieve_topk_documents(
-        self, model: EmbeddingModel, query_loader: DataLoader,
-        emb_collection_name: str, topk: int = 10, chroma_batch_size: int = 50
-    ) -> list:
+        self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10,
+        emb_collection_name: str | None = None, chroma_batch_size: int = 50
+    ) -> dict[str, list[list[str] | list[float]]]:
         was_training = model.training
         model.eval()
         collection = self._get_collection(emb_collection_name)
@@ -146,10 +148,10 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             model.train()
         return all_results
     
-    def retrieve_documents_from_result_set(
+    def _retrieve_documents_from_result_set(
         self, result_set: dict[str, list[list[str] | list[int]]],
         document_collection_name: str
-    ) -> None:
+    ) -> dict:
         all_docs = []
         col = self.client.get_collection(document_collection_name)
 
@@ -157,7 +159,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             revert_indices = np.argsort(
                 pd.Series(doc_ids).sort_values().index
             )
-            response = col.get(result_set["doc_ids"][0])["metadatas"]
+            response = col.get(doc_ids)["metadatas"]
             documents = [
                 json.loads(meta["json_string"])
                 for meta in np.array(response)[revert_indices]
@@ -165,6 +167,83 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             all_docs.append(documents)
 
         return all_docs
+    
+
+class Filesystem_EmbeddingStore(EmbeddingStore):
+    def __init__(self, save_dirpath: str) -> None:
+        self.save_dirpath = save_dirpath
+        self.vector_store_in_memory = None
+    
+    def store_embeddings(
+        self, model: EmbeddingModel, loader: DataLoader
+    ) -> None:
+        was_training = model.training
+        model.eval()
+        os.makedirs(self.save_dirpath, exist_ok=True)
+
+        for texts, doc_ids in tqdm(loader):
+            with torch.no_grad():
+                embeddings = model(texts)
+
+            for id, emb in zip(doc_ids, embeddings):
+                filepath = os.path.join(self.save_dirpath, f"{id}.pt")
+                torch.save(emb, filepath)
+
+        if was_training:
+            model.train()
+
+    # TODO change
+    def retrieve_topk_documents(
+        self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10
+    ) -> dict[str, list[list[str] | list[float]]]:
+        if self.vector_store_in_memory is None:
+            self.vector_store_in_memory = self._load_embeddings()        
+        all_document_ids = np.array([
+            file[:file.rfind(".")]
+            for file in sorted(os.listdir(self.save_dirpath))
+        ])
+
+        all_results_sets = []
+        for texts, _ in tqdm(query_loader):
+            with torch.no_grad():
+                query_emb = model(texts)
+    
+            all_results_sets.extend(semantic_search(
+                query_emb, self.vector_store_in_memory, query_chunk_size=100, 
+                corpus_chunk_size=10_000, top_k=topk
+            ))
+    
+        topk_docs_ids = []
+        topk_distances = []
+        for db_matches in all_results_sets:
+            db_indices = [db_match["corpus_id"] for db_match in db_matches]
+            db_scores = [db_match["score"] for db_match in db_matches]
+
+            topk_docs_ids.append(all_document_ids[db_indices].tolist())
+            topk_distances.append((1 - np.array(db_scores)).tolist())
+
+        results = {
+            "doc_ids": topk_docs_ids,
+            "distances": topk_distances
+        }
+        return results
+
+    def _load_embeddings(self) -> torch.Tensor:
+        if (
+            os.path.exists(self.save_dirpath) is False 
+            or len(os.listdir(self.save_dirpath)) == 0
+        ):
+            return None
+
+        all_embeddings = []
+        for filename in sorted(os.listdir(self.save_dirpath)):
+            emb = torch.load(
+                os.path.join(self.save_dirpath, filename), 
+                utils.get_device()
+            )
+            all_embeddings.append(emb)
+
+        return torch.vstack(all_embeddings)
 
 
 def compute_embeddings_wrapper(
@@ -183,25 +262,22 @@ if __name__ == "__main__":
     client = utils.init()
 
     # 6h20m
-
-    batch_size = 1
-    model = ModelSetup._setup_gte_large(model_max_length=4096) # batch: 8 (non-hierarchical)
+    # model = ModelSetup._setup_gte_large(model_max_length=4096) # batch: 8 (non-hierarchical)
     
     text_dirpath = "data/texts"
     collection_name = "embeddings-gte_large-simple-v0"
 
-    compute_embeddings_wrapper(
-        client, model, text_dirpath, collection_name, 
-        loader_kwargs={
-            "batch_size": batch_size,
-            "num_workers": 2
-        }
-    )
+    # compute_embeddings_wrapper(
+    #     client, model, text_dirpath, collection_name, 
+    #     loader_kwargs={
+    #         "batch_size": batch_size,
+    #         "num_workers": 2
+    #     }
+    # )
 
     #######################
 
     # 6h40m
-
     # batch_size = 32
     # model = ModelSetup._setup_multilingual_e5_large() # batch: 32 (hierarchical)
 
@@ -219,6 +295,17 @@ if __name__ == "__main__":
     # Perform semantic search
     store = Chroma_EmbeddingStore(client, verbose=True)
     
+    model = ModelSetup.setup_hierarchical_model(
+        model_path="BAAI/bge-base-en-v1.5",
+        max_num_chunks=5,
+        use_chunk_transformer=False,
+        token_pooling="none",
+        chunk_pooling="mean", 
+        parallel_chunk_processing=True
+    )
+        
+    collection_name = "embeddings-BAAI-simple"
+
     QUERY = "I want a dataset about movies reviews"
     query_list = [(QUERY, 0)]
     query_loader = DataLoader(
@@ -226,7 +313,14 @@ if __name__ == "__main__":
         batch_size=4, num_workers=2
     )
 
-    results = store.retrieve_topk_documents(model, query_loader, collection_name)
-    top_docs = store.retrieve_documents_from_result_set(
+    results = store.retrieve_topk_documents(
+        model, query_loader, topk=10, emb_collection_name=collection_name
+    )
+    results = {
+        "doc_ids": [["strings"]], #2D
+        "distances": [["floats"]] #2D
+    }
+
+    top_docs = store._retrieve_documents_from_result_set(
         results, document_collection_name="datasets"
     )
