@@ -10,10 +10,30 @@ from chromadb.api.client import Client
 import numpy as np
 import random
 from nltk.corpus import words
+from pydantic import BaseModel
 
 import utils
 from preprocess.text_operations import ConvertJsonToString
 
+
+class AnnotatedDoc(BaseModel):
+    id: str
+    score: int
+
+
+class QueryDatapoint(BaseModel):
+    text: str
+    id: str | None = None
+    annotated_docs: list[AnnotatedDoc] | None = None
+
+    def get_relevant_documents(
+        self, relevance_func: Callable[[float], bool]
+    ) -> list[AnnotatedDoc]:
+        return [
+            doc for doc in self.annotated_docs
+            if relevance_func(doc.score)
+        ]
+    
 
 class AIoD_Documents(Dataset):
     def __init__(
@@ -53,7 +73,7 @@ class AIoD_Documents(Dataset):
                 "batch_size": 1,
                 "num_workers": 1
             }
-        return DataLoader(self, collate_fn=self._collate_fn, **loader_kwargs)
+        return DataLoader(self, collate_fn=list_collate_fn, **loader_kwargs)
     
     def filter_out_already_computed_docs(
         self, client: Client, collection_name: str
@@ -68,16 +88,53 @@ class AIoD_Documents(Dataset):
             ]
         except:
             return    
-        
-    @staticmethod
-    def _collate_fn(
-        batch: list[tuple[str, int]]
-    ) -> tuple[list[str], list[str]]:
-        all_texts = [x[0] for x in batch]
-        all_ids = [x[1] for x in batch]
-        
-        return all_texts, all_ids
+    
 
+        pass
+
+class Queries(Dataset):
+    def __init__(
+        self, json_path: str | None = None, queries: list[dict] | None = None
+    ) -> None:
+        if json_path is None and queries is None or queries == []:
+            raise ValueError("You need to define source of queries")
+        data = queries
+        if json_path is not None:
+            with open(json_path) as f:
+                data = json.load(f)
+        
+        self.queries = [QueryDatapoint(**d) for d in data]
+
+    def __getitem__(self, idx: int) -> QueryDatapoint:
+        return self.queries[idx]
+            
+    def __len__(self) -> int:
+        return len(self.queries)
+    
+    def get_by_id(self, id: str) -> QueryDatapoint | None:
+        rs = [q for q in self.queries if q.id == id]
+        if rs == []:
+            return None
+        return rs[0]
+    
+    def build_loader(self, loader_kwargs: dict | None = None) -> DataLoader:
+        if loader_kwargs is None:
+            loader_kwargs = {
+                "batch_size": 1,
+                "num_workers": 1
+            }
+        return DataLoader(self, collate_fn=lambda x: x, **loader_kwargs)
+            
+    def build_query_json_from_asset_specific_eval(self, savepath: str): 
+        # TODO later
+        pass
+
+def list_collate_fn(batch: list[tuple]) -> tuple[list]:
+    return tuple([
+        [x[idx] for x in batch]
+        for idx in range(len(batch[0]))
+    ])
+    
 
 def process_documents_and_store_to_filesystem(
     client: Client, collection_name: str, 
@@ -102,6 +159,12 @@ def process_documents_and_store_to_filesystem(
 
 
 if __name__ == "__main__":
+    queries = ["query 1", "query 2", "query 3"]
+    q_ds = Queries(queries=queries)
+    q_ds.build_loader(loader_kwargs={"batch_size": 2})
+
+    exit()
+
     client = utils.init(return_chroma_client=True)
     savedir = "./data/extracted_data"
     collection_name = "datasets"

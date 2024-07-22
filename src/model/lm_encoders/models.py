@@ -49,7 +49,7 @@ class RepresentationModel(EmbeddingModel):
         """
 
     @abstractmethod
-    def _forward(self, encodings: dict) -> torch.Tensor: 
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor: 
         """
         Function called to perform a model forward pass on a input data
         that is represented by the 'encodings' argument
@@ -129,11 +129,11 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         self.global_attention_mask = global_attention_mask
         self.preprocess_text_fn = preprocess_text_fn
 
-    def forward(self, texts: dict) -> torch.Tensor:
+    def forward(self, texts: list[str]) -> torch.Tensor:
         encoding = self.preprocess_input(texts)
         return self._forward(encoding)
 
-    def _forward(self, encodings: dict) -> torch.Tensor:
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor:
         out = self.transformer(**encodings)[0]
         out = _pool(out, encodings["attention_mask"], self.pooling)
         return out
@@ -161,15 +161,15 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         return encodings
     
 
-class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
+class Hierarchical_RepresentationModel(torch.nn.Module, RepresentationModel):
     """
     Class representing models that process the input documents by firstly individually 
     processing their chunks before further accumulating the chunk information to 
     compute the represenations of the whole documents
     """
     def __init__(
-        self, input_transformer: PreTrainedTokenizer, 
-        chunk_transformer: PreTrainedTokenizer | None = None, 
+        self, input_transformer: PreTrainedModel | SentenceTransformerToHF,  
+        chunk_transformer: PreTrainedModel | None = None, 
         tokenizer: PreTrainedTokenizer | None = None, 
         token_pooling: str = "CLS_token", 
         chunk_pooling: str = "mean", 
@@ -217,11 +217,11 @@ class HierarchicalLM_TrainingModel(torch.nn.Module, RepresentationModel):
 
         self.preprocess_text_fn = preprocess_text_fn
 
-    def forward(self, texts: dict) -> torch.Tensor:
+    def forward(self, texts: list[str]) -> torch.Tensor:
         encoding = self.preprocess_input(texts)
         return self._forward(encoding)
 
-    def _forward(self, encodings: dict) -> torch.Tensor:
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor:
         chunk_embeddings = self._first_level_forward(
             encodings["input_encodings"],
             encodings["max_num_chunks"]

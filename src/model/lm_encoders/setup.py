@@ -1,15 +1,13 @@
-from sentence_transformers import SentenceTransformer
 from transformers import (
     AutoModel, AutoTokenizer, 
     AutoModelForSequenceClassification,
     RobertaConfig, RobertaModel,
-    PreTrainedTokenizer
 )
 
 from .models import (
     RepresentationModel, 
     Basic_RepresentationModel, 
-    HierarchicalLM_TrainingModel,
+    Hierarchical_RepresentationModel,
     SentenceTransformerToHF,
     TokenizerTextSplitter
 )
@@ -55,7 +53,7 @@ class ModelSetup:
         token_pooling: str = "CLS_token",
         chunk_pooling: str = "mean",
         parallel_chunk_processing: bool = True,
-    ) -> HierarchicalLM_TrainingModel:
+    ) -> Hierarchical_RepresentationModel:
         if model_path not in (
             cls.tested_sentence_transformers + 
             cls.tested_hf_hierarchical_transformers
@@ -78,7 +76,7 @@ class ModelSetup:
             chunk_transformer = cls._init_chunk_transformer(
                 transformer.embedding_dim, max_num_chunks=max_num_chunks
             )
-        model = HierarchicalLM_TrainingModel(
+        model = Hierarchical_RepresentationModel(
             transformer, tokenizer=tokenizer, token_pooling=token_pooling,
             chunk_transformer=chunk_transformer,
             chunk_pooling=chunk_pooling,
@@ -166,14 +164,14 @@ class ModelSetup:
         return model
         
     @classmethod
-    def _setup_multilingual_e5_large(cls) -> HierarchicalLM_TrainingModel:    
+    def _setup_multilingual_e5_large(cls) -> Hierarchical_RepresentationModel:    
         transformer = SentenceTransformerToHF("intfloat/multilingual-e5-large")
         prepend_prompt_fn = lambda t: "query: " + t
 
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
         )
-        model = HierarchicalLM_TrainingModel(
+        model = Hierarchical_RepresentationModel(
             transformer, 
             tokenizer=transformer.tokenizer,
             token_pooling="none",
