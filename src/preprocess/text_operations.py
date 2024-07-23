@@ -60,7 +60,6 @@ class ConvertJsonToString:
 
         return string    
             
-        
     @classmethod
     def _extract_relevant_fields(cls, data: dict) -> dict:
         # basic fields to copy

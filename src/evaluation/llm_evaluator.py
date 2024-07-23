@@ -6,7 +6,6 @@ from enum import Enum
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 from torch.utils.data import DataLoader
-from langchain_openai import ChatOpenAI
 
 from dataset import AnnotatedDoc, Queries, QueryDatapoint
 from embedding_stores import SemanticSearchResult
@@ -133,6 +132,41 @@ class LLM_Evaluator:
             llm=llm
         )
     
+    def __init__(self, chain: SimpleChain | None = None) -> None:
+        self.chain = chain
+        if chain is None:
+            self.chain = self.build_chain()
+
+    def evaluate_query_doc_pairs(
+        self,
+        query_loader: DataLoader, 
+        topk_documents: list[SemanticSearchResult],
+        text_dirpath: str,
+        save_dirpath: str
+    ) -> None:
+        queries: list[QueryDatapoint] = query_loader.dataset.queries
+        
+        print(f"...Evaluating relevance of retrieved documents to {len(queries)} queries...")
+        for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
+            os.makedirs(os.path.join(save_dirpath, query.id), exist_ok=True)
+            
+            for doc_id in topk_doc_ids.doc_ids:
+                savepath = os.path.join(save_dirpath, query.id, f"{doc_id}.json")
+                if os.path.exists(savepath):
+                    continue
+                with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
+                    doc_text = f.read()
+        
+                pred = self.chain.invoke({
+                    "query": query.text,
+                    "document": doc_text
+                })
+                if pred is not None:
+                    with open(savepath, "w") as f:
+                        json.dump(pred, f, ensure_ascii=False)
+                else:
+                    print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
+            
     @staticmethod
     def build_multiple_document_prompt(documents: list[str]) -> str:
         string_placeholder = "\n### Document {doc_it}:\n{doc}"
@@ -142,68 +176,37 @@ class LLM_Evaluator:
         
         return string
 
-
-def evaluate_query_doc_pairs(
-    llm: Chain, 
-    query_loader: DataLoader, 
-    topk_documents: list[SemanticSearchResult],
-    text_dirpath: str,
-    save_dirpath: str
-) -> None:
-    queries: list[QueryDatapoint] = query_loader.dataset.queries
-    
-    print(f"...Evaluating relevance of retrieved documents to {len(queries)} queries...")
-    for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
-        os.makedirs(os.path.join(save_dirpath, query.id), exist_ok=True)
+    @staticmethod
+    def build_query_json_from_llm_eval(
+        dataset: Queries, sem_search: list[SemanticSearchResult], 
+        llm_eval_dirpath: str, savepath: str,
+        score_function: Callable[[dict], float] | None = None,
+    ) -> None:
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        json_query_datapoints = []
         
-        for doc_id in topk_doc_ids.doc_ids:
-            savepath = os.path.join(save_dirpath, query.id, f"{doc_id}.json")
-            if os.path.exists(savepath):
-                continue
-            with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
-                doc_text = f.read()
-    
-            pred = llm.invoke({
-                "query": query.text,
-                "document": doc_text
-            })
-            if pred is not None:
-                with open(savepath, "w") as f:
-                    json.dump(pred, f, ensure_ascii=False)
-            else:
-                print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
-            
+        if score_function is None:
+            score_function = lambda obj: obj["explanation"]["relevance_rating"]
+        for query_topk_docs in sem_search:
+            query = dataset.get_by_id(query_topk_docs.query_id)
+            doc_ids = query_topk_docs.doc_ids
 
-def build_query_json_from_llm_eval(
-    dataset: Queries, sem_search: list[SemanticSearchResult], 
-    llm_eval_dirpath: str, savepath: str,
-    score_function: Callable[[dict], float] | None = None,
-) -> None:
-    os.makedirs(os.path.dirname(savepath), exist_ok=True)
-    json_query_datapoints = []
-    
-    if score_function is None:
-        score_function = lambda obj: obj["explanation"]["relevance_rating"]
-    for query_topk_docs in sem_search:
-        query = dataset.get_by_id(query_topk_docs.query_id)
-        doc_ids = query_topk_docs.doc_ids
+            annotated_docs = []
+            for doc_id in doc_ids:
+                p = os.path.join(llm_eval_dirpath, query.id, f"{doc_id}.json")
+                with open(p) as f:
+                    data = json.load(f)
 
-        annotated_docs = []
-        for doc_id in doc_ids:
-            p = os.path.join(llm_eval_dirpath, query.id, f"{doc_id}.json")
-            with open(p) as f:
-                data = json.load(f)
-
-            annotated_docs.append(AnnotatedDoc(
-                id=doc_id, score=score_function(data)
-            ))
-            
-        json_query_datapoints.append(
-            QueryDatapoint(
-                text=query.text, 
-                id=query.id, 
-                annotated_docs=annotated_docs
-            ).model_dump()
-        )
-    with open(savepath, "w") as f:
-        json.dump(json_query_datapoints, f, ensure_ascii=False)
+                annotated_docs.append(AnnotatedDoc(
+                    id=doc_id, score=score_function(data)
+                ))
+                
+            json_query_datapoints.append(
+                QueryDatapoint(
+                    text=query.text, 
+                    id=query.id, 
+                    annotated_docs=annotated_docs
+                ).model_dump()
+            )
+        with open(savepath, "w") as f:
+            json.dump(json_query_datapoints, f, ensure_ascii=False)

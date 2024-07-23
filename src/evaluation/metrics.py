@@ -1,7 +1,8 @@
-from typing import Callable
+from typing import Any, Callable, Type
 import json
 import os
 import numpy as np
+from abc import abstractmethod
 from sklearn.metrics import ndcg_score
 from torch.utils.data import DataLoader
 from pydantic import BaseModel
@@ -11,15 +12,41 @@ from embedding_stores import EmbeddingStore, SemanticSearchResult
 from model import EmbeddingModel
 
 
-class RetrievalMetricsAtK(BaseModel):
-    k: int    
+class MetricsClass(BaseModel):
+    @abstractmethod
+    def compute_metrics_for_datapoint(
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,  
+        k: int, **kwargs
+    ) -> None:
+        pass
+        
+    @abstractmethod
+    def average_results(self) -> None:
+        pass
+
+
+class MetricsWrapperClass(BaseModel):
+    results_in_top: dict[str, MetricsClass] | None = None
+
+    @abstractmethod
+    def compute_metrics_for_datapoint(
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, **kwargs
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def average_results(self) -> None:
+        pass
+
+
+class RetrievalMetricsAtK(MetricsClass):    
     prec: list[float] | float = []
     rec: list[float] | float = []
     AP: list[float] | float = []
     ndcg: list[float] | float = []
 
     def compute_metrics_for_datapoint(
-        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, k: int,
         compute_precision_only: bool = True,
         relevance_func: Callable[[float], bool] | None = None
     ) -> None:
@@ -32,10 +59,10 @@ class RetrievalMetricsAtK(BaseModel):
         retrieved_docs = query_results.doc_ids
         
         # RETRIEVAL
-        self.prec.append(precision_at_k(relevant_docs, retrieved_docs, k=self.k))
+        self.prec.append(precision_at_k(relevant_docs, retrieved_docs, k=k))
         if compute_precision_only is False: 
-            self.rec.append(recall_at_k(relevant_docs, retrieved_docs, k=self.k))
-            self.AP.append(average_precision_at_k(relevant_docs, retrieved_docs, k=self.k))
+            self.rec.append(recall_at_k(relevant_docs, retrieved_docs, k=k))
+            self.AP.append(average_precision_at_k(relevant_docs, retrieved_docs, k=k))
 
         # RANKING (NDCG)
         annotated_doc_ids = np.array([doc.id for doc in query_dp.annotated_docs])
@@ -62,29 +89,44 @@ class RetrievalMetricsAtK(BaseModel):
             setattr(self, attr_name, avg)
 
 
-class RetrievalMetrics(BaseModel):
-    results_at: dict[str, RetrievalMetricsAtK] | None = None
+class RetrievalMetrics(MetricsWrapperClass):
+    results_in_top: dict[str, RetrievalMetricsAtK] | None = None
 
     def __init__(self, topk: list[int]) -> None:
         super().__init__()
-        self.results_at = {
-            str(k): RetrievalMetricsAtK(k=k)
+        self.results_in_top = {
+            str(k): RetrievalMetricsAtK()
             for k in topk
         }
 
+    def compute_metrics_for_datapoint(
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, 
+        compute_precision_only: bool = True,
+        relevance_func: Callable[[float], bool] | None = None
+    ):
+        for k in self.results_in_top.keys():
+            self.results_in_top[k].compute_metrics_for_datapoint(
+                query_dp, query_results, int(k),
+                compute_precision_only=compute_precision_only,
+                relevance_func=relevance_func
+            )
+
     def average_results(self) -> None:
-        for k in self.results_at.keys():
-            self.results_at[k].average_results()
+        for k in self.results_in_top.keys():
+            self.results_in_top[k].average_results()
     
 
-class SpecificAssetQueriesMetricsAtK(BaseModel):
-    k: int
+class SpecificAssetQueriesMetricsAtK(MetricsClass):
     asset_hit_rate: list[float] | float = []
     asset_position: list[int] | float = []
 
-    def compute_metrics_for_datapoint(self, gt_doc_id: str, relevant_docs: list[str]) -> None:
-        relevant_docs = np.array(relevant_docs)
-        indices = np.where(relevant_docs[:self.k] == gt_doc_id)[0]
+    def compute_metrics_for_datapoint(
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, k: int
+    ) -> None:
+        gt_doc_id = query_dp.annotated_docs[0].id
+        relevant_docs = np.array(query_results.doc_ids)
+        
+        indices = np.where(relevant_docs[:k] == gt_doc_id)[0]
         if len(indices) == 0:
             self.asset_hit_rate.append(0)
         else:
@@ -98,19 +140,27 @@ class SpecificAssetQueriesMetricsAtK(BaseModel):
         self.asset_position = np.array(self.asset_position).mean()
     
 
-class SpecificAssetQueriesMetrics(BaseModel):
-    results_at: dict[str, SpecificAssetQueriesMetricsAtK] = None
+class SpecificAssetQueriesMetrics(MetricsWrapperClass):
+    results_in_top: dict[str, SpecificAssetQueriesMetricsAtK] = None
 
     def __init__(self, topk: list[int]) -> None:
         super().__init__()
-        self.results_at = {
-            str(k): SpecificAssetQueriesMetricsAtK(k=k)
+        self.results_in_top = {
+            str(k): SpecificAssetQueriesMetricsAtK()
             for k in topk
         }
 
+    def compute_metrics_for_datapoint(
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult
+    ) -> None:
+        for k in self.results_in_top.keys():
+            self.results_in_top[k].compute_metrics_for_datapoint(
+                query_dp, query_results, int(k)
+            )
+
     def average_results(self) -> None:
-        for k in self.results_at.keys():
-            self.results_at[k].average_results()
+        for k in self.results_in_top.keys():
+            self.results_in_top[k].average_results()
 
 
 class RetrievalEvaluation:
@@ -132,32 +182,22 @@ class RetrievalEvaluation:
         topk: list[int] = [3, 5, 10],
         retrieve_topk_documents_func_kwargs: dict | None = None,
     ) -> RetrievalMetrics:
-        query_ds: Queries = query_loader.dataset
-        if retrieve_topk_documents_func_kwargs is None:
-            retrieve_topk_documents_func_kwargs = {}
-
-        sem_search_results = embedding_store.retrieve_topk_documents(
-            model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath,
-            **retrieve_topk_documents_func_kwargs
+        return _generic_evaluation_loop(
+            model, 
+            embedding_store, 
+            query_loader,
+            evaluation_class_type=RetrievalMetrics,
+            load_topk_docs_dirpath=load_topk_docs_dirpath,
+            metrics_savepath=metrics_savepath,
+            topk=topk,
+            retrieve_topk_documents_func_kwargs=retrieve_topk_documents_func_kwargs,
+            compute_metrics_for_datapoint_func_kwargs={
+                "relevance_func": self.relevance_func,
+                "compute_precision_only": True
+            }
         )
 
-        metrics = RetrievalMetrics(topk)
-        for query, query_results in zip(query_ds, sem_search_results):
-            for k in topk:
-                metrics.results_at[str(k)].compute_metrics_for_datapoint(
-                    query_dp=query, 
-                    query_results=query_results,
-                    relevance_func=self.relevance_func
-                )
-            
-        metrics.average_results()
-        if metrics_savepath is not None:
-            os.makedirs(os.path.dirname(metrics_savepath), exist_ok=True)
-            with open(metrics_savepath, "w") as f:
-                json.dump(metrics.model_dump(), f, ensure_ascii=False)
-        return metrics
 
-        
 class SpecificAssetQueriesEvaluation:
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
@@ -172,28 +212,52 @@ class SpecificAssetQueriesEvaluation:
         topk: list[int] = [5, 10, 20, 50, 100],
         retrieve_topk_documents_func_kwargs: dict | None = None,
     ) -> SpecificAssetQueriesMetrics:
-        query_ds: Queries = query_loader.dataset
-        if retrieve_topk_documents_func_kwargs is None:
-            retrieve_topk_documents_func_kwargs = {}
-
-        sem_search_results = embedding_store.retrieve_topk_documents(
-            model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath,
-            **retrieve_topk_documents_func_kwargs
+        return _generic_evaluation_loop(
+            model, 
+            embedding_store, 
+            query_loader,
+            evaluation_class_type=SpecificAssetQueriesMetrics,
+            load_topk_docs_dirpath=load_topk_docs_dirpath,
+            metrics_savepath=metrics_savepath,
+            topk=topk,
+            retrieve_topk_documents_func_kwargs=retrieve_topk_documents_func_kwargs
         )
-        metrics = SpecificAssetQueriesMetrics(topk)
-        for query, query_results in zip(query_ds, sem_search_results):
-            gt_doc_id = query.annotated_docs[0].id
-            for k in topk:
-                metrics.results_at[str(k)].compute_metrics_for_datapoint(
-                    gt_doc_id, query_results.doc_ids
-                )            
+
     
-        metrics.average_results()
-        if metrics_savepath is not None:
-            os.makedirs(os.path.dirname(metrics_savepath), exist_ok=True)
-            with open(metrics_savepath, "w") as f:
-                json.dump(metrics.model_dump(), f, ensure_ascii=False)
-        return metrics
+def _generic_evaluation_loop(
+    model: EmbeddingModel, 
+    embedding_store: EmbeddingStore, 
+    query_loader: DataLoader,
+    evaluation_class_type: Type[MetricsWrapperClass],
+    load_topk_docs_dirpath: str | None = None, 
+    metrics_savepath: str | None = None,
+    topk: list[int] = [5, 10, 20, 50, 100],
+    retrieve_topk_documents_func_kwargs: dict | None = None,
+    compute_metrics_for_datapoint_func_kwargs: dict | None = None
+) -> MetricsWrapperClass:
+    query_ds: Queries = query_loader.dataset
+    if retrieve_topk_documents_func_kwargs is None:
+        retrieve_topk_documents_func_kwargs = {}
+    if compute_metrics_for_datapoint_func_kwargs is None:
+        compute_metrics_for_datapoint_func_kwargs = {}
+    
+    sem_search_results = embedding_store.retrieve_topk_documents(
+        model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath,
+        **retrieve_topk_documents_func_kwargs
+    )
+    
+    metrics = evaluation_class_type(topk)
+    for query, query_results in zip(query_ds, sem_search_results):
+        metrics.compute_metrics_for_datapoint(
+            query, query_results, **compute_metrics_for_datapoint_func_kwargs
+        )
+
+    metrics.average_results()
+    if metrics_savepath is not None:
+        os.makedirs(os.path.dirname(metrics_savepath), exist_ok=True)
+        with open(metrics_savepath, "w") as f:
+            json.dump(metrics.model_dump(), f, ensure_ascii=False)
+    return metrics
 
 
 def precision_at_k(relevant: list[str], retrieved: list[str], k: int = 10) -> float:

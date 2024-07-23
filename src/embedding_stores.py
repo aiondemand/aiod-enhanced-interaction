@@ -11,16 +11,15 @@ import uuid
 import numpy as np
 from abc import ABC, abstractmethod 
 from sentence_transformers.util import semantic_search
-from sklearn.metrics import ndcg_score
 from pydantic import BaseModel
+
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(src_dir)
 
 from model.lm_encoders.setup import ModelSetup
 from model import EmbeddingModel
 import utils
 from dataset import AIoD_Documents, Queries
-
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(src_dir)
 
 
 class SemanticSearchResult(BaseModel):
@@ -78,7 +77,6 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         was_training = model.training
         model.eval()
         collection = self._get_collection(collection_name, create_collection=True)
-
 
         all_embeddings = []
         all_ids = []
@@ -371,13 +369,20 @@ if __name__ == "__main__":
 
     store = Chroma_EmbeddingStore(client, verbose=True)
     collection_name = "embeddings-gte_large-simple-v0"
+
     # compute_embeddings_wrapper(client, model, text_dirpath, collection_name)
 
-    exit()
-
     # Perform semantic search    
-    QUERIES = ["I want a dataset about movies reviews"]
-    query_loader = Queries(queries=QUERIES).build_loader()
+    QUERIES = [
+        { "text": "I want a dataset about movies reviews" }, 
+        { "text": "Second query inbound" } 
+    ]
+    ds = Queries(queries=QUERIES)
+    query_loader = DataLoader(ds, batch_size=2, collate_fn=lambda x: x)
+
+    batch = next(iter(query_loader))
+
+    exit()
 
     results = store.retrieve_topk_documents(
         model, query_loader, topk=10

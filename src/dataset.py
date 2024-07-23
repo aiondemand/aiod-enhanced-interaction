@@ -12,9 +12,6 @@ import random
 from nltk.corpus import words
 from pydantic import BaseModel
 
-import utils
-from preprocess.text_operations import ConvertJsonToString
-
 
 class AnnotatedDoc(BaseModel):
     id: str
@@ -73,7 +70,7 @@ class AIoD_Documents(Dataset):
                 "batch_size": 1,
                 "num_workers": 1
             }
-        return DataLoader(self, collate_fn=list_collate_fn, **loader_kwargs)
+        return DataLoader(self, **loader_kwargs)
     
     def filter_out_already_computed_docs(
         self, client: Client, collection_name: str
@@ -87,10 +84,8 @@ class AIoD_Documents(Dataset):
                 ~np.isin(self.split_document_ids, computed_doc_ids)
             ]
         except:
-            return    
-    
-
-        pass
+            return
+        
 
 class Queries(Dataset):
     def __init__(
@@ -125,17 +120,7 @@ class Queries(Dataset):
             }
         return DataLoader(self, collate_fn=lambda x: x, **loader_kwargs)
             
-    def build_query_json_from_asset_specific_eval(self, savepath: str): 
-        # TODO later
-        pass
-
-def list_collate_fn(batch: list[tuple]) -> tuple[list]:
-    return tuple([
-        [x[idx] for x in batch]
-        for idx in range(len(batch[0]))
-    ])
-    
-
+            
 def process_documents_and_store_to_filesystem(
     client: Client, collection_name: str, 
     extraction_function: Callable[[dict], str],
@@ -156,20 +141,3 @@ def process_documents_and_store_to_filesystem(
         for id, text in zip(doc_ids, extracted_texts):
             with open(os.path.join(savedir, f"{id}.txt"), "w") as f:
                 f.write(text)
-
-
-if __name__ == "__main__":
-    queries = ["query 1", "query 2", "query 3"]
-    q_ds = Queries(queries=queries)
-    q_ds.build_loader(loader_kwargs={"batch_size": 2})
-
-    exit()
-
-    client = utils.init(return_chroma_client=True)
-    savedir = "./data/extracted_data"
-    collection_name = "datasets"
-
-    process_documents_and_store_to_filesystem(
-        client, collection_name, savedir=savedir,
-        extraction_function=ConvertJsonToString.extract_relevant_info,
-    )

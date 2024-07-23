@@ -10,6 +10,7 @@ from chromadb.config import Settings
 
 CHROMA_CLIENT_AUTH_PROVIDER = "chromadb.auth.token_authn.TokenAuthClientProvider"
 
+
 class HideOutput:
     def __enter__(self):
         self.stderr = sys.stderr

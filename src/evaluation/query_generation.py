@@ -8,7 +8,6 @@ from typing import Type, Literal
 from abc import ABC, abstractmethod
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
-from langchain_openai import ChatOpenAI
 
 from dataset import AnnotatedDoc, QueryDatapoint
 from evaluation.llm import LLM_Chain, get_default_llm
@@ -35,6 +34,7 @@ class QueryGeneration(ABC):
     @abstractmethod
     def get_query_types(self) -> list[str]:
         pass
+
 
 class AssetSpecificQueryGeneration(QueryGeneration):
     asset_quality = [
@@ -99,7 +99,6 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         if chain is None:
             self.chain = self.build_chain()
         
-
     def generate(self, savedir: str) -> None:    
         descr_levels = self.descriptiveness_levels
         all_query_types = self.get_query_types()
@@ -185,7 +184,9 @@ class AssetSpecificQueryGeneration(QueryGeneration):
             all_good_datasets.extend(good_datasets)
 
             ds_ids.extend([ds["identifier"] for ds in good_datasets])
-            description_lengths.extend([len(ds["description"]["plain"]) for ds in good_datasets])
+            description_lengths.extend(
+                [len(ds["description"]["plain"]) for ds in good_datasets]
+            )
             num_tags.extend([len(ds["keyword"]) for ds in good_datasets])
 
         data = pd.DataFrame(data=[ds_ids, description_lengths, num_tags]).T
@@ -212,8 +213,6 @@ class AssetSpecificQueryGeneration(QueryGeneration):
             json.dump(json_data, f, ensure_ascii=False)
 
 
-
-        
 class GenericQueryGeneration(QueryGeneration):
     query_types = [
         "least_descriptive", 
@@ -272,7 +271,7 @@ class GenericQueryGeneration(QueryGeneration):
         if chain is None:
             self.chain = self.build_chain()
 
-    def generate(self, savedir: str, num_generate_calls: int = 1) -> None:
+    def generate(self, savedir: str, num_generative_calls: int = 1) -> None:
         outputs = [[] for _ in range(len(self.query_types))]    
         if sum([
             os.path.exists(os.path.join(savedir, f"{qtype}.json")) 
@@ -280,7 +279,7 @@ class GenericQueryGeneration(QueryGeneration):
         ]) == len(self.query_types):
             return
 
-        for _ in range(num_generate_calls):
+        for _ in range(num_generative_calls):
             output = self.chain.invoke({})
             if output is not None:
                 for it, qtype in enumerate(self.query_types):
@@ -301,77 +300,3 @@ class GenericQueryGeneration(QueryGeneration):
 
     def get_query_types(self) -> list[str]:
         return self.query_types
-            
-
-if __name__ == "__main__":
-    # description = """
-    # Self-supervised learning (SSL) has proven vital for advancing research in
-    # natural language processing (NLP) and computer vision (CV). The paradigm
-    # pretrains a shared model on large volumes of unlabeled data and achieves
-    # state-of-the-art (SOTA) for various tasks with minimal adaptation. However, the
-    # speech processing community lacks a similar setup to systematically explore the
-    # paradigm. To bridge this gap, we introduce Speech processing Universal
-    # PERformance Benchmark (SUPERB). SUPERB is a leaderboard to benchmark the
-    # performance of a shared model across a wide range of speech processing tasks
-    # with minimal architecture changes and labeled data. Among multiple usages of the
-    # shared model, we especially focus on extracting the representation learned from
-    # SSL due to its preferable re-usability. We present a simple framework to solve
-    # SUPERB tasks by learning task-specialized lightweight prediction heads on top of
-    # the frozen shared model. Our results demonstrate that the framework is promising
-    # as SSL representations show competitive generalizability and accessibility
-    # across SUPERB tasks. We release SUPERB as a challenge with a leaderboard and a
-    # benchmark toolkit to fuel the research in representation learning and general
-    # speech processing.
-
-    # Note that in order to limit the required storage for preparing this dataset, the
-    # audio is stored in the .wav format and is not converted to a float32 array. To
-    # convert the audio file to a float32 array, please make use of the `.map()`
-    # function as follows:
-
-
-    # ```python
-    # import soundfile as sf
-
-    # def map_to_array(batch):
-    #     speech_array, _ = sf.read(batch["file"])
-    #     batch["speech"] = speech_array
-    #     return batch
-
-    # dataset = dataset.map(map_to_array, remove_columns=["file"])
-    # """    
-    # tags = " | ".join([
-    #     'source_datasets:original',
-    #     'multilinguality:monolingual',
-    #     'language:en',
-    #     'region:us',
-    #     'license:unknown',
-    #     'size_categories:unknown',
-    #     'task_ids:intent-classification',
-    #     'language_creators:other',
-    #     'annotations_creators:other',
-    #     'task_ids:slot-filling',
-    #     'task_ids:speaker-identification',
-    #     'task_ids:keyword-spotting',
-    #     'source_datasets:extended|other-librimix',
-    #     'source_datasets:extended|other-speech_commands',
-    #     'source_datasets:extended|librispeech_asr',
-    #     'arxiv:2105.01051'
-    # ])
-    # name = "anton-l/superb"
-    # name = name.split("/")[-1]
-    
-    # chain = AssetSpecificQueryGeneration.build_chain()
-    # queries = chain.invoke({
-    #     "name": name,
-    #     "description": description,
-    #     "keywords": tags
-    # })
-
-    # print(queries)
-
-    chain = GenericQueryGeneration.build_chain()
-    output = chain.invoke({})
-
-    print(output)
-
-    pass

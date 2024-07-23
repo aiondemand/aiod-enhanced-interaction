@@ -4,10 +4,9 @@ import numpy as np
 
 from dataset import Queries
 from embedding_stores import EmbeddingStore
-from evaluation.llm_evaluator import LLM_Evaluator, build_query_json_from_llm_eval, evaluate_query_doc_pairs
+from evaluation.llm_evaluator import LLM_Evaluator
 from evaluation.metrics import RetrievalEvaluation
-from evaluation.query_generation import GenericQueryGeneration, QueryGeneration
-from lang_chains import Chain
+from evaluation.query_generation import GenericQueryGeneration
 from model.base import EmbeddingModel
 
 
@@ -32,7 +31,8 @@ class PrecisionEvaluationPipeline:
         self.query_generation = GenericQueryGeneration(
             GenericQueryGeneration.build_chain(asset_type=asset_type)
         )
-        self.llm_evaluator = LLM_Evaluator.build_chain()
+        self.llm_evaluator = LLM_Evaluator()
+        
         
         self.model_name = model_name
         self.asset_type = asset_type
@@ -63,7 +63,6 @@ class PrecisionEvaluationPipeline:
         query_types = self.query_generation.get_query_types()
         
         for query_type in query_types:
-            print(f"===== Evaluating '{query_type}' queries =====")
             self._inner_pipeline(
                 query_type=query_type,
                 topk=topk, 
@@ -73,11 +72,12 @@ class PrecisionEvaluationPipeline:
 
         print("=========== PRECISION EVALUATION CONCLUDED ===========")
 
-
     def _inner_pipeline(self, query_type: str, topk: int = 10, 
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
+        print(f"===== Evaluating '{query_type}' queries =====")
+
         query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
         topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
         llm_eval_dirpath = os.path.join(self.llm_eval_dirpath, query_type)
@@ -98,12 +98,12 @@ class PrecisionEvaluationPipeline:
 
         print("=== Using LLM-as-a-judge principle to evaluate (query, doc) pairs ===")
 
-        evaluate_query_doc_pairs(
-            self.llm_evaluator, query_loader, sem_search_results, 
+        self.llm_evaluator.evaluate_query_doc_pairs(
+            query_loader, sem_search_results, 
             text_dirpath=self.asset_text_dirpath, 
             save_dirpath=llm_eval_dirpath
         )
-        build_query_json_from_llm_eval(
+        LLM_Evaluator.build_query_json_from_llm_eval(
             query_loader.dataset, sem_search_results, 
             llm_eval_dirpath, 
             savepath=annotated_query_savepath,

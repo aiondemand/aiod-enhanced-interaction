@@ -4,7 +4,7 @@ import os
 from dataset import Queries
 from embedding_stores import EmbeddingStore
 from evaluation.metrics import SpecificAssetQueriesEvaluation
-from evaluation.query_generation import AssetSpecificQueryGeneration, QueryGeneration
+from evaluation.query_generation import AssetSpecificQueryGeneration
 from model.base import EmbeddingModel
 
 
@@ -34,10 +34,7 @@ class HitRateEvaluationPipeline:
         if retrieve_topk_documents_func_kwargs is None:
             self.retrieve_topk_documents_func_kwargs = {}
     
-    def execute(
-        self,
-        topk: int = 100
-    ) -> None:
+    def execute(self,topk: int = 100) -> None:
         print("=========== ACCURACY EVALUATION STARTED ===========")
         print("===== Filtering assets worth creating specific queries to =====")
         AssetSpecificQueryGeneration.create_asset_dataset_for_asset_specific_queries(
@@ -51,10 +48,13 @@ class HitRateEvaluationPipeline:
         query_types = query_generation.get_query_types()
 
         for query_type in query_types:
-            print(f"===== Evaluating '{query_type}' queries =====")
             self._inner_pipeline(query_type, topk=topk)
+
+        print("=========== ACCURACY EVALUATION CONCLUDED ===========")
         
     def _inner_pipeline(self, query_type: str, topk: int = 100) -> None:
+        print(f"===== Evaluating '{query_type}' queries =====")
+
         query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
         topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
         metrics_savepath = os.path.join(
