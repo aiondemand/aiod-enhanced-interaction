@@ -2,7 +2,7 @@ import os
 from tqdm import tqdm
 from operator import itemgetter
 from typing import Any, Type, Callable
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 import json
 
 from langchain.prompts.few_shot import FewShotChatMessagePromptTemplate
@@ -79,7 +79,7 @@ class ChainOutputOpts:
         return llm_fc, JsonOutputKeyToolsParser(key_name=schema_name)
     
 
-class Chain:
+class Chain(ABC):
     """
     Generic class representing logic of building a Langchain chain
 
@@ -183,8 +183,13 @@ class TwoStageChain(Chain):
         )
         return entire_chain
 
-    def invoke(self, input: dict) -> dict | str:
-        return self.chain.invoke(input)
+    def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
+        for _ in range(num_retry_attempts):
+            try:
+                return self.chain.invoke(input)
+            except:
+                continue
+        return None
     
     
 class SimpleChain(Chain):
@@ -213,8 +218,13 @@ class SimpleChain(Chain):
             )
         return self.prompt | llm | parser | RunnableLambda(self.postprocess_lambda)
 
-    def invoke(self, input: dict) -> dict | str:
-        return self.chain.invoke(input)
+    def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
+        for _ in range(num_retry_attempts):
+            try:
+                return self.chain.invoke(input)
+            except:
+                continue
+        return None
 
 
 def build_prompt(

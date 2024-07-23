@@ -1,3 +1,0 @@
-# TODO logika ohladne retrievnutia 100-200 datasetov, pre ktore chceme vytvorit 
-# very specific queries...
-

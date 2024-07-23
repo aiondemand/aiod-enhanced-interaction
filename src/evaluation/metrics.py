@@ -20,6 +20,7 @@ class RetrievalMetricsAtK(BaseModel):
 
     def compute_metrics_for_datapoint(
         self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,
+        compute_precision_only: bool = True,
         relevance_func: Callable[[float], bool] | None = None
     ) -> None:
         if relevance_func is None:
@@ -32,8 +33,9 @@ class RetrievalMetricsAtK(BaseModel):
         
         # RETRIEVAL
         self.prec.append(precision_at_k(relevant_docs, retrieved_docs, k=self.k))
-        self.rec.append(recall_at_k(relevant_docs, retrieved_docs, k=self.k))
-        self.AP.append(average_precision_at_k(relevant_docs, retrieved_docs, k=self.k))
+        if compute_precision_only is False: 
+            self.rec.append(recall_at_k(relevant_docs, retrieved_docs, k=self.k))
+            self.AP.append(average_precision_at_k(relevant_docs, retrieved_docs, k=self.k))
 
         # RANKING (NDCG)
         annotated_doc_ids = np.array([doc.id for doc in query_dp.annotated_docs])
@@ -80,7 +82,8 @@ class SpecificAssetQueriesMetricsAtK(BaseModel):
     asset_hit_rate: list[float] | float = []
     asset_position: list[int] | float = []
 
-    def compute_metrics_for_datapoint(self, gt_doc_id: str, relevant_docs: str) -> None:
+    def compute_metrics_for_datapoint(self, gt_doc_id: str, relevant_docs: list[str]) -> None:
+        relevant_docs = np.array(relevant_docs)
         indices = np.where(relevant_docs[:self.k] == gt_doc_id)[0]
         if len(indices) == 0:
             self.asset_hit_rate.append(0)
@@ -101,7 +104,7 @@ class SpecificAssetQueriesMetrics(BaseModel):
     def __init__(self, topk: list[int]) -> None:
         super().__init__()
         self.results_at = {
-            k: SpecificAssetQueriesMetricsAtK(k=k)
+            str(k): SpecificAssetQueriesMetricsAtK(k=k)
             for k in topk
         }
 
@@ -166,18 +169,22 @@ class SpecificAssetQueriesEvaluation:
         query_loader: DataLoader,
         load_topk_docs_dirpath: str | None = None, 
         metrics_savepath: str | None = None,
-        topk: list[int] = [3, 5, 10]
+        topk: list[int] = [5, 10, 20, 50, 100],
+        retrieve_topk_documents_func_kwargs: dict | None = None,
     ) -> SpecificAssetQueriesMetrics:
         query_ds: Queries = query_loader.dataset
-        sem_search_results = embedding_store.retrieve_topk_documents(
-            model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath
-        )
+        if retrieve_topk_documents_func_kwargs is None:
+            retrieve_topk_documents_func_kwargs = {}
 
+        sem_search_results = embedding_store.retrieve_topk_documents(
+            model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath,
+            **retrieve_topk_documents_func_kwargs
+        )
         metrics = SpecificAssetQueriesMetrics(topk)
         for query, query_results in zip(query_ds, sem_search_results):
             gt_doc_id = query.annotated_docs[0].id
             for k in topk:
-                metrics.results_at[k].compute_metrics_for_datapoint(
+                metrics.results_at[str(k)].compute_metrics_for_datapoint(
                     gt_doc_id, query_results.doc_ids
                 )            
     
@@ -185,7 +192,7 @@ class SpecificAssetQueriesEvaluation:
         if metrics_savepath is not None:
             os.makedirs(os.path.dirname(metrics_savepath), exist_ok=True)
             with open(metrics_savepath, "w") as f:
-                json.dump(metrics, f, ensure_ascii=False)
+                json.dump(metrics.model_dump(), f, ensure_ascii=False)
         return metrics
 
 
