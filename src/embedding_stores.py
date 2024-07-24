@@ -36,10 +36,16 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
-    def retrieve_topk_documents(
+    def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
         save_dirpath: str | None = None, load_dirpath: str | None = None, **kwargs
     ) -> list[SemanticSearchResult]:
+        pass
+
+    @abstractmethod
+    def translate_sem_results_to_documents(
+        self, result_set: list[SemanticSearchResult], **kwargs
+    ) -> list[list[str]]:
         pass
         
 
@@ -71,8 +77,8 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         )
 
     def store_embeddings(
-        self, model: EmbeddingModel, loader: DataLoader, collection_name: str,
-        chroma_batch_size: int = 50
+        self, model: EmbeddingModel, loader: DataLoader, 
+        collection_name: str, chroma_batch_size: int = 50
     ) -> None:
         was_training = model.training
         model.eval()
@@ -106,7 +112,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         if was_training:
             model.train()
 
-    def retrieve_topk_documents(
+    def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
         save_dirpath: str | None = None, load_dirpath: str | None = None,
         emb_collection_name: str | None = None, chroma_batch_size: int = 50,
@@ -176,8 +182,8 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             )
         return all_results
     
-    def _retrieve_documents_from_result_set(
-        self, result_set: list[dict], document_collection_name: str
+    def translate_sem_results_to_documents(
+        self, result_set: list[SemanticSearchResult], document_collection_name: str
     ) -> list[dict]:
         all_docs = []
         col = self.client.get_collection(document_collection_name)
@@ -223,7 +229,7 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
         if was_training:
             model.train()
 
-    def retrieve_topk_documents(
+    def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10,
         save_dirpath: str | None = None, load_dirpath: str | None = None,
     ) -> list[SemanticSearchResult]:
@@ -275,6 +281,12 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
                 all_results
             )
         return all_results
+    
+    def translate_sem_results_to_documents(
+        self, result_set: list[SemanticSearchResult]
+    ) -> list[dict]:
+        # TODO implement later on....
+        pass
 
     def _load_embeddings(self) -> torch.Tensor:
         if (

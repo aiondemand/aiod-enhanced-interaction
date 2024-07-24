@@ -1,12 +1,15 @@
-from .base import EmbeddingModel
 from .lm_encoders.models import (
-    RepresentationModel, Hierarchical_RepresentationModel, Basic_RepresentationModel
+    Hierarchical_EmbeddingModel, Basic_EmbeddingModel
 )
+from .base import RetrievalSystem, EmbeddingModel
+# from .retrieval import RAG_Pipeline, EmbeddingModel_Pipeline
 
 
 __all__ = [
-    "EmbeddingModel",
-    "RepresentationModel", 
-    "Hierarchical_RepresentationModel", 
-    "Basic_RepresentationModel"
+    "EmbeddingModel", 
+    "RetrievalSystem",
+    # "EmbeddingModel_Pipeline", 
+    # "RAG_Pipeline",
+    "Hierarchical_EmbeddingModel", 
+    "Basic_EmbeddingModel"
 ]

@@ -1,12 +1,11 @@
 from typing import Callable
 import torch
-from abc import abstractmethod 
+from model.base import EmbeddingModel
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
 import utils
-from model.base import EmbeddingModel
 
 
 class TokenizerTextSplitter:
@@ -38,31 +37,6 @@ class TokenizerTextSplitter:
                 break
 
         return chunks
-
-
-class RepresentationModel(EmbeddingModel):
-    @abstractmethod
-    def forward(self, texts: list[str]) -> torch.Tensor:
-        """
-        Main endpoint that wraps the logic of two functions
-        'preprocess_input' and '_forward'
-        """
-
-    @abstractmethod
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor: 
-        """
-        Function called to perform a model forward pass on a input data
-        that is represented by the 'encodings' argument
-        """
-        pass
-    
-    @abstractmethod
-    def preprocess_input(self, texts: list[str]) -> dict:
-        """
-        Function to process a batch of data and return it a format that is 
-        further fed into a model
-        """
-        pass
 
 
 class SentenceTransformerToHF(torch.nn.Module):
@@ -102,7 +76,7 @@ class SentenceTransformerToHF(torch.nn.Module):
         return [encodings["sentence_embedding"]]
     
 
-class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
+class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
     """
     Class representing models that process the input documents in their entirety 
     without needing to divide them into seperate chunks.
@@ -161,7 +135,7 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
         return encodings
     
 
-class Hierarchical_RepresentationModel(torch.nn.Module, RepresentationModel):
+class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
     """
     Class representing models that process the input documents by firstly individually 
     processing their chunks before further accumulating the chunk information to 

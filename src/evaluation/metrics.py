@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from dataset import Queries, QueryDatapoint
 from embedding_stores import EmbeddingStore, SemanticSearchResult
-from model import EmbeddingModel
+from model.lm_encoders.models import EmbeddingModel
 
 
 class MetricsClass(BaseModel):
@@ -241,7 +241,7 @@ def _generic_evaluation_loop(
     if compute_metrics_for_datapoint_func_kwargs is None:
         compute_metrics_for_datapoint_func_kwargs = {}
     
-    sem_search_results = embedding_store.retrieve_topk_documents(
+    sem_search_results = embedding_store.retrieve_topk_document_ids(
         model, query_loader, topk=max(topk), load_dirpath=load_topk_docs_dirpath,
         **retrieve_topk_documents_func_kwargs
     )

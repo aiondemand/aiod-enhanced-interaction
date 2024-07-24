@@ -4,10 +4,10 @@ from transformers import (
     RobertaConfig, RobertaModel,
 )
 
+from model.base import EmbeddingModel
 from .models import (
-    RepresentationModel, 
-    Basic_RepresentationModel, 
-    Hierarchical_RepresentationModel,
+    Basic_EmbeddingModel, 
+    Hierarchical_EmbeddingModel,
     SentenceTransformerToHF,
     TokenizerTextSplitter
 )
@@ -53,7 +53,7 @@ class ModelSetup:
         token_pooling: str = "CLS_token",
         chunk_pooling: str = "mean",
         parallel_chunk_processing: bool = True,
-    ) -> Hierarchical_RepresentationModel:
+    ) -> Hierarchical_EmbeddingModel:
         if model_path not in (
             cls.tested_sentence_transformers + 
             cls.tested_hf_hierarchical_transformers
@@ -76,7 +76,7 @@ class ModelSetup:
             chunk_transformer = cls._init_chunk_transformer(
                 transformer.embedding_dim, max_num_chunks=max_num_chunks
             )
-        model = Hierarchical_RepresentationModel(
+        model = Hierarchical_EmbeddingModel(
             transformer, tokenizer=tokenizer, token_pooling=token_pooling,
             chunk_transformer=chunk_transformer,
             chunk_pooling=chunk_pooling,
@@ -91,7 +91,7 @@ class ModelSetup:
     def setup_non_hierarchical_model(
         cls, model_path: str, document_max_length: int = -1,
         pooling: str = "CLS_token"
-    ) -> RepresentationModel:
+    ) -> EmbeddingModel:
         if model_path not in (
             cls.tested_sentence_transformers +
             cls.tested_hf_non_hierarchical_transformers
@@ -113,9 +113,9 @@ class ModelSetup:
     @classmethod
     def _setup_sentence_transformer_no_hierarchical(
         cls, model_path: str, document_max_length: int = -1
-    ) -> Basic_RepresentationModel:
+    ) -> Basic_EmbeddingModel:
         transformer = SentenceTransformerToHF(model_path)
-        model = Basic_RepresentationModel(
+        model = Basic_EmbeddingModel(
             transformer, transformer.tokenizer, pooling="none",
             document_max_length=document_max_length
         )
@@ -126,13 +126,13 @@ class ModelSetup:
     @classmethod
     def _setup_longformer(
         cls, pooling: str = "mean", document_max_length: int = -1
-    ) -> Basic_RepresentationModel:
+    ) -> Basic_EmbeddingModel:
         p = "severinsimmler/xlm-roberta-longformer-base-16384"
         transformer = AutoModel.from_pretrained(p)
         tokenizer = AutoTokenizer.from_pretrained(p)
         tokenizer.model_max_length = 16384
 
-        model = Basic_RepresentationModel(
+        model = Basic_EmbeddingModel(
             transformer, tokenizer, 
             pooling=pooling,
             document_max_length=document_max_length
@@ -144,7 +144,7 @@ class ModelSetup:
     @classmethod
     def _setup_m2_bert_8k(
         cls, document_max_length: int = -1
-    ) -> Basic_RepresentationModel:
+    ) -> Basic_EmbeddingModel:
         transformer = AutoModelForSequenceClassification.from_pretrained(
             "togethercomputer/m2-bert-80M-8k-retrieval",
             trust_remote_code=True
@@ -155,7 +155,7 @@ class ModelSetup:
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         tokenizer.model_max_length = 8192
         
-        model = Basic_RepresentationModel(
+        model = Basic_EmbeddingModel(
             transformer, tokenizer, 
             pooling="none", document_max_length=document_max_length
         )
@@ -164,14 +164,14 @@ class ModelSetup:
         return model
         
     @classmethod
-    def _setup_multilingual_e5_large(cls) -> Hierarchical_RepresentationModel:    
+    def _setup_multilingual_e5_large(cls) -> Hierarchical_EmbeddingModel:    
         transformer = SentenceTransformerToHF("intfloat/multilingual-e5-large")
         prepend_prompt_fn = lambda t: "query: " + t
 
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
         )
-        model = Hierarchical_RepresentationModel(
+        model = Hierarchical_EmbeddingModel(
             transformer, 
             tokenizer=transformer.tokenizer,
             token_pooling="none",
@@ -187,14 +187,14 @@ class ModelSetup:
     @classmethod
     def _setup_gte_large(
         cls, model_max_length: int | None = None
-    ) -> Basic_RepresentationModel: 
+    ) -> Basic_EmbeddingModel: 
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
         )
         if model_max_length is None:
             model_max_length = transformer.tokenizer.model_max_length
 
-        model = Basic_RepresentationModel(
+        model = Basic_EmbeddingModel(
             transformer, 
             transformer.tokenizer, 
             pooling="none", 
@@ -207,7 +207,7 @@ class ModelSetup:
     @classmethod
     def _setup_gte_qwen2(
         cls, prepend_prompt: str | None = None,
-    ) -> Basic_RepresentationModel:
+    ) -> Basic_EmbeddingModel:
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True
         )
@@ -218,7 +218,7 @@ class ModelSetup:
             )
         prepend_prompt_fn = lambda t: prepend_prompt + t
 
-        model = Basic_RepresentationModel(
+        model = Basic_EmbeddingModel(
             transformer, 
             transformer.tokenizer,
             pooling="none",

@@ -37,14 +37,18 @@ class RelevanceEvaluation(BaseModel):
     explanation: RelevanceExplanation = Field(..., description="Detailed explanation of the document relevance to the query.")
 
 
-class RelevanceEvaluationOneDoc(BaseModel):
+class RelevanceEvaluationOneDocExplicitQueryDoc(BaseModel):
     query: str = Field(..., description="The user query describing the requirements and desired properties of an asset.")
     document: str = Field(..., description="The document (a short asset description together with additional metadata) being evaluated.")
     explanation: RelevanceExplanation = Field(..., description="Detailed explanation of the document relevance to the query.")
 
 
+class RelevanceEvaluationMultipleDocsExplicitQueryDoc(BaseModel):
+    relevances: list[RelevanceEvaluationOneDocExplicitQueryDoc] = Field(..., description="Evaluation of relevance of each document/asset to an user query.")
+
+
 class RelevanceEvaluationMultipleDocs(BaseModel):
-    relevances: list[RelevanceEvaluationOneDoc] = Field(..., description="Evaluation of relevance of each document/asset to an user query.")
+    relevances: list[RelevanceEvaluation] = Field(..., description="Evaluation of relevance of each document/asset to an user query.")
     
 
 class LLM_Evaluator:
@@ -111,22 +115,24 @@ class LLM_Evaluator:
     @classmethod
     def build_chain(
         cls, llm: BaseLLM | None = None, pydantic_model: Type[BaseModel] | None = None,
-        compare_multiple_documents_to_a_query: bool = False
+        compare_multiple_documents_to_a_query: bool = False, 
+        generating_explicit_query_doc_pairs: bool = False
     ) -> SimpleChain:
         if llm is None:
             llm = get_default_llm()
         if pydantic_model is None:
-            pydantic_model = (
-                RelevanceEvaluationMultipleDocs
-                if compare_multiple_documents_to_a_query
-                else RelevanceEvaluation
-            )
+            if compare_multiple_documents_to_a_query and generating_explicit_query_doc_pairs:
+                pydantic_model = RelevanceEvaluationMultipleDocsExplicitQueryDoc
+            elif compare_multiple_documents_to_a_query:
+                pydantic_model = RelevanceEvaluationMultipleDocs
+            else:
+                pydantic_model = RelevanceEvaluation
+
         prompt_templates = (
             [cls.system_prompt_multiple_docs, cls.prompt_template_multiple_docs]
             if compare_multiple_documents_to_a_query
             else [cls.system_prompt_one_doc, cls.prompt_template_one_doc]
         )
-
         return LLM_Chain.build_simple_chain(
             pydantic_model=pydantic_model, 
             prompt_templates=prompt_templates, 
@@ -157,52 +163,76 @@ class LLM_Evaluator:
         with get_openai_callback() as cb:
             for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
                 os.makedirs(os.path.join(save_dirpath, query.id), exist_ok=True)
-                
-                doc_groups = self._group_docs(text_dirpath, topk_doc_ids.doc_ids)
-                
+                remaining_doc_ids = [
+                    doc_id
+                    for doc_id in topk_doc_ids.doc_ids
+                    if os.path.exists(
+                        os.path.join(save_dirpath, query.id, f"{doc_id}.json")
+                    ) == False
+                ]
+                if len(remaining_doc_ids) == 0:
+                    continue
+
                 model_predictions = []
-                for doc_group in doc_groups:
-                    # TODO changes in progress
-                    pass
-
-
-                for doc_id in topk_doc_ids.doc_ids:
-                    savepath = os.path.join(save_dirpath, query.id, f"{doc_id}.json")
-                    if os.path.exists(savepath):
-                        continue
-                    with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
-                        doc_text = f.read()
-            
-                    pred = self.chain.invoke({
-                        "query": query.text,
-                        "document": doc_text
-                    })
-                    if pred is not None:
-                        with open(savepath, "w") as f:
-                            json.dump(pred, f, ensure_ascii=False)
-                    else:
-                        print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
-            # print(cb)
+                doc_groups = self._group_docs(text_dirpath, remaining_doc_ids)
+                group_size = self.num_docs_to_compare_at_the_time
+                for it, doc_group in enumerate(doc_groups):
+                    doc_ids = remaining_doc_ids[
+                        it*group_size: (it+1)*group_size
+                    ]
+                    model_predictions = self.calc_doc_relevance(query, doc_group)
+                    self.save_doc_relevance(query, doc_ids, model_predictions, save_dirpath)
+                    
+            print(cb)
 
     def _group_docs(self, text_dirpath: str, doc_ids: list[str]) -> list[list[str]]:
         groups = []
         for i in range(0, len(doc_ids), self.num_docs_to_compare_at_the_time):
             group = []
-            ids = doc_ids[i, i+self.num_docs_to_compare_at_the_time]
+            ids = doc_ids[i: i+self.num_docs_to_compare_at_the_time]
             for doc_id in ids:
                 with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
-                    group.append(f.read())
-            
+                    group.append(f.read())            
             groups.append(group)
                     
         return groups
     
-    def evaluate_doc_group(self, query: QueryDatapoint, docs):
-        pass
+    def calc_doc_relevance(
+        self, query: QueryDatapoint, docs: list[str]
+    ) -> list[dict | None]:
+        if self.num_docs_to_compare_at_the_time == 1:
+            return [self.chain.invoke({
+                "query": query.text,
+                "document": docs[0]
+            })]
+        
+        multiple_docs_str = self.build_multiple_document_prompt(docs)
+        multiple_pred = self.chain.invoke({
+            "query": query.text,
+            "multiple_documents": multiple_docs_str
+        })
+        if len(multiple_pred["relevances"]) != len(docs):
+            return [None for _ in range(len(docs))]
+        return [
+            { "explanation": p["explanation"] }
+            for p in multiple_pred["relevances"]
+        ]
+    
+    def save_doc_relevance(
+        self, query: QueryDatapoint, doc_ids: list[str], 
+        predictions: list[dict | None], savedir: str
+    ) -> None:
+        for doc_id, pred in zip(doc_ids, predictions):
+            if pred is not None:
+                savepath = os.path.join(savedir, query.id, f"{doc_id}.json")
+                with open(savepath, "w") as f:
+                    json.dump(pred, f, ensure_ascii=False)
+            else:
+                print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
 
-    @staticmethod
-    def build_multiple_document_prompt(documents: list[str]) -> str:
-        string_placeholder = "\n### Document {doc_it}:\n{doc}"
+    @classmethod
+    def build_multiple_document_prompt(cls, documents: list[str]) -> str:
+        string_placeholder = "### Asset {doc_it} to evaluate to the user query:\n{doc}\n\n"
         string = ""
         for it, doc in enumerate(documents):
             string += string_placeholder.format(doc_it=it+1, doc=doc)

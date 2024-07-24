@@ -37,6 +37,7 @@ class ConvertJsonToString:
     def stringify(cls, data: dict) -> str:
         return json.dumps(data)
 
+    # "BASIC INFO"
     @classmethod
     def extract_very_basic_info(cls, data: dict, stringify: bool = False) -> str:
         simple_data = cls._extract_very_basic_fields(data)
@@ -55,6 +56,7 @@ class ConvertJsonToString:
 
         return string
     
+    # "SIMPLE INFO"
     @classmethod
     def extract_relevant_info(cls, data: dict, stringify: bool = False) -> str:
         simple_data = cls._extract_relevant_fields(data)

@@ -41,8 +41,8 @@ class AssetSpecificQueryGeneration(QueryGeneration):
     asset_quality = [
         "long_description_many_tags",
         "long_description_few_tags",
-        "moderate_description",
-        "poor_description"
+        "moderate_description_many_tags",
+        "poor_description_many_tags"
     ]
     descriptiveness_levels = [
         "least_descriptive", 
@@ -113,7 +113,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         with get_openai_callback() as cb:
             for asset_type_it, asset_q in enumerate(self.asset_quality):
                 print(f"...Generating asset-specific queries for '{asset_q}' documents...")
-                for doc in tqdm(self.all_assets[asset_q], total=len(self.all_assets[asset_q])):
+                for doc in tqdm(self.all_assets[asset_q], total=len(self.all_assets[asset_q])):    
                     name = doc["name"].split("/")[-1]
                     description = doc["description"]["plain"]
                     keywords = " | ".join(doc["keyword"])
@@ -133,16 +133,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
                                     AnnotatedDoc(id=str(doc["identifier"]), score=1)
                                 ]
                             )
-                            # TODO get rid of
-                            # outputs[out_idx].append(datapoint.model_dump())
-                            outputs[out_idx].append({
-                                "query": datapoint.model_dump(),
-                                "document": {
-                                    "name": name,
-                                    "description": description,
-                                    "keywords": keywords
-                                }
-                            })
+                            outputs[out_idx].append(datapoint.model_dump())
                     else:
                         print(f"We were unable to generate asset-specific queries to the asset ID={doc['identifier']}")
             # print(cb)
@@ -164,7 +155,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
 
     @classmethod
     def create_asset_dataset_for_asset_specific_queries(
-        cls, json_dirpath: str, savepath: str
+        cls, json_dirpath: str, savepath: str, max_docs_per_doctype: int = 50
     ) -> None:
         def is_good_dataset(ds: dict) -> bool:
             platform = ds.get("platform", None)
@@ -209,10 +200,10 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         data = data.set_index("id", drop=True)
         data = data.drop_duplicates(subset=["description"])
 
-        long_descr_many_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] > 10)].iloc[:50].index.values #79 documents
-        long_descr_few_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] < 3)].iloc[:50].index.values #95 documents
-        moder_descr = data[(data["descr_len"] > 200) & (data["descr_len"] < 500) & (data["num_tags"] > 10)].iloc[:50].index.values #518 documents
-        poor_descr = data[(data["descr_len"] < 50) & (data["num_tags"] > 10)].iloc[:50].index.values #61 documents
+        long_descr_many_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] > 10)].iloc[:max_docs_per_doctype].index.values #79 documents
+        long_descr_few_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] < 3)].iloc[:max_docs_per_doctype].index.values #95 documents
+        moder_descr = data[(data["descr_len"] > 200) & (data["descr_len"] < 500) & (data["num_tags"] > 10)].iloc[:max_docs_per_doctype].index.values #518 documents
+        poor_descr = data[(data["descr_len"] < 50) & (data["num_tags"] > 10)].iloc[:max_docs_per_doctype].index.values #61 documents
 
         all_id_subsets = [
             long_descr_many_tags, long_descr_few_tags, moder_descr, poor_descr

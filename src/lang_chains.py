@@ -186,7 +186,9 @@ class TwoStageChain(Chain):
     def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
         for _ in range(num_retry_attempts):
             try:
-                return self.chain.invoke(input)
+                pred = self.chain.invoke(input)
+                self.chain_output_opts.pydantic_model(**pred)
+                return pred
             except:
                 continue
         return None
@@ -221,7 +223,9 @@ class SimpleChain(Chain):
     def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
         for _ in range(num_retry_attempts):
             try:
-                return self.chain.invoke(input)
+                pred = self.chain.invoke(input)
+                self.chain_output_opts.pydantic_model(**pred)
+                return pred
             except:
                 continue
         return None

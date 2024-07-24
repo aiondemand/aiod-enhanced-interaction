@@ -12,8 +12,6 @@ import random
 from nltk.corpus import words
 from pydantic import BaseModel
 
-from model.lm_encoders.setup import ModelSetup
-
 
 class AnnotatedDoc(BaseModel):
     id: str
@@ -144,23 +142,4 @@ def process_documents_and_store_to_filesystem(
         for id, text in zip(doc_ids, extracted_texts):
             with open(os.path.join(savedir, f"{id}{extension}"), "w") as f:
                 f.write(text)
-
-
-if __name__ == "__main__":
-    from utils import init
-    from preprocess.text_operations import ConvertJsonToString
-    client = init()    
-    ds = AIoD_Documents(dirpath="data/basic-texts")
-    
-    retrieval_model = ModelSetup._setup_gte_large(model_max_length=4096)
-    tokenizer = retrieval_model.tokenizer
-
-    counts = []
-    for doc in tqdm(ds):
-        counts.append(len(tokenizer(doc[0])["input_ids"]))
-
-    counts = np.array(counts)
-    print(np.quantile(counts, 0.1))
-    print(np.quantile(counts, 0.5))
-    print(np.quantile(counts, 0.9))
     

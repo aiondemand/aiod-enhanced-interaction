@@ -7,12 +7,13 @@ from embedding_stores import EmbeddingStore
 from evaluation.llm_evaluator import LLM_Evaluator
 from evaluation.metrics import RetrievalEvaluation
 from evaluation.query_generation import GenericQueryGeneration
-from model.base import EmbeddingModel
+from model.lm_encoders.models import EmbeddingModel
 
 
 class PrecisionEvaluationPipeline:
+    # TODO retrieval_model should be later or replaced by the retrieval system abstraction
     def __init__(
-        self, retrieval_model: EmbeddingModel,
+        self, embedding_model: EmbeddingModel,
         embedding_store: EmbeddingStore,
         model_name: str,
         asset_type: Literal["dataset", "model", "publication"],
@@ -24,20 +25,32 @@ class PrecisionEvaluationPipeline:
         metrics_dirpath: str,
         post_process_llm_prediction_function: Callable[[dict], dict] | None = None,
         retrieve_topk_documents_func_kwargs: dict | None = None,
-        llm_judge_num_docs_to_compare_at_the_time: int = 1,
+        llm_evaluator_build_chain_kwargs: dict | None = None,
+        llm_evaluator_num_docs_to_compare_at_the_time: int = 1
     ) -> None:
-        self.retrieval_model = retrieval_model
+        self.embedding_model = embedding_model
         self.embedding_store = embedding_store
 
-        self.query_generation = GenericQueryGeneration(
-            GenericQueryGeneration.build_chain(asset_type=asset_type)
+        query_gen_chain = GenericQueryGeneration.build_chain(
+            asset_type=asset_type,
+            query_counts=[10, 30, 50]
         )
-        self.llm_judge_num_docs_to_compare_at_the_time = llm_judge_num_docs_to_compare_at_the_time
-        multiple_docs = llm_judge_num_docs_to_compare_at_the_time > 1
-        judge_chain = LLM_Evaluator.build_chain(compare_multiple_documents_to_a_query=multiple_docs)
+        self.query_generation = GenericQueryGeneration(chain=query_gen_chain)
+
+        self.llm_evaluator_build_chain_kwargs = llm_evaluator_build_chain_kwargs
+        if llm_evaluator_build_chain_kwargs is None:
+            self.llm_evaluator_build_chain_kwargs = {}
+
+        judge_chain = LLM_Evaluator.build_chain(**self.llm_evaluator_build_chain_kwargs)
+        multiple_docs = self.llm_evaluator_build_chain_kwargs.get(
+            "compare_multiple_documents_to_a_query", False
+        )
+        self.llm_evaluator_num_doct_to_compare_at_the_time = llm_evaluator_num_docs_to_compare_at_the_time
+        if multiple_docs is False:
+            self.llm_evaluator_num_doct_to_compare_at_the_time = 1
         self.llm_evaluator = LLM_Evaluator(
             judge_chain, 
-            num_docs_to_compare_at_the_time=llm_judge_num_docs_to_compare_at_the_time
+            num_docs_to_compare_at_the_time=self.llm_evaluator_num_doct_to_compare_at_the_time
         )
         
         self.model_name = model_name
@@ -68,7 +81,7 @@ class PrecisionEvaluationPipeline:
         print("===== Generation of generic queries =====")
         self.query_generation.generate(savedir=self.generate_queries_dirpath)
         query_types = self.query_generation.get_query_types()
-        
+    
         for query_type in query_types:
             self._inner_pipeline(
                 query_type=query_type,
@@ -97,8 +110,8 @@ class PrecisionEvaluationPipeline:
 
         print("=== Retreving top K documents to each query ===")
         query_loader = Queries(json_path=query_filepath).build_loader()
-        sem_search_results = self.embedding_store.retrieve_topk_documents(
-            self.retrieval_model, query_loader, topk=topk, 
+        sem_search_results = self.embedding_store.retrieve_topk_document_ids(
+            self.embedding_model, query_loader, topk=topk, 
             load_dirpath=topk_dirpath, save_dirpath=topk_dirpath,
             **self.retrieve_topk_documents_func_kwargs
         )
@@ -123,9 +136,12 @@ class PrecisionEvaluationPipeline:
         all_topk = all_topk[all_topk <= topk].tolist()
         eval = RetrievalEvaluation(relevance_func=relevance_function)
         eval.evaluate(
-            self.retrieval_model, self.embedding_store, query_loader_with_gt, 
+            self.embedding_model, self.embedding_store, query_loader_with_gt, 
             topk=all_topk,
             load_topk_docs_dirpath=topk_dirpath,
             metrics_savepath=metrics_savepath,
             retrieve_topk_documents_func_kwargs=self.retrieve_topk_documents_func_kwargs
         )
+
+if __name__ == "__main__":
+    pass

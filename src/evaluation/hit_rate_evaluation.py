@@ -5,12 +5,13 @@ from dataset import Queries
 from embedding_stores import EmbeddingStore
 from evaluation.metrics import SpecificAssetQueriesEvaluation
 from evaluation.query_generation import AssetSpecificQueryGeneration
-from model.base import EmbeddingModel
+from model.lm_encoders.models import EmbeddingModel
 
 
 class HitRateEvaluationPipeline:
+    # TODO retrieval_model should be later or replaced by the retrieval system abstraction
     def __init__(
-        self, retrieval_model: EmbeddingModel,
+        self, embedding_model: EmbeddingModel,
         embedding_store: EmbeddingStore,
         model_name: str,
         orig_json_assets_dirpath: str,
@@ -20,7 +21,7 @@ class HitRateEvaluationPipeline:
         metrics_dirpath: str,
         retrieve_topk_documents_func_kwargs: dict | None = None,
     ) -> None:
-        self.retrieval_model = retrieval_model
+        self.embedding_model = embedding_model
         self.embedding_store = embedding_store
     
         self.model_name = model_name
@@ -39,7 +40,7 @@ class HitRateEvaluationPipeline:
         print("===== Filtering assets worth creating specific queries to =====")
         AssetSpecificQueryGeneration.create_asset_dataset_for_asset_specific_queries(
             json_dirpath=self.orig_json_assets_dirpath,
-            savepath=self.quality_assets_path
+            savepath=self.quality_assets_path,
         )
         
         print("===== Generation of asset-specific queries =====")
@@ -63,8 +64,8 @@ class HitRateEvaluationPipeline:
         
         print("=== Retreving top K documents to each query ===")
         query_loader = Queries(json_path=query_filepath).build_loader()
-        self.embedding_store.retrieve_topk_documents(
-            self.retrieval_model, query_loader, topk=topk, 
+        self.embedding_store.retrieve_topk_document_ids(
+            self.embedding_model, query_loader, topk=topk, 
             load_dirpath=topk_dirpath, save_dirpath=topk_dirpath,
             **self.retrieve_topk_documents_func_kwargs
         )
@@ -74,7 +75,7 @@ class HitRateEvaluationPipeline:
         all_topk = all_topk[all_topk <= topk].tolist()
         eval = SpecificAssetQueriesEvaluation()
         eval.evaluate(
-            self.retrieval_model, self.embedding_store, query_loader, 
+            self.embedding_model, self.embedding_store, query_loader, 
             topk=all_topk,
             load_topk_docs_dirpath=topk_dirpath,
             metrics_savepath=metrics_savepath,
