@@ -6,6 +6,7 @@ import json
 import os
 from typing import Type, Literal
 from abc import ABC, abstractmethod
+from langchain_community.callbacks import get_openai_callback
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 
@@ -66,7 +67,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         
     """
     input_prompt = """
-        ### ML asset name: {name}
+        ### ML asset name to exclude: {name}
         ### ML asset description: {description}
         ### ML asset keywords and tags: {keywords}
         
@@ -109,30 +110,42 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         ]) == len(all_query_types):
             return
 
-        for asset_type_it, asset_q in enumerate(self.asset_quality):
-            for doc in self.all_assets[asset_q]:
-                name = doc["name"]
-                description = doc["description"]["plain"]
-                keywords = " | ".join(doc["keyword"])
-                
-                output = self.chain.invoke({
-                    "name": name,
-                    "description": description,
-                    "keywords": keywords
-                })
-                if output is not None:
-                    for descr_it, descr_level in enumerate(descr_levels):
-                        out_idx = asset_type_it*len(descr_levels) + descr_it
-                        datapoint = QueryDatapoint(
-                            text=output[descr_level], 
-                            id=str(uuid.uuid4()),
-                            annotated_docs=[
-                                AnnotatedDoc(id=str(doc["identifier"]), score=1)
-                            ]
-                        )
-                        outputs[out_idx].append(datapoint.model_dump())
-                else:
-                    print(f"We were unable to generate asset-specific queries to the asset ID={doc['identifier']}")
+        with get_openai_callback() as cb:
+            for asset_type_it, asset_q in enumerate(self.asset_quality):
+                print(f"...Generating asset-specific queries for '{asset_q}' documents...")
+                for doc in tqdm(self.all_assets[asset_q], total=len(self.all_assets[asset_q])):
+                    name = doc["name"].split("/")[-1]
+                    description = doc["description"]["plain"]
+                    keywords = " | ".join(doc["keyword"])
+        
+                    output = self.chain.invoke({
+                        "name": name,
+                        "description": description,
+                        "keywords": keywords
+                    })
+                    if output is not None:
+                        for descr_it, descr_level in enumerate(descr_levels):
+                            out_idx = asset_type_it*len(descr_levels) + descr_it
+                            datapoint = QueryDatapoint(
+                                text=output[descr_level], 
+                                id=str(uuid.uuid4()),
+                                annotated_docs=[
+                                    AnnotatedDoc(id=str(doc["identifier"]), score=1)
+                                ]
+                            )
+                            # TODO get rid of
+                            # outputs[out_idx].append(datapoint.model_dump())
+                            outputs[out_idx].append({
+                                "query": datapoint.model_dump(),
+                                "document": {
+                                    "name": name,
+                                    "description": description,
+                                    "keywords": keywords
+                                }
+                            })
+                    else:
+                        print(f"We were unable to generate asset-specific queries to the asset ID={doc['identifier']}")
+            # print(cb)
 
         os.makedirs(savedir, exist_ok=True)
         for it, qtype in enumerate(all_query_types):
@@ -173,6 +186,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
 
         all_good_datasets = []
         ds_ids = []
+        descriptions = []
         description_lengths = []
         num_tags = []
         for filename in tqdm(os.listdir(json_dirpath)):
@@ -184,19 +198,21 @@ class AssetSpecificQueryGeneration(QueryGeneration):
             all_good_datasets.extend(good_datasets)
 
             ds_ids.extend([ds["identifier"] for ds in good_datasets])
+            descriptions.extend(ds["description"]["plain"] for ds in good_datasets)
             description_lengths.extend(
                 [len(ds["description"]["plain"]) for ds in good_datasets]
             )
             num_tags.extend([len(ds["keyword"]) for ds in good_datasets])
 
-        data = pd.DataFrame(data=[ds_ids, description_lengths, num_tags]).T
-        data.columns = ["id", "descr_len", "num_tags"]
+        data = pd.DataFrame(data=[ds_ids, descriptions, description_lengths, num_tags]).T
+        data.columns = ["id", "description", "descr_len", "num_tags"]
         data = data.set_index("id", drop=True)
+        data = data.drop_duplicates(subset=["description"])
 
-        long_descr_many_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] > 10)].iloc[:100].index.values #79 documents
-        long_descr_few_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] < 3)].iloc[:100].index.values #95 documents
-        moder_descr = data[(data["descr_len"] > 200) & (data["descr_len"] < 500) & (data["num_tags"] > 10)].iloc[:100].index.values #518 documents
-        poor_descr = data[(data["descr_len"] < 50) & (data["num_tags"] > 10)].iloc[:100].index.values #61 documents
+        long_descr_many_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] > 10)].iloc[:50].index.values #79 documents
+        long_descr_few_tags = data[(data["descr_len"] > 1000) & (data["num_tags"] < 3)].iloc[:50].index.values #95 documents
+        moder_descr = data[(data["descr_len"] > 200) & (data["descr_len"] < 500) & (data["num_tags"] > 10)].iloc[:50].index.values #518 documents
+        poor_descr = data[(data["descr_len"] < 50) & (data["num_tags"] > 10)].iloc[:50].index.values #61 documents
 
         all_id_subsets = [
             long_descr_many_tags, long_descr_few_tags, moder_descr, poor_descr
@@ -232,10 +248,10 @@ class GenericQueryGeneration(QueryGeneration):
         The queries can cover different aspects, such as application, data domain, as well as additional specific asset traits (e.g., 
         task, content, language, {asset} size, framework, format, ...). 
 
-        You're expected to generate {total_queries} user queries in total with varying levels of descriptiveness:
-        - Least Descriptive Queries: {query} queries, each up to 70 characters, capturing only the essential aspects of the assets we wish to search for.
-        - Moderately Descriptive Queries: {query} queries, each up to 200 characters, providing additional details in the form at least 2 properties of the assets we wish to search for.
-        - Most Descriptive Queries: {query} queries, each up to 500 characters, encompassing a wide range of details and characteristics by defining at least 4 properties of the assets we wish to search for.
+        You're expected to generate unique {total_queries} user queries in total with varying levels of descriptiveness:
+        - Least Descriptive Queries: {query1} unique queries, each up to 70 characters, capturing only the essential aspects of the assets we wish to search for.
+        - Moderately Descriptive Queries: {query2} unique queries, each up to 200 characters, providing additional details in the form at least 2 specific properties of the assets we wish to search for.
+        - Most Descriptive Queries: {query3} unique queries, each up to 500 characters, encompassing a wide range of details and characteristics by defining at least 4 specific properties of the assets we wish to search for.
 
         Important Note: Ensure the queries are realistic and representative of what users might search for. Do not reference any specific asset names directly. 
     """
@@ -247,7 +263,7 @@ class GenericQueryGeneration(QueryGeneration):
     def build_chain(
         cls, llm: BaseLLM | None = None, pydantic_model: Type[BaseModel] | None = None,
         asset_type: Literal["dataset", "model", "publication"] = "dataset", 
-        query_count: int = 10
+        query_counts: list[int] = [10, 30, 50]
     ) -> SimpleChain:
         if llm is None:
             llm = get_default_llm()
@@ -256,8 +272,10 @@ class GenericQueryGeneration(QueryGeneration):
         prompt_templates = [
             cls.system_prompt.format(
                 asset=asset_type,
-                total_queries=query_count*3, 
-                query=query_count
+                total_queries=sum(query_counts),
+                query1=query_counts[0],
+                query2=query_counts[1],
+                query3=query_counts[2]
             ), 
             cls.input_prompt
         ]
@@ -279,18 +297,22 @@ class GenericQueryGeneration(QueryGeneration):
         ]) == len(self.query_types):
             return
 
-        for _ in range(num_generative_calls):
-            output = self.chain.invoke({})
-            if output is not None:
-                for it, qtype in enumerate(self.query_types):
-                    queries = [
-                        QueryDatapoint(
-                            **{ "id": str(uuid.uuid4()), "text": q }
-                        ).model_dump() for q in output[qtype]
-                    ]
-                    outputs[it].extend(queries)
-            else:
-                print("We were unable to generate some generic queries")
+        print("...Generating generic queries...")
+        with get_openai_callback() as cb:
+            for _ in tqdm(range(num_generative_calls)):
+                output = self.chain.invoke({})
+                if output is not None:
+                    for it, qtype in enumerate(self.query_types):
+                        queries = [
+                            QueryDatapoint(
+                                **{ "id": str(uuid.uuid4()), "text": q }
+                            ).model_dump() for q in output[qtype]
+                        ]
+                        outputs[it].extend(queries)
+                else:
+                    print("We were unable to generate some generic queries")
+            print(cb)
+                
 
         os.makedirs(savedir, exist_ok=True)
         for it, qtype in enumerate(self.query_types):

@@ -4,10 +4,11 @@ import os
 from typing import Type, Callable
 from enum import Enum
 from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_community.callbacks import get_openai_callback
 from langchain_core.language_models.llms import BaseLLM
 from torch.utils.data import DataLoader
 
-from dataset import AnnotatedDoc, Queries, QueryDatapoint
+from dataset import AIoD_Documents, AnnotatedDoc, Queries, QueryDatapoint
 from embedding_stores import SemanticSearchResult
 from lang_chains import Chain, SimpleChain
 from evaluation.llm import LLM_Chain, get_default_llm
@@ -132,10 +133,16 @@ class LLM_Evaluator:
             llm=llm
         )
     
-    def __init__(self, chain: SimpleChain | None = None) -> None:
-        self.chain = chain
+    def __init__(
+        self, chain: SimpleChain | None = None, 
+        num_docs_to_compare_at_the_time: int = 1
+    ) -> None:
         if chain is None:
             self.chain = self.build_chain()
+            self.num_docs_to_compare_at_the_time = 1
+        else:
+            self.chain = chain
+            self.num_docs_to_compare_at_the_time = num_docs_to_compare_at_the_time
 
     def evaluate_query_doc_pairs(
         self,
@@ -147,26 +154,52 @@ class LLM_Evaluator:
         queries: list[QueryDatapoint] = query_loader.dataset.queries
         
         print(f"...Evaluating relevance of retrieved documents to {len(queries)} queries...")
-        for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
-            os.makedirs(os.path.join(save_dirpath, query.id), exist_ok=True)
+        with get_openai_callback() as cb:
+            for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
+                os.makedirs(os.path.join(save_dirpath, query.id), exist_ok=True)
+                
+                doc_groups = self._group_docs(text_dirpath, topk_doc_ids.doc_ids)
+                
+                model_predictions = []
+                for doc_group in doc_groups:
+                    # TODO changes in progress
+                    pass
+
+
+                for doc_id in topk_doc_ids.doc_ids:
+                    savepath = os.path.join(save_dirpath, query.id, f"{doc_id}.json")
+                    if os.path.exists(savepath):
+                        continue
+                    with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
+                        doc_text = f.read()
             
-            for doc_id in topk_doc_ids.doc_ids:
-                savepath = os.path.join(save_dirpath, query.id, f"{doc_id}.json")
-                if os.path.exists(savepath):
-                    continue
+                    pred = self.chain.invoke({
+                        "query": query.text,
+                        "document": doc_text
+                    })
+                    if pred is not None:
+                        with open(savepath, "w") as f:
+                            json.dump(pred, f, ensure_ascii=False)
+                    else:
+                        print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
+            # print(cb)
+
+    def _group_docs(self, text_dirpath: str, doc_ids: list[str]) -> list[list[str]]:
+        groups = []
+        for i in range(0, len(doc_ids), self.num_docs_to_compare_at_the_time):
+            group = []
+            ids = doc_ids[i, i+self.num_docs_to_compare_at_the_time]
+            for doc_id in ids:
                 with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
-                    doc_text = f.read()
-        
-                pred = self.chain.invoke({
-                    "query": query.text,
-                    "document": doc_text
-                })
-                if pred is not None:
-                    with open(savepath, "w") as f:
-                        json.dump(pred, f, ensure_ascii=False)
-                else:
-                    print(f"We were unable to evaluate query (id={query.id}) doc (id={doc_id}) pair")
+                    group.append(f.read())
             
+            groups.append(group)
+                    
+        return groups
+    
+    def evaluate_doc_group(self, query: QueryDatapoint, docs):
+        pass
+
     @staticmethod
     def build_multiple_document_prompt(documents: list[str]) -> str:
         string_placeholder = "\n### Document {doc_it}:\n{doc}"
@@ -210,3 +243,21 @@ class LLM_Evaluator:
             )
         with open(savepath, "w") as f:
             json.dump(json_query_datapoints, f, ensure_ascii=False)
+
+
+if __name__ == "__main__":
+    with open("data/long_description_many_tags.json") as f:
+        data = json.load(f)
+
+    import numpy as np
+    ds_ids = np.array([ds["identifier"] for ds in data["long_description_many_tags"][:5]])
+
+    ds = AIoD_Documents(dirpath="data/basic-texts", include_ids=ds_ids)
+    ds
+
+    chain = LLM_Evaluator.build_chain(compare_multiple_documents_to_a_query=True)
+    judge = LLM_Evaluator(chain, num_docs_to_compare_at_the_time=3)
+
+    judge.evaluate_query_doc_pairs()
+    
+    pass

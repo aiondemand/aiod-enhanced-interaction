@@ -24,6 +24,7 @@ class PrecisionEvaluationPipeline:
         metrics_dirpath: str,
         post_process_llm_prediction_function: Callable[[dict], dict] | None = None,
         retrieve_topk_documents_func_kwargs: dict | None = None,
+        llm_judge_num_docs_to_compare_at_the_time: int = 1,
     ) -> None:
         self.retrieval_model = retrieval_model
         self.embedding_store = embedding_store
@@ -31,8 +32,13 @@ class PrecisionEvaluationPipeline:
         self.query_generation = GenericQueryGeneration(
             GenericQueryGeneration.build_chain(asset_type=asset_type)
         )
-        self.llm_evaluator = LLM_Evaluator()
-        
+        self.llm_judge_num_docs_to_compare_at_the_time = llm_judge_num_docs_to_compare_at_the_time
+        multiple_docs = llm_judge_num_docs_to_compare_at_the_time > 1
+        judge_chain = LLM_Evaluator.build_chain(compare_multiple_documents_to_a_query=multiple_docs)
+        self.llm_evaluator = LLM_Evaluator(
+            judge_chain, 
+            num_docs_to_compare_at_the_time=llm_judge_num_docs_to_compare_at_the_time
+        )
         
         self.model_name = model_name
         self.asset_type = asset_type
@@ -49,6 +55,7 @@ class PrecisionEvaluationPipeline:
         self.retrieve_topk_documents_func_kwargs = retrieve_topk_documents_func_kwargs
         if retrieve_topk_documents_func_kwargs is None:
             self.retrieve_topk_documents_func_kwargs = {}
+
     
     def execute(
         self, 

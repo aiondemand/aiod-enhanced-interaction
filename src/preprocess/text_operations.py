@@ -36,6 +36,24 @@ class ConvertJsonToString:
     @classmethod
     def stringify(cls, data: dict) -> str:
         return json.dumps(data)
+
+    @classmethod
+    def extract_very_basic_info(cls, data: dict, stringify: bool = False) -> str:
+        simple_data = cls._extract_very_basic_fields(data)
+        if stringify:
+            return json.dumps(simple_data)
+        
+        description = simple_data.get("description", None)
+        keywords = simple_data.get("keyword", None)
+
+        string = f"Platform: {simple_data['platform']}\nAsset name: {simple_data['name']}"
+        if description is not None:
+            string += f"\nDescription: {description}"
+        if keywords is not None:
+            key_string = " | ".join(keywords)
+            string += f"\nKeywords: {key_string}"
+
+        return string
     
     @classmethod
     def extract_relevant_info(cls, data: dict, stringify: bool = False) -> str:
@@ -59,6 +77,23 @@ class ConvertJsonToString:
                     string += f"\t{', '.join(distrib_str_arr)}\n"
 
         return string    
+    
+    @classmethod
+    def _extract_very_basic_fields(cls, data: dict) -> dict:
+        # extract only name, keyword, description and platform
+        new_object = {
+            "platform": data["platform"],
+            "name": data["name"]
+        }
+        description = cls._get_description(data)
+        if description is not None:
+            new_object["description"] = description
+
+        keywords = data.get("keyword", [])
+        if len(keywords) > 0:
+            new_object["keyword"] = keywords
+
+        return new_object
             
     @classmethod
     def _extract_relevant_fields(cls, data: dict) -> dict:
@@ -81,17 +116,10 @@ class ConvertJsonToString:
                 new_object[field_value] = x
         
         # description
-        description = data.get("description", None)
+        description = cls._get_description(data)
         if description is not None:
-            plain_descr = description.get("plain", None)
-            html_descr = description.get("html", None)
-
-            if plain_descr is not None:
-                new_object["description"] = plain_descr
-            elif html_descr is not None:
-                html_descr = re.sub(re.compile(r'<.*?>'), '', html_descr)
-                new_object["description"] = html_descr
-
+            new_object["description"] = description
+        
         # Distribution type data (fields: distribution, media)
         dist_relevant_fields = [
             "name", "description", "content_size_kb", "encoding_format"
@@ -130,3 +158,20 @@ class ConvertJsonToString:
             new_object["size"] = f"{size['value']} {size['unit']}"
 
         return new_object
+
+    @classmethod
+    def _get_description(cls, data: dict) -> str | None:
+        description = data.get("description", None)
+        if description is None:
+            return None
+        
+        plain_descr = description.get("plain", None)
+        html_descr = description.get("html", None)
+
+        if plain_descr is not None:
+            return plain_descr
+        elif html_descr is not None:
+            html_descr = re.sub(re.compile(r'<.*?>'), '', html_descr)
+            return html_descr
+
+        return None
