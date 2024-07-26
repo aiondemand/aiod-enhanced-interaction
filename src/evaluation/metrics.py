@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Callable, Type
 import json
 import os
@@ -56,15 +57,16 @@ class RetrievalMetricsAtK(MetricsClass):
         relevant_docs = [
             doc.id for doc in query_dp.get_relevant_documents(relevance_func)
         ]        
-        retrieved_docs = query_results.doc_ids
+        all_retrieved_docs = query_results.doc_ids
         
         # RETRIEVAL
-        self.prec.append(precision_at_k(relevant_docs, retrieved_docs, k=k))
+        self.prec.append(precision_at_k(relevant_docs, all_retrieved_docs, k=k))
         if compute_precision_only is False: 
-            self.rec.append(recall_at_k(relevant_docs, retrieved_docs, k=k))
-            self.AP.append(average_precision_at_k(relevant_docs, retrieved_docs, k=k))
+            self.rec.append(recall_at_k(relevant_docs, all_retrieved_docs, k=k))
+            self.AP.append(average_precision_at_k(relevant_docs, all_retrieved_docs, k=k))
 
         # RANKING (NDCG)
+        retrieved_docs = all_retrieved_docs[:k]
         annotated_doc_ids = np.array([doc.id for doc in query_dp.annotated_docs])
         if (np.isin(retrieved_docs, annotated_doc_ids) == False).sum() > 0:
             raise ValueError(
@@ -98,6 +100,17 @@ class RetrievalMetrics(MetricsWrapperClass):
             str(k): RetrievalMetricsAtK()
             for k in topk
         }
+
+    @staticmethod
+    def load(data: dict) -> RetrievalMetrics:
+        topk = [int(k) for k in data["results_in_top"].keys()]
+        metrics_wrapper = RetrievalMetrics(topk)
+
+        for k in topk:
+            metrics_wrapper.results_in_top[str(k)] = RetrievalMetricsAtK(
+                **data["results_in_top"][str(k)]
+            )
+        return metrics_wrapper
 
     def compute_metrics_for_datapoint(
         self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, 
@@ -149,6 +162,17 @@ class SpecificAssetQueriesMetrics(MetricsWrapperClass):
             str(k): SpecificAssetQueriesMetricsAtK()
             for k in topk
         }
+
+    @staticmethod
+    def load(data: dict) -> SpecificAssetQueriesMetrics:
+        topk = [int(k) for k in data["results_in_top"].keys()]
+        metrics_wrapper = SpecificAssetQueriesMetrics(topk)
+
+        for k in topk:
+            metrics_wrapper.results_in_top[str(k)] = SpecificAssetQueriesMetricsAtK(
+                **data["results_in_top"][str(k)]
+            )
+        return metrics_wrapper
 
     def compute_metrics_for_datapoint(
         self, query_dp: QueryDatapoint, query_results: SemanticSearchResult
@@ -293,3 +317,12 @@ def average_precision_at_k(
         if num_relevant_docs > 0 else 0
     )
     return avg_precision
+
+
+if __name__ == "__main__":
+    p = "data/results/hit_rate/gte_large--basic/least_descriptive-long_description_few_tags/results.json"
+    with open(p) as f:
+        data = json.load(f)
+
+    metrics = SpecificAssetQueriesMetrics.load(data)
+    metrics

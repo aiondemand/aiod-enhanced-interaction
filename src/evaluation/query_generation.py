@@ -302,7 +302,7 @@ class GenericQueryGeneration(QueryGeneration):
                         outputs[it].extend(queries)
                 else:
                     print("We were unable to generate some generic queries")
-            print(cb)
+            # print(cb)
                 
 
         os.makedirs(savedir, exist_ok=True)

@@ -80,4 +80,5 @@ def recall_evaluation() -> None:
     
 
 if __name__ == "__main__":
+    # precision_evaluation()
     recall_evaluation()

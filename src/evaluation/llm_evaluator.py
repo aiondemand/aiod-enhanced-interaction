@@ -183,7 +183,7 @@ class LLM_Evaluator:
                     model_predictions = self.calc_doc_relevance(query, doc_group)
                     self.save_doc_relevance(query, doc_ids, model_predictions, save_dirpath)
                     
-            print(cb)
+            # print(cb)
 
     def _group_docs(self, text_dirpath: str, doc_ids: list[str]) -> list[list[str]]:
         groups = []
@@ -245,6 +245,8 @@ class LLM_Evaluator:
         llm_eval_dirpath: str, savepath: str,
         score_function: Callable[[dict], float] | None = None,
     ) -> None:
+        if os.path.exists(savepath):
+            return
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         json_query_datapoints = []
         

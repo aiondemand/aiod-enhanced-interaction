@@ -76,7 +76,7 @@ class PrecisionEvaluationPipeline:
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
-        print("=========== PRECISION EVALUATION STARTED ===========")
+        print(f"=========== PRECISION EVALUATION FOR '{self.model_name}' STARTED ===========")
 
         print("===== Generation of generic queries =====")
         self.query_generation.generate(savedir=self.generate_queries_dirpath)
@@ -90,7 +90,7 @@ class PrecisionEvaluationPipeline:
                 relevance_function=relevance_function
             )
 
-        print("=========== PRECISION EVALUATION CONCLUDED ===========")
+        print(f"=========== PRECISION EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
 
     def _inner_pipeline(self, query_type: str, topk: int = 10, 
         score_function: Callable[[dict], float] | None = None,
@@ -142,6 +142,3 @@ class PrecisionEvaluationPipeline:
             metrics_savepath=metrics_savepath,
             retrieve_topk_documents_func_kwargs=self.retrieve_topk_documents_func_kwargs
         )
-
-if __name__ == "__main__":
-    pass

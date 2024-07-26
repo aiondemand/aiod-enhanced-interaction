@@ -36,7 +36,7 @@ class HitRateEvaluationPipeline:
             self.retrieve_topk_documents_func_kwargs = {}
     
     def execute(self,topk: int = 100) -> None:
-        print("=========== ACCURACY EVALUATION STARTED ===========")
+        print(f"=========== ACCURACY EVALUATION FOR '{self.model_name}' STARTED ===========")
         print("===== Filtering assets worth creating specific queries to =====")
         AssetSpecificQueryGeneration.create_asset_dataset_for_asset_specific_queries(
             json_dirpath=self.orig_json_assets_dirpath,
@@ -51,7 +51,7 @@ class HitRateEvaluationPipeline:
         for query_type in query_types:
             self._inner_pipeline(query_type, topk=topk)
 
-        print("=========== ACCURACY EVALUATION CONCLUDED ===========")
+        print(f"=========== ACCURACY EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
         
     def _inner_pipeline(self, query_type: str, topk: int = 100) -> None:
         print(f"===== Evaluating '{query_type}' queries =====")
