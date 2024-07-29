@@ -1,19 +1,22 @@
 from abc import ABC, abstractmethod
 import torch
 
-from dataset import QueryDatapoint
+from data_types import SemanticSearchResult
 
 
 class EmbeddingModel(ABC):
     @abstractmethod
-    def forward(self, texts: list[str]) -> torch.Tensor:
+    def forward(self, texts: list[str]) -> list[torch.Tensor]:
         """
         Main endpoint that wraps the logic of two functions
         'preprocess_input' and '_forward'
+
+        Returns a list of tensors representing either entire documents or
+        the chunks documents consist of
         """
 
     @abstractmethod
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor: 
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]: 
         """
         Function called to perform a model forward pass on a input data
         that is represented by the 'encodings' argument
@@ -31,12 +34,12 @@ class EmbeddingModel(ABC):
 
 class RetrievalSystem(ABC):
     @abstractmethod
-    def forward(self, queries: list[QueryDatapoint]) -> list[list[str]]:
+    def forward(self, queries: SemanticSearchResult) -> list[list[str]]:
         """
         Function encapsulating the entire pipeline of processing queries and
         retrieving (or potentionally further) generating results
 
-        This function outputs a list of document IDs for each user query
+        This function outputs a IDs of the retrieved, most similar documents
         """
         pass
 

@@ -10,9 +10,9 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 
-from dataset import AnnotatedDoc, QueryDatapoint
 from evaluation.llm import LLM_Chain, get_default_llm
 from lang_chains import SimpleChain
+from data_types import AnnotatedDoc, QueryDatapoint
 
 
 class AssetSpecificQueries(BaseModel):

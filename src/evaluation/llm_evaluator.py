@@ -8,10 +8,10 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.language_models.llms import BaseLLM
 from torch.utils.data import DataLoader
 
-from dataset import AIoD_Documents, AnnotatedDoc, Queries, QueryDatapoint
-from embedding_stores import SemanticSearchResult
-from lang_chains import Chain, SimpleChain
+from dataset import AIoD_Documents, Queries
+from lang_chains import SimpleChain
 from evaluation.llm import LLM_Chain, get_default_llm
+from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
 
 
 class MetStatus(str, Enum):

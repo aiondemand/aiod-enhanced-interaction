@@ -11,22 +11,15 @@ import uuid
 import numpy as np
 from abc import ABC, abstractmethod 
 from sentence_transformers.util import semantic_search
-from pydantic import BaseModel
 
 src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.append(src_dir)
 
-from model.lm_encoders.setup import ModelSetup
-from model import EmbeddingModel
+from model.base import EmbeddingModel
 import utils
 from dataset import AIoD_Documents, Queries
+from data_types import SemanticSearchResult
 
-
-class SemanticSearchResult(BaseModel):
-    query_id: str
-    doc_ids: list[str]
-    distances: list[float]
-    
 
 class EmbeddingStore(ABC):
     @abstractmethod
@@ -91,14 +84,23 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
             with torch.no_grad():
-                embeddings = model(texts)
-        
-            all_embeddings.append(embeddings.cpu().numpy())
-            all_ids.extend([str(uuid.uuid4()) for _ in range(len(doc_ids))])
-            all_meta.extend([{"doc_id": id} for id in doc_ids])
+                chunks_embeddings_of_multiple_docs = model(texts)
+            if chunks_embeddings_of_multiple_docs[0].ndim == 1:
+                chunks_embeddings_of_multiple_docs = [emb[None] for emb in chunks_embeddings_of_multiple_docs]
+
+            for chunk_embeds_of_a_doc, doc_id in zip(chunks_embeddings_of_multiple_docs, doc_ids):
+                all_embeddings.extend([
+                    chunk_emb for chunk_emb in chunk_embeds_of_a_doc.cpu().numpy()
+                ])
+                all_ids.extend([
+                    str(uuid.uuid4()) for _ in range(len(chunk_embeds_of_a_doc))
+                ])
+                all_meta.extend([
+                    {"doc_id": doc_id} for _ in range(len(chunk_embeds_of_a_doc))
+                ])
     
-            if len(all_embeddings) == chroma_batch_size or it == len(loader) - 1:
-                all_embeddings = np.vstack(all_embeddings)
+            if len(all_embeddings) >= chroma_batch_size or it == len(loader) - 1:
+                all_embeddings = np.stack(all_embeddings)
                 collection.add(
                     embeddings=all_embeddings, 
                     ids=all_ids,
@@ -116,6 +118,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
         save_dirpath: str | None = None, load_dirpath: str | None = None,
         emb_collection_name: str | None = None, chroma_batch_size: int = 50,
+        chunk_embedding_store: bool = False
     ) -> list[SemanticSearchResult]:
         if load_dirpath is not None:
             try:
@@ -130,7 +133,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
 
         all_results = []
         all_embeddings = []
-        all_query_ids = []
+        all_queries = []
         
         for it, queries in tqdm(
             enumerate(query_loader), 
@@ -139,16 +142,21 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         ):
             texts = [q.text for q in queries]
             with torch.no_grad():
-                embeddings = model(texts)
-            all_embeddings.append(embeddings.cpu().numpy())
-            all_query_ids.extend(queries)
+                query_embeddings = model(texts)
+            if query_embeddings[0].ndim == 2:
+                if sum([len(q_emb) != 1 for q_emb in query_embeddings]) > 0:
+                    raise ValueError("We dont support queries that consist of multiple chunks")
+                query_embeddings = [q_emb[0] for q_emb in query_embeddings]
+
+            all_embeddings.extend(q_emb.cpu().numpy() for q_emb in query_embeddings)
+            all_queries.extend(queries)
             
-            if len(all_embeddings) == chroma_batch_size or it == len(query_loader) - 1:
-                all_embeddings = np.vstack(all_embeddings)
+            if len(all_embeddings) >= chroma_batch_size or it == len(query_loader) - 1:
+                all_embeddings = np.stack(all_embeddings)
 
                 sem_search_results = collection.query(
                     query_embeddings=all_embeddings,
-                    n_results=topk - 1,                 # for some reason, it returns one more doc...
+                    n_results=topk * 10 if chunk_embedding_store else topk,
                     include=["metadatas", "distances"]
                 )
                 doc_ids = [
@@ -157,21 +165,25 @@ class Chroma_EmbeddingStore(EmbeddingStore):
                 ]
 
                 for query, docs, distances in zip(
-                    all_query_ids, doc_ids, sem_search_results["distances"]
+                    all_queries, doc_ids, sem_search_results["distances"]
                 ):
                     query_id = (
                         f"query_{len(all_results)}" 
                         if query.id is None 
                         else query.id
                     )
+                    indices = pd.Series(data=docs).drop_duplicates().index.values[:topk]
+                    filtered_docs = [docs[idx] for idx in indices]
+                    filtered_distances = [distances[idx] for idx in indices]
+
                     all_results.append(SemanticSearchResult(
                         query_id=query_id,
-                        doc_ids=docs,
-                        distances=distances
+                        doc_ids=filtered_docs,
+                        distances=filtered_distances
                     ))
                 
                 all_embeddings = []
-                all_query_ids = []
+                all_queries = []
         
         if was_training:
             model.train()
@@ -189,7 +201,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
         col = self.client.get_collection(document_collection_name)
 
         for results in result_set:
-            doc_ids = results["doc_ids"]
+            doc_ids = results.doc_ids
             revert_indices = np.argsort(
                 pd.Series(doc_ids).sort_values().index
             )
@@ -199,13 +211,15 @@ class Chroma_EmbeddingStore(EmbeddingStore):
                 for meta in np.array(response)[revert_indices]
             ]
             all_docs.append({
-                "query_id": results["query_id"],
+                "query_id": results.query_id,
                 "docs": documents
             })
 
         return all_docs
     
 
+# TODO this store doesnt support transformation of doc IDs to doc JSONs
+# TODO this store doesnt support saving embeddings of multiple chunks of one document yet
 class Filesystem_EmbeddingStore(EmbeddingStore):
     def __init__(self, save_dirpath: str) -> None:
         self.save_dirpath = save_dirpath
@@ -285,7 +299,7 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
     def translate_sem_results_to_documents(
         self, result_set: list[SemanticSearchResult]
     ) -> list[dict]:
-        # TODO implement later on....
+        # TODO
         pass
 
     def _load_embeddings(self) -> torch.Tensor:
@@ -357,47 +371,3 @@ class LocalTopKDocumentsStore:
             ))
             
         return topk_documents
-    
-
-def compute_embeddings_wrapper(
-    client: Client, model: EmbeddingModel, 
-    text_dirpath: str, new_collection_name: str,
-    loader_kwargs: dict | None = None
-) -> None:
-    ds = AIoD_Documents(text_dirpath, testing_random_texts=False)
-    ds.filter_out_already_computed_docs(client, new_collection_name)
-    loader = ds.build_loader(loader_kwargs)
-
-    store = Chroma_EmbeddingStore(client, verbose=True)
-    store.store_embeddings(model, loader, new_collection_name, chroma_batch_size=50)
-
-    
-if __name__ == "__main__":
-    client = utils.init()
-    text_dirpath = "data/texts"
-
-    model = ModelSetup._setup_gte_large(model_max_length=4096)
-
-
-    store = Chroma_EmbeddingStore(client, verbose=True)
-    collection_name = "embeddings-gte_large-simple-v0"
-
-    # compute_embeddings_wrapper(client, model, text_dirpath, collection_name)
-
-    # Perform semantic search    
-    QUERIES = [
-        { "text": "I want a dataset about movies reviews" }, 
-        { "text": "Second query inbound" } 
-    ]
-    ds = Queries(queries=QUERIES)
-    query_loader = DataLoader(ds, batch_size=2, collate_fn=lambda x: x)
-
-    batch = next(iter(query_loader))
-
-    exit()
-
-    results = store.retrieve_topk_documents(
-        model, query_loader, topk=10
-    )
-
-    

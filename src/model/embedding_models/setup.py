@@ -1,3 +1,4 @@
+from typing import Literal
 from transformers import (
     AutoModel, AutoTokenizer, 
     AutoModelForSequenceClassification,
@@ -5,7 +6,7 @@ from transformers import (
 )
 
 from model.base import EmbeddingModel
-from .models import (
+from model.embedding_models.models import (
     Basic_EmbeddingModel, 
     Hierarchical_EmbeddingModel,
     SentenceTransformerToHF,
@@ -164,7 +165,10 @@ class ModelSetup:
         return model
         
     @classmethod
-    def _setup_multilingual_e5_large(cls) -> Hierarchical_EmbeddingModel:    
+    def _setup_multilingual_e5_large(
+        cls, chunk_pooling: Literal["mean", "none"] = "none",
+        max_supported_chunks: int = 11 #around 4k tokens
+    ) -> Hierarchical_EmbeddingModel:    
         transformer = SentenceTransformerToHF("intfloat/multilingual-e5-large")
         prepend_prompt_fn = lambda t: "query: " + t
 
@@ -175,8 +179,8 @@ class ModelSetup:
             transformer, 
             tokenizer=transformer.tokenizer,
             token_pooling="none",
-            chunk_pooling="mean",
-            max_supported_chunks=11, # to cover 4k document
+            chunk_pooling=chunk_pooling,
+            max_supported_chunks=max_supported_chunks,
             text_splitter=text_splitter,
             preprocess_text_fn=prepend_prompt_fn
         )
@@ -186,7 +190,7 @@ class ModelSetup:
 
     @classmethod
     def _setup_gte_large(
-        cls, model_max_length: int | None = None
+        cls, model_max_length: int | None = 4096
     ) -> Basic_EmbeddingModel: 
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
@@ -228,7 +232,28 @@ class ModelSetup:
         model.eval()
         model.to(utils.get_device())
         return model
-        
+    
+    @classmethod
+    def _setup_bge_large(cls, chunk_pooling: Literal["mean", "none"] = "none",
+        max_supported_chunks: int = 11 #around 4k tokens)
+    ) -> Hierarchical_EmbeddingModel:
+        transformer = SentenceTransformerToHF("BAAI/bge-large-en-v1.5")
+
+        text_splitter = TokenizerTextSplitter(
+            transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
+        )
+        model = Hierarchical_EmbeddingModel(
+            transformer, 
+            tokenizer=transformer.tokenizer,
+            token_pooling="none",
+            chunk_pooling=chunk_pooling,
+            max_supported_chunks=max_supported_chunks,
+            text_splitter=text_splitter,
+        )
+        model.eval()
+        model.to(utils.get_device())
+        return model
+            
     @staticmethod
     def _init_chunk_transformer(
         hidden_size: int, max_num_chunks: int, num_layers: int = 6

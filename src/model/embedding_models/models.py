@@ -1,10 +1,10 @@
 from typing import Callable
 import torch
-from model.base import EmbeddingModel
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
+from model.base import EmbeddingModel
 import utils
 
 
@@ -103,14 +103,14 @@ class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         self.global_attention_mask = global_attention_mask
         self.preprocess_text_fn = preprocess_text_fn
 
-    def forward(self, texts: list[str]) -> torch.Tensor:
+    def forward(self, texts: list[str]) -> list[torch.Tensor]:
         encoding = self.preprocess_input(texts)
         return self._forward(encoding)
 
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor:
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
         out = self.transformer(**encodings)[0]
         out = _pool(out, encodings["attention_mask"], self.pooling)
-        return out
+        return [emb for emb in out]
     
     def preprocess_input(self, texts: list[str]) -> dict:
         if self.preprocess_text_fn is not None:
@@ -191,19 +191,30 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
 
         self.preprocess_text_fn = preprocess_text_fn
 
-    def forward(self, texts: list[str]) -> torch.Tensor:
+    def forward(self, texts: list[str]) -> list[torch.Tensor]:
         encoding = self.preprocess_input(texts)
         return self._forward(encoding)
 
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor:
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
         chunk_embeddings = self._first_level_forward(
             encodings["input_encodings"],
             encodings["max_num_chunks"]
         )
-        return self._second_level_forward(
+        doc_embeddings = self._second_level_forward(
             chunk_embeddings, 
             encodings["chunk_attn_mask"],
         )
+        doc_embeddings = [emb for emb in doc_embeddings]
+        
+        # get rid of padding chunks if there exists
+        if self.chunk_pooling == "none":
+            doc_embeddings = [
+                emb[chunk_mask.to(torch.bool)] 
+                for emb, chunk_mask in 
+                zip(doc_embeddings, encodings["chunk_attn_mask"])
+            ]
+
+        return doc_embeddings
     
     def _first_level_forward(
             self, input_encodings: list[dict] | dict, max_num_chunks: int

@@ -179,8 +179,7 @@ cython_debug/
 # Built Visual Studio Code Extensions
 *.vsix
 
-jsons/
-data/
-
 nohup.out
+
+data/
 temp/

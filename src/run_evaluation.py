@@ -1,11 +1,12 @@
 from embedding_stores import Chroma_EmbeddingStore
 from evaluation.hit_rate_evaluation import HitRateEvaluationPipeline
 from evaluation.precision_evaluation import PrecisionEvaluationPipeline
-from model.lm_encoders.setup import ModelSetup
+from model.embedding_models.setup import ModelSetup
 from utils import init
+from model.retrieval import EmbeddingModel_Pipeline
 
 
-def precision_evaluation() -> None:
+def precision_evaluation(topk: int = 10) -> None:
     client = init()
     store = Chroma_EmbeddingStore(client, verbose=True)
 
@@ -14,9 +15,9 @@ def precision_evaluation() -> None:
 
     for model_name in model_names:
         if model_name == "gte_large":
-            retrieval_model = ModelSetup._setup_gte_large(model_max_length=4096)
+            embedding_model = ModelSetup._setup_gte_large(model_max_length=4096)
         elif model_name == "multilingual_e5_large":
-            retrieval_model = ModelSetup._setup_multilingual_e5_large()
+            embedding_model = ModelSetup._setup_multilingual_e5_large()
         else:
             raise ValueError("Unsupported model for evaluation")
         
@@ -25,9 +26,12 @@ def precision_evaluation() -> None:
             folder_model_name = f"{model_name}--{process_text_type}"
             collection_name = f"embeddings-{model_name}-{process_text_type}-v0"
 
+            retrieval_system = EmbeddingModel_Pipeline(
+                embedding_model, store, topk=topk, 
+                emb_collection_name=collection_name
+            )
             pipeline = PrecisionEvaluationPipeline(
-                retrieval_model,
-                store,
+                retrieval_system,
                 model_name=folder_model_name,
                 asset_type="dataset",
                 generate_queries_dirpath="./data/queries/generic",
@@ -37,14 +41,11 @@ def precision_evaluation() -> None:
                 annotated_query_dirpath=f"./data/annotated-queries",
                 metrics_dirpath=f"./data/results/precision",
                 post_process_llm_prediction_function = None,
-                retrieve_topk_documents_func_kwargs={
-                    "emb_collection_name": collection_name
-                },
             )
             pipeline.execute()
 
 
-def recall_evaluation() -> None:
+def recall_evaluation(topk: int = 100) -> None:
     client = init()
     store = Chroma_EmbeddingStore(client, verbose=True)
 
@@ -53,9 +54,9 @@ def recall_evaluation() -> None:
 
     for model_name in model_names:
         if model_name == "gte_large":
-            retrieval_model = ModelSetup._setup_gte_large(model_max_length=4096)
+            embedding_model = ModelSetup._setup_gte_large(model_max_length=4096)
         elif model_name == "multilingual_e5_large":
-            retrieval_model = ModelSetup._setup_multilingual_e5_large()
+            embedding_model = ModelSetup._setup_multilingual_e5_large()
         else:
             raise ValueError("Unsupported model for evaluation")
         
@@ -63,18 +64,18 @@ def recall_evaluation() -> None:
             folder_model_name = f"{model_name}--{process_text_type}"
             collection_name = f"embeddings-{model_name}-{process_text_type}-v0"
 
+            retrieval_system = EmbeddingModel_Pipeline(
+                embedding_model, store, topk=topk, 
+                emb_collection_name=collection_name
+            )
             pipeline = HitRateEvaluationPipeline(
-                retrieval_model,
-                store, 
+                retrieval_system,
                 model_name=folder_model_name,
                 orig_json_assets_dirpath="./data/jsons",
                 quality_assets_path="./data/queries/asset-specific/handpicked_datasets.json",
                 generate_queries_dirpath="./data/queries/asset-specific",
                 topk_dirpath="./data/topk-results",
                 metrics_dirpath=f"./data/results/hit_rate",
-                retrieve_topk_documents_func_kwargs={
-                    "emb_collection_name": collection_name
-                }
             )
             pipeline.execute()
     

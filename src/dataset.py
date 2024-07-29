@@ -10,26 +10,8 @@ from chromadb.api.client import Client
 import numpy as np
 import random
 from nltk.corpus import words
-from pydantic import BaseModel
 
-
-class AnnotatedDoc(BaseModel):
-    id: str
-    score: int
-
-
-class QueryDatapoint(BaseModel):
-    text: str
-    id: str | None = None
-    annotated_docs: list[AnnotatedDoc] | None = None
-
-    def get_relevant_documents(
-        self, relevance_func: Callable[[float], bool]
-    ) -> list[AnnotatedDoc]:
-        return [
-            doc for doc in self.annotated_docs
-            if relevance_func(doc.score)
-        ]
+from data_types import QueryDatapoint
     
 
 class AIoD_Documents(Dataset):

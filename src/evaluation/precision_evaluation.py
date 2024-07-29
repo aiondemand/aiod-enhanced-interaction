@@ -3,18 +3,16 @@ from typing import Callable, Literal
 import numpy as np
 
 from dataset import Queries
-from embedding_stores import EmbeddingStore
 from evaluation.llm_evaluator import LLM_Evaluator
 from evaluation.metrics import RetrievalEvaluation
 from evaluation.query_generation import GenericQueryGeneration
-from model.lm_encoders.models import EmbeddingModel
+from model.retrieval import RetrievalSystem
 
 
 class PrecisionEvaluationPipeline:
-    # TODO retrieval_model should be later or replaced by the retrieval system abstraction
     def __init__(
-        self, embedding_model: EmbeddingModel,
-        embedding_store: EmbeddingStore,
+        self, 
+        retrieval_sytem: RetrievalSystem,
         model_name: str,
         asset_type: Literal["dataset", "model", "publication"],
         generate_queries_dirpath: str,
@@ -24,12 +22,10 @@ class PrecisionEvaluationPipeline:
         annotated_query_dirpath: str,
         metrics_dirpath: str,
         post_process_llm_prediction_function: Callable[[dict], dict] | None = None,
-        retrieve_topk_documents_func_kwargs: dict | None = None,
         llm_evaluator_build_chain_kwargs: dict | None = None,
         llm_evaluator_num_docs_to_compare_at_the_time: int = 1
     ) -> None:
-        self.embedding_model = embedding_model
-        self.embedding_store = embedding_store
+        self.retrieval_system = retrieval_sytem
 
         query_gen_chain = GenericQueryGeneration.build_chain(
             asset_type=asset_type,
@@ -65,14 +61,9 @@ class PrecisionEvaluationPipeline:
         self.post_process_llm_prediction_function = post_process_llm_prediction_function
         if post_process_llm_prediction_function is None:
             self.post_process_llm_prediction_function = lambda x: x
-        self.retrieve_topk_documents_func_kwargs = retrieve_topk_documents_func_kwargs
-        if retrieve_topk_documents_func_kwargs is None:
-            self.retrieve_topk_documents_func_kwargs = {}
-
     
     def execute(
         self, 
-        topk: int = 10, 
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
@@ -85,19 +76,17 @@ class PrecisionEvaluationPipeline:
         for query_type in query_types:
             self._inner_pipeline(
                 query_type=query_type,
-                topk=topk, 
                 score_function=score_function, 
                 relevance_function=relevance_function
             )
 
         print(f"=========== PRECISION EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
 
-    def _inner_pipeline(self, query_type: str, topk: int = 10, 
+    def _inner_pipeline(self, query_type: str,
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
         print(f"===== Evaluating '{query_type}' queries =====")
-
         query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
         topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
         llm_eval_dirpath = os.path.join(self.llm_eval_dirpath, query_type)
@@ -110,14 +99,14 @@ class PrecisionEvaluationPipeline:
 
         print("=== Retreving top K documents to each query ===")
         query_loader = Queries(json_path=query_filepath).build_loader()
-        sem_search_results = self.embedding_store.retrieve_topk_document_ids(
-            self.embedding_model, query_loader, topk=topk, 
-            load_dirpath=topk_dirpath, save_dirpath=topk_dirpath,
-            **self.retrieve_topk_documents_func_kwargs
-        )
-
+        sem_search_results = self.retrieval_system(
+            query_loader, 
+            retrieve_topk_document_ids_func_kwargs={
+                "load_dirpath": topk_dirpath,
+                "save_dirpath": topk_dirpath
+            })
+    
         print("=== Using LLM-as-a-judge principle to evaluate (query, doc) pairs ===")
-
         self.llm_evaluator.evaluate_query_doc_pairs(
             query_loader, sem_search_results, 
             text_dirpath=self.asset_text_dirpath, 
@@ -132,13 +121,13 @@ class PrecisionEvaluationPipeline:
         query_loader_with_gt = Queries(json_path=annotated_query_savepath).build_loader()
 
         print("=== Computing retrieval metrics ===")
-        all_topk = np.array([3, 5, 10], dtype=np.int32)
-        all_topk = all_topk[all_topk <= topk].tolist()
+        topk_levels = np.array([3, 5, 10], dtype=np.int32)
+        topk_levels = topk_levels[topk_levels <= self.retrieval_system.topk].tolist()
         eval = RetrievalEvaluation(relevance_func=relevance_function)
         eval.evaluate(
-            self.embedding_model, self.embedding_store, query_loader_with_gt, 
-            topk=all_topk,
+            self.retrieval_system, 
+            query_loader_with_gt, 
             load_topk_docs_dirpath=topk_dirpath,
-            metrics_savepath=metrics_savepath,
-            retrieve_topk_documents_func_kwargs=self.retrieve_topk_documents_func_kwargs
+            metrics_savepath=metrics_savepath, 
+            topk_levels=topk_levels
         )
