@@ -21,7 +21,6 @@ class PrecisionEvaluationPipeline:
         llm_eval_dirpath: str,
         annotated_query_dirpath: str,
         metrics_dirpath: str,
-        post_process_llm_prediction_function: Callable[[dict], dict] | None = None,
         llm_evaluator_build_chain_kwargs: dict | None = None,
         llm_evaluator_num_docs_to_compare_at_the_time: int = 1
     ) -> None:
@@ -57,11 +56,7 @@ class PrecisionEvaluationPipeline:
         self.llm_eval_dirpath = llm_eval_dirpath
         self.annotated_query_dirpath = annotated_query_dirpath
         self.metrics_dirpath = metrics_dirpath
-        
-        self.post_process_llm_prediction_function = post_process_llm_prediction_function
-        if post_process_llm_prediction_function is None:
-            self.post_process_llm_prediction_function = lambda x: x
-    
+            
     def execute(
         self, 
         score_function: Callable[[dict], float] | None = None,
@@ -90,11 +85,18 @@ class PrecisionEvaluationPipeline:
         query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
         topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
         llm_eval_dirpath = os.path.join(self.llm_eval_dirpath, query_type)
+        
+        annot_query_filename = (
+            "llm_scores_queries.json" if score_function is None else "heuristic_scores_queries.json"
+        )
+        metrics_filename = (
+            "llm_scores_results.json" if score_function is None else "heuristic_scores_results.json"
+        )
         annotated_query_savepath = os.path.join(
-            self.annotated_query_dirpath, self.model_name, query_type, "queries.json"
+            self.annotated_query_dirpath, self.model_name, query_type, annot_query_filename
         )
         metrics_savepath = os.path.join(
-            self.metrics_dirpath, self.model_name, query_type, "results.json"
+            self.metrics_dirpath, self.model_name, query_type, metrics_filename
         )
 
         print("=== Retreving top K documents to each query ===")

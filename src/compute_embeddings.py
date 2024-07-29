@@ -46,7 +46,7 @@ def store_embeddings(
         model: EmbeddingModel, client: Client, text_dirpath: str, 
         collection_name: str, loader_kwargs: dict | None = None
     ) -> None:
-    ds = AIoD_Documents(text_dirpath, testing_random_texts=False) #TODO test BGE batch size
+    ds = AIoD_Documents(text_dirpath, testing_random_texts=False)
     ds.filter_out_already_computed_docs(client, collection_name)
     loader = ds.build_loader(loader_kwargs)
 

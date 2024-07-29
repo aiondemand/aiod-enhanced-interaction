@@ -1,17 +1,25 @@
 from embedding_stores import Chroma_EmbeddingStore
 from evaluation.hit_rate_evaluation import HitRateEvaluationPipeline
+from evaluation.llm_evaluator import LLM_Evaluator
 from evaluation.precision_evaluation import PrecisionEvaluationPipeline
 from model.embedding_models.setup import ModelSetup
 from utils import init
 from model.retrieval import EmbeddingModel_Pipeline
 
 
-def precision_evaluation(topk: int = 10) -> None:
+def precision_evaluation(
+    heuristic_function: bool = False, topk: int = 10, chunk_embeddings: bool = False
+) -> None:
     client = init()
     store = Chroma_EmbeddingStore(client, verbose=True)
 
     model_names = ["gte_large", "multilingual_e5_large"]
     process_text_types = ["basic", "relevant"]
+
+    score_function, relevance_function = None, None
+    if heuristic_function:
+        score_function = LLM_Evaluator.heuristic_score_function
+        relevance_function = lambda x: x >= 0.65
 
     for model_name in model_names:
         if model_name == "gte_large":
@@ -25,6 +33,10 @@ def precision_evaluation(topk: int = 10) -> None:
             asset_text_dirpath = f"./data/{process_text_type}-texts"
             folder_model_name = f"{model_name}--{process_text_type}"
             collection_name = f"embeddings-{model_name}-{process_text_type}-v0"
+
+            if chunk_embeddings:
+                folder_model_name = f"{model_name}--CHUNK_EMBEDS--{process_text_type}"
+                collection_name = f"chunk_embeddings-{model_name}-{process_text_type}-v0"
 
             retrieval_system = EmbeddingModel_Pipeline(
                 embedding_model, store, topk=topk, 
@@ -40,12 +52,13 @@ def precision_evaluation(topk: int = 10) -> None:
                 llm_eval_dirpath="./data/llm_evaluations",
                 annotated_query_dirpath=f"./data/annotated-queries",
                 metrics_dirpath=f"./data/results/precision",
-                post_process_llm_prediction_function = None,
             )
-            pipeline.execute()
+            pipeline.execute(score_function, relevance_function)
 
 
-def recall_evaluation(topk: int = 100) -> None:
+def recall_evaluation(
+    topk: int = 100, chunk_embeddings: bool = False
+) -> None:
     client = init()
     store = Chroma_EmbeddingStore(client, verbose=True)
 
@@ -63,6 +76,10 @@ def recall_evaluation(topk: int = 100) -> None:
         for process_text_type in process_text_types:
             folder_model_name = f"{model_name}--{process_text_type}"
             collection_name = f"embeddings-{model_name}-{process_text_type}-v0"
+
+            if chunk_embeddings:
+                folder_model_name = f"{model_name}--CHUNK_EMBEDS--{process_text_type}"
+                collection_name = f"chunk_embeddings-{model_name}-{process_text_type}-v0"
 
             retrieval_system = EmbeddingModel_Pipeline(
                 embedding_model, store, topk=topk, 
@@ -81,5 +98,6 @@ def recall_evaluation(topk: int = 100) -> None:
     
 
 if __name__ == "__main__":
-    # precision_evaluation()
-    recall_evaluation()
+    # precision_evaluation(heuristic_function=True)
+    precision_evaluation(heuristic_function=False)
+    # recall_evaluation()

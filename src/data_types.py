@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class AnnotatedDoc(BaseModel):
     id: str
-    score: int
+    score: int | float
 
 
 class QueryDatapoint(BaseModel):

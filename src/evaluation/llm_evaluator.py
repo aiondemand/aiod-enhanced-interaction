@@ -23,7 +23,7 @@ class MetStatus(str, Enum):
 class ConditionEvaluation(BaseModel):
     condition: str = Field(..., description="The specific user-defined condition/constraint being evaluated.")
     details: str = Field(..., description="A brief description of how the condition was or was not met.")
-    mandatory: bool = Field(True, description="Whether this condition is mandatory. It is usually mandatory unless specified otherwise")
+    mandatory: bool = Field(..., description="Whether this condition is mandatory. It is usually mandatory unless specified otherwise")
     met: MetStatus = Field(..., description="Whether the condition was met (true/false/cant tell).")
 
 
@@ -275,6 +275,25 @@ class LLM_Evaluator:
             )
         with open(savepath, "w") as f:
             json.dump(json_query_datapoints, f, ensure_ascii=False)
+
+
+    @staticmethod
+    def heuristic_score_function(llm_output: dict) -> float:
+        filters = RelevanceEvaluation(**llm_output).explanation.condition_evaluations
+        req_filters = [cond for cond in filters if cond.mandatory]
+        opt_filters = [cond for cond in filters if cond.mandatory is False]
+
+        required_score = sum([
+            f.met == MetStatus.TRUE for f in req_filters
+        ]) / len(req_filters)
+        
+        optional_score = 0
+        if len(opt_filters) > 0:
+            optional_score = sum([
+                f.met == MetStatus.TRUE for f in opt_filters
+            ]) / len(opt_filters)
+        
+        return required_score + optional_score*(required_score)**2
 
 
 if __name__ == "__main__":
