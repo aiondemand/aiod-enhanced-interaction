@@ -1,4 +1,10 @@
+import sys
+import os
 from chromadb import Client
+
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(src_dir)
+
 from dataset import AIoD_Documents
 from embedding_stores import Chroma_EmbeddingStore
 from model.base import EmbeddingModel

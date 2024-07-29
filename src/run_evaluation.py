@@ -1,3 +1,9 @@
+import sys
+import os
+
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(src_dir)
+
 from embedding_stores import Chroma_EmbeddingStore
 from evaluation.hit_rate_evaluation import HitRateEvaluationPipeline
 from evaluation.precision_evaluation import PrecisionEvaluationPipeline
