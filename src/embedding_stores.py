@@ -99,7 +99,10 @@ class Chroma_EmbeddingStore(EmbeddingStore):
                     {"doc_id": doc_id} for _ in range(len(chunk_embeds_of_a_doc))
                 ])
     
-            if len(all_embeddings) >= chroma_batch_size or it == len(loader) - 1:
+            if (
+                it != 0 and len(all_embeddings) % chroma_batch_size == 0
+                or it == len(loader) - 1
+            ):
                 all_embeddings = np.stack(all_embeddings)
                 collection.add(
                     embeddings=all_embeddings, 
@@ -151,7 +154,10 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             all_embeddings.extend(q_emb.cpu().numpy() for q_emb in query_embeddings)
             all_queries.extend(queries)
             
-            if len(all_embeddings) >= chroma_batch_size or it == len(query_loader) - 1:
+            if (
+                it != 0 and it % chroma_batch_size == 0 
+                or it == len(query_loader) - 1
+            ):
                 all_embeddings = np.stack(all_embeddings)
 
                 sem_search_results = collection.query(
