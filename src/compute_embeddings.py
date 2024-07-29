@@ -1,4 +1,10 @@
+import sys
+import os
 from chromadb import Client
+
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(src_dir)
+
 from dataset import AIoD_Documents
 from embedding_stores import Chroma_EmbeddingStore
 from model.base import EmbeddingModel
@@ -9,8 +15,8 @@ import utils
 def store_embeddings_wrapper():
     client = utils.init()
     collection_name_placeholder = "chunk_embeddings-{model_name}-{text_type}-v0"
-    process_text_types = ["relevant", "basic"]
-    model_names = ["multilingual_e5_large", "bge_large"]
+    process_text_types = ["basic", "relevant"] 
+    model_names = ["bge_large", "multilingual_e5_large"]
     loader_kwargs = {
         "num_workers": 1
     }
@@ -24,6 +30,7 @@ def store_embeddings_wrapper():
             loader_kwargs["batch_size"] = 32
         elif model_name == "bge_large":
             embedding_model = ModelSetup._setup_bge_large()
+            loader_kwargs["batch_size"] = 32
         else:
             raise ValueError("Unsupported model for evaluation")
         
