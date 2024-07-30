@@ -1,6 +1,6 @@
 import sys
 import os
-from chromadb import Client
+from chromadb.api.client import Client
 
 src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.append(src_dir)
@@ -12,11 +12,16 @@ from model.embedding_models.setup import ModelSetup
 import utils
 
 
-def store_embeddings_wrapper():
+def store_embeddings_wrapper(
+        model_names: list[str], process_text_types: list[str], 
+        chunk_embeddings: bool = False
+    ) -> None:
     client = utils.init()
-    collection_name_placeholder = "chunk_embeddings-{model_name}-{text_type}-v0"
-    process_text_types = ["basic", "relevant"] 
-    model_names = ["bge_large", "multilingual_e5_large"]
+    collection_name_placeholder = (
+        "chunk_embeddings-{model_name}-{text_type}-v0"
+        if chunk_embeddings
+        else "embeddings-{model_name}-{text_type}-v0"
+    )
     loader_kwargs = {
         "num_workers": 1
     }
@@ -27,7 +32,7 @@ def store_embeddings_wrapper():
             loader_kwargs["batch_size"] = 8
         elif model_name == "multilingual_e5_large":
             embedding_model = ModelSetup._setup_multilingual_e5_large()
-            loader_kwargs["batch_size"] = 32
+            loader_kwargs["batch_size"] = 16
         elif model_name == "bge_large":
             embedding_model = ModelSetup._setup_bge_large()
             loader_kwargs["batch_size"] = 32
@@ -62,4 +67,7 @@ def store_embeddings(
 
 
 if __name__ == "__main__":
-    store_embeddings_wrapper()
+    process_text_types = ["basic", "relevant"] 
+    model_names = ["multilingual_e5_large"]
+
+    store_embeddings_wrapper(model_names, process_text_types, chunk_embeddings=True)

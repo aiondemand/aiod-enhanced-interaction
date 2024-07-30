@@ -18,7 +18,7 @@ sys.path.append(src_dir)
 from model.base import EmbeddingModel
 import utils
 from dataset import AIoD_Documents, Queries
-from data_types import SemanticSearchResult
+from data_types import RetrievedDocuments, SemanticSearchResult
 
 
 class EmbeddingStore(ABC):
@@ -38,7 +38,7 @@ class EmbeddingStore(ABC):
     @abstractmethod
     def translate_sem_results_to_documents(
         self, result_set: list[SemanticSearchResult], **kwargs
-    ) -> list[list[str]]:
+    ) -> list[RetrievedDocuments]:
         pass
         
 
@@ -202,7 +202,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
     
     def translate_sem_results_to_documents(
         self, result_set: list[SemanticSearchResult], document_collection_name: str
-    ) -> list[dict]:
+    ) -> list[RetrievedDocuments]:
         all_docs = []
         col = self.client.get_collection(document_collection_name)
 
@@ -216,10 +216,10 @@ class Chroma_EmbeddingStore(EmbeddingStore):
                 json.loads(meta["json_string"])
                 for meta in np.array(response)[revert_indices]
             ]
-            all_docs.append({
-                "query_id": results.query_id,
-                "docs": documents
-            })
+            all_docs.append(RetrievedDocuments(
+                query_id=results.query_id,
+                document_objects=documents
+            ))
 
         return all_docs
     
@@ -338,12 +338,12 @@ class LocalTopKDocumentsStore:
 
         for query_results in sem_search_results:
             docs_to_save = [
-                { "doc_id": doc_id, "distance": dist }
-                for doc_id, dist in zip(
-                    query_results.doc_ids, query_results.distances
-                )
+                { "doc_id": doc_id } for doc_id in query_results.doc_ids
             ]
-    
+            if query_results.distances is not None:
+                for it, dist in enumerate(query_results.distances):
+                    docs_to_save[it]["distance"] = dist
+            
             path = os.path.join(self.dirpath, f"{query_results.query_id}.json")
             with open(path, "w") as f:
                 json.dump(docs_to_save, f, ensure_ascii=False)
@@ -373,7 +373,11 @@ class LocalTopKDocumentsStore:
             topk_documents.append(SemanticSearchResult(
                 query_id=query_id,
                 doc_ids=[d["doc_id"] for d in data],
-                distances=[d["distance"] for d in data]
+                distances=(
+                    [d["distance"] for d in data]
+                    if data[0].get("distance", None) is not None
+                    else None
+                )
             ))
             
         return topk_documents

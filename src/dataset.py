@@ -60,7 +60,7 @@ class AIoD_Documents(Dataset):
         try:
             collection = client.get_collection(collection_name)
             metadatas = collection.get(include=["metadatas"])["metadatas"]
-            computed_doc_ids = np.array([m["doc_id"] for m in metadatas])
+            computed_doc_ids = np.unique(np.array([m["doc_id"] for m in metadatas]))
 
             self.split_document_ids = self.split_document_ids[
                 ~np.isin(self.split_document_ids, computed_doc_ids)

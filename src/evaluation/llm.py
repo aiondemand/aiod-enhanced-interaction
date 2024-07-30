@@ -41,7 +41,10 @@ class LLM_Chain:
         return chain_wrapper
     
 
-def get_default_llm() -> BaseLLM:
+def load_llm(ollama_name: str | None = None) -> BaseLLM:
+    if ollama_name is not None:
+        return Ollama(model=ollama_name, num_predict=1024)
+    
     azure_environs = [
         "OPENAI_API_VERSION", "AZURE_OPENAI_ENDPOINT", 
         "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"

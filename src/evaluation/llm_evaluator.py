@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from dataset import AIoD_Documents, Queries
 from lang_chains import SimpleChain
-from evaluation.llm import LLM_Chain, get_default_llm
+from evaluation.llm import LLM_Chain, load_llm
 from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
 
 
@@ -119,7 +119,7 @@ class LLM_Evaluator:
         generating_explicit_query_doc_pairs: bool = False
     ) -> SimpleChain:
         if llm is None:
-            llm = get_default_llm()
+            llm = load_llm()
         if pydantic_model is None:
             if compare_multiple_documents_to_a_query and generating_explicit_query_doc_pairs:
                 pydantic_model = RelevanceEvaluationMultipleDocsExplicitQueryDoc
@@ -294,21 +294,3 @@ class LLM_Evaluator:
             ]) / len(opt_filters)
         
         return required_score + optional_score*(required_score)**2
-
-
-if __name__ == "__main__":
-    with open("data/long_description_many_tags.json") as f:
-        data = json.load(f)
-
-    import numpy as np
-    ds_ids = np.array([ds["identifier"] for ds in data["long_description_many_tags"][:5]])
-
-    ds = AIoD_Documents(dirpath="data/basic-texts", include_ids=ds_ids)
-    ds
-
-    chain = LLM_Evaluator.build_chain(compare_multiple_documents_to_a_query=True)
-    judge = LLM_Evaluator(chain, num_docs_to_compare_at_the_time=3)
-
-    judge.evaluate_query_doc_pairs()
-    
-    pass

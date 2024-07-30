@@ -39,7 +39,11 @@ class ConvertJsonToString:
 
     # "BASIC INFO"
     @classmethod
-    def extract_very_basic_info(cls, data: dict, stringify: bool = False) -> str:
+    def extract_very_basic_info(
+        cls, data: dict, 
+        stringify: bool = False, 
+        include_id: bool = False
+    ) -> str:
         simple_data = cls._extract_very_basic_fields(data)
         if stringify:
             return json.dumps(simple_data)
@@ -47,7 +51,8 @@ class ConvertJsonToString:
         description = simple_data.get("description", None)
         keywords = simple_data.get("keyword", None)
 
-        string = f"Platform: {simple_data['platform']}\nAsset name: {simple_data['name']}"
+        string = f"Dataset ID: {simple_data['id']}\n" if include_id else ""
+        string += f"Platform: {simple_data['platform']}\nAsset name: {simple_data['name']}"
         if description is not None:
             string += f"\nDescription: {description}"
         if keywords is not None:
@@ -56,7 +61,7 @@ class ConvertJsonToString:
 
         return string
     
-    # "SIMPLE INFO"
+    # "RELEVANT INFO"
     @classmethod
     def extract_relevant_info(cls, data: dict, stringify: bool = False) -> str:
         simple_data = cls._extract_relevant_fields(data)
@@ -84,6 +89,7 @@ class ConvertJsonToString:
     def _extract_very_basic_fields(cls, data: dict) -> dict:
         # extract only name, keyword, description and platform
         new_object = {
+            "id": data["identifier"],
             "platform": data["platform"],
             "name": data["name"]
         }

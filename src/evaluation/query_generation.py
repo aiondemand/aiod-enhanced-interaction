@@ -10,7 +10,7 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 
-from evaluation.llm import LLM_Chain, get_default_llm
+from evaluation.llm import LLM_Chain, load_llm
 from lang_chains import SimpleChain
 from data_types import AnnotatedDoc, QueryDatapoint
 
@@ -79,7 +79,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         cls, llm: BaseLLM | None = None, pydantic_model: Type[BaseModel] | None = None
     ) -> SimpleChain:
         if llm is None:
-            llm = get_default_llm()
+            llm = load_llm()
         if pydantic_model is None:
             pydantic_model = AssetSpecificQueries
         prompt_templates = [
@@ -257,7 +257,7 @@ class GenericQueryGeneration(QueryGeneration):
         query_counts: list[int] = [10, 30, 50]
     ) -> SimpleChain:
         if llm is None:
-            llm = get_default_llm()
+            llm = load_llm()
         if pydantic_model is None:
             pydantic_model = GenericQueries
         prompt_templates = [

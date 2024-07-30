@@ -25,7 +25,12 @@ class QueryDatapoint(BaseModel):
 class SemanticSearchResult(BaseModel):
     query_id: str
     doc_ids: list[str]
-    distances: list[float]
+    distances: list[float] | None = None
+
+
+class RetrievedDocuments(BaseModel):
+    query_id: str
+    document_objects: list[dict]
 
 
 class MetricsClassAtK(BaseModel):
