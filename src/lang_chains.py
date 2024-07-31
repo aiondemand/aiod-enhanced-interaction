@@ -49,7 +49,7 @@ class ChainOutputOpts:
                     raise ValueError("You need to define Pydantic model that will be adhered to using JsonOutputParser")
                 if schema_placeholder_name is None:
                     raise ValueError("You need to define Schema placeholder name for JSON schema utilized in model prompt")
-                self.langchain_parser = langchain_parser_class(pydantic_model=pydantic_model)
+                self.langchain_parser = JsonOutputParser(pydantic_object=pydantic_model)
         
         # we utilize a different parser 
         else:

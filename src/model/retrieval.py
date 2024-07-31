@@ -7,6 +7,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from langchain_core.language_models.llms import BaseLLM
 from langchain.pydantic_v1 import BaseModel, Field
+from langchain_community.callbacks import get_openai_callback
 from time import time
 
 from tqdm import tqdm
@@ -23,6 +24,13 @@ class TopAssetIds(BaseModel):
     
 
 class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
+    llm_system_prompt_basic = """
+        You are an advanced language model tasked with evaluating the relevance of 
+        a set of machine learning asset descriptions to a specific user query. 
+        Given the query and a list of {doc_type}s, your goal is to output the list of 
+        IDs of the most relevant {doc_type}s to that query.
+    """
+    
     llm_system_prompt = """
         You are an advanced language model tasked with evaluating the relevance of 
         a set of machine learning asset descriptions to a specific user query. 
@@ -64,7 +72,7 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         stringify_document_func: Callable[[dict], str], 
         retrieval_topk: int = 100, output_topk: int = 10,
         llm: BaseLLM | None = None, pydantic_model: Type[BaseModel] | None = None,
-        include_steps_in_prompt: bool = False, 
+        prompt_variation: Literal["basic", "normal", "with_steps"] = "normal", 
         doc_type_name: Literal["dataset", "model"] = "dataset", 
         
     ) -> None:
@@ -75,7 +83,7 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         self.llm_chain = self.build_llm_for_document_validation(
             llm=llm, 
             pydantic_model=pydantic_model, 
-            include_steps_in_prompt=include_steps_in_prompt, 
+            prompt_variation=prompt_variation, 
             doc_type_name=doc_type_name,
             num_output_docs=output_topk
         )
@@ -92,6 +100,11 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         retrieve_topk_document_ids_func_kwargs: dict | None = None,
         translate_documents_func_kwargs: dict | None = None
     ) -> list[SemanticSearchResult]:
+        if retrieve_topk_document_ids_func_kwargs is None:
+            retrieve_topk_document_ids_func_kwargs = {}
+        if translate_documents_func_kwargs is None:
+            translate_documents_func_kwargs = {}
+        
         load_dirpath = retrieve_topk_document_ids_func_kwargs.pop("load_dirpath", None)
         save_dirpath = retrieve_topk_document_ids_func_kwargs.pop("save_dirpath", None)
 
@@ -154,39 +167,50 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         queries: list[QueryDatapoint] = query_loader.dataset.queries
         
         final_retrieved_doc_ids = []
-        for query, sem_results, context_docs in tqdm(
-            zip(queries, semantic_search_results, retrieved_documents),
-            total=len(queries)
-        ):
-            multiple_doc_string = self._build_multiple_docs_prompt(
-                context_docs.document_objects
-            )
 
-            for _ in range(retry_count_wrong_doc_ids):
-                try:
-                    out = self.llm_chain.invoke({
-                        "query": query.text,
-                        "multiple_docs": multiple_doc_string,
-                        "doc_type": self.doc_type_name,
-                        "output_count": self.topk
-                    }) 
-                
-                    valid_pred_ids = np.isin(
-                        np.array(out["document_ids"]), np.array(sem_results.doc_ids)
-                    )
-                    if (valid_pred_ids == False).sum() > 0:
-                        raise ValueError("Invalid LLM predictions")
+        with get_openai_callback() as cb:
+            for query, sem_results, context_docs in tqdm(
+                zip(queries, semantic_search_results, retrieved_documents),
+                total=len(queries)
+            ):
+                multiple_doc_string = self._build_multiple_docs_prompt(
+                    context_docs.document_objects
+                )
 
-                    final_retrieved_doc_ids.append(SemanticSearchResult(
-                        query_id=query.id,
-                        doc_ids=out["document_ids"]
-                    ))        
-                    break
-                except:
-                    continue
-            else:
-                raise ValueError(f"Invalid LLM predictions for query id=f'{query.id}'")
-        
+                # TODO testing direct invocation
+                # pred = self.llm_chain.chain.invoke({
+                #     "query": query.text,
+                #     "multiple_docs": multiple_doc_string,
+                #     "doc_type": self.doc_type_name,
+                #     "output_count": self.topk
+                # })
+
+                for _ in range(retry_count_wrong_doc_ids):
+                    try:
+                        out = self.llm_chain.invoke({
+                            "query": query.text,
+                            "multiple_docs": multiple_doc_string,
+                            "doc_type": self.doc_type_name,
+                            "output_count": self.topk
+                        }) 
+                    
+                        valid_pred_ids = np.isin(
+                            np.array(out["document_ids"]), np.array(sem_results.doc_ids)
+                        )
+                        if (valid_pred_ids == False).sum() > 0:
+                            raise ValueError("Invalid LLM predictions")
+
+                        final_retrieved_doc_ids.append(SemanticSearchResult(
+                            query_id=query.id,
+                            doc_ids=out["document_ids"]
+                        ))        
+                        break
+                    except:
+                        continue
+                else:
+                    raise ValueError(f"Invalid LLM predictions for query id=f'{query.id}'")
+            print(cb)
+            
         return final_retrieved_doc_ids
 
     def _build_multiple_docs_prompt(self, retrieved_docs: list[dict]) -> str:
@@ -206,7 +230,7 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
     def build_llm_for_document_validation(
         cls, llm: BaseLLM | None = None, 
         pydantic_model: Type[BaseModel] | None = None,
-        include_steps_in_prompt: bool = False, 
+        prompt_variation: Literal["basic", "normal", "with_steps"] = "normal", 
         doc_type_name: Literal["dataset", "model"] = "dataset", 
         num_output_docs: int = 10
     ) -> SimpleChain:
@@ -215,13 +239,17 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         if pydantic_model is None:
             pydantic_model = TopAssetIds
 
-        system_prompt = cls.llm_system_prompt + cls.llm_system_prompt_output
-        if include_steps_in_prompt:    
+        if prompt_variation == "basic":
+            system_prompt = cls.llm_system_prompt_basic
+        elif prompt_variation == "normal":
+            system_prompt = cls.llm_system_prompt + cls.llm_system_prompt_output
+        elif "with_steps":
             system_prompt = (
                 cls.llm_system_prompt + 
                 cls.llm_system_prompt_steps + 
                 cls.llm_system_prompt_output
             )
+
         prompt_templates = [
             system_prompt.format(
                 doc_type=doc_type_name,
@@ -229,7 +257,6 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
             ), 
             cls.user_prompt
         ]
-
         return LLM_Chain.build_simple_chain(
             pydantic_model=pydantic_model, 
             prompt_templates=prompt_templates, 
