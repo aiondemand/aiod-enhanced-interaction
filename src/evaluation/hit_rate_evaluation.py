@@ -41,30 +41,64 @@ class HitRateEvaluationPipeline:
         query_generation.generate(savedir=self.generate_queries_dirpath)
         query_types = query_generation.get_query_types()
 
+        # all the query types separately
         for query_type in query_types:
-            self._inner_pipeline(query_type)
+            self._inner_pipeline(
+                query_type_list=[query_type], 
+                query_type_name=query_type
+            )
+
+        # query types grouped by query descriptiveness level
+        descr_levels = query_generation.descriptiveness_levels
+        for descr_lvl in descr_levels:
+            query_types_subset = [
+                q_type for q_type in query_types 
+                if q_type.startswith(descr_lvl)
+            ]
+            self._inner_pipeline(
+                query_type_list=query_types_subset, 
+                query_type_name=descr_lvl
+            )
+            
+        # all the query types grouped together
+        self._inner_pipeline(
+            query_type_list=query_types, 
+            query_type_name="all"
+        )
 
         print(f"=========== ACCURACY EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
         
-    def _inner_pipeline(self, query_type: str) -> None:
-        print(f"===== Evaluating '{query_type}' queries =====")
-        query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
-        topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
+    def _inner_pipeline(self, query_type_list: list[str], query_type_name: str) -> None:
+        print(f"===== Evaluating '{query_type_name}' queries =====")
+        query_filepaths = [
+            os.path.join(self.generate_queries_dirpath, f"{path}.json") 
+            for path in query_type_list
+        ]
+        load_topk_dirpaths = [
+            os.path.join(self.topk_dirpath, self.model_name, path)
+            for path in query_type_list
+        ]
+        save_topk_dirpath = (
+            os.path.join(self.topk_dirpath, self.model_name, query_type_name)
+            if len(query_type_list) == 1
+            else None
+        )
         metrics_savepath = os.path.join(
-            self.metrics_dirpath, self.model_name, query_type, "results.json"
+            self.metrics_dirpath, self.model_name, query_type_name, "results.json"
         )
+            
+        query_loader = Queries(json_paths=query_filepaths).build_loader()
         
-        print("=== Retreving top K documents to each query ===")
-        query_loader = Queries(json_path=query_filepath).build_loader()
-        self.retrieval_system(
-            query_loader, 
-            retrieve_topk_document_ids_func_kwargs={
-                "load_dirpath": topk_dirpath,
-                "save_dirpath": topk_dirpath
-            }
-        )
-        
-
+        if save_topk_dirpath is not None:
+            print("=== Retreving top K documents to each query ===")
+            self.retrieval_system(
+                query_loader, 
+                retrieve_topk_document_ids_func_kwargs={
+                    "load_dirpaths": load_topk_dirpaths,
+                    "save_dirpath": save_topk_dirpath
+                }
+            )
+    
         print("=== Computing accuracy metrics ===")
         topk_levels = np.array([5, 10, 20, 50, 100], dtype=np.int32)
         topk_levels = topk_levels[topk_levels <= self.retrieval_system.topk].tolist()
@@ -73,6 +107,6 @@ class HitRateEvaluationPipeline:
             self.retrieval_system,
             query_loader, 
             topk_levels=topk_levels,
-            load_topk_docs_dirpath=topk_dirpath,
+            load_topk_docs_dirpath=load_topk_dirpaths,
             metrics_savepath=metrics_savepath,
         )

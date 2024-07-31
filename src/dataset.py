@@ -71,14 +71,18 @@ class AIoD_Documents(Dataset):
 
 class Queries(Dataset):
     def __init__(
-        self, json_path: str | None = None, queries: list[dict] | None = None
+        self, json_paths: str | list[str] | None = None, queries: list[dict] | None = None
     ) -> None:
-        if json_path is None and queries is None or queries == []:
+        if json_paths is None and queries is None or queries == []:
             raise ValueError("You need to define source of queries")
         data = queries
-        if json_path is not None:
-            with open(json_path) as f:
-                data = json.load(f)
+        if json_paths is not None:
+            if type(json_paths) == str:
+                json_paths = [json_paths]
+            data = []
+            for path in json_paths:
+                with open(path) as f:
+                    data.extend(json.load(f))
         
         self.queries = [QueryDatapoint(**d) for d in data]
 

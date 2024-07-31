@@ -22,7 +22,9 @@ def precision_evaluation(
     heuristic_function: bool = False, topk: int = 10, chunk_embeddings: bool = False
 ) -> None:
     client = init()
-    store = Chroma_EmbeddingStore(client, verbose=True)
+    store = Chroma_EmbeddingStore(
+        client, chunk_embedding_store=chunk_embeddings, verbose=True
+    )
 
     score_function, relevance_function = None, None
     if heuristic_function:
@@ -61,7 +63,9 @@ def recall_evaluation(
     topk: int = 100, chunk_embeddings: bool = False
 ) -> None:
     client = init()
-    store = Chroma_EmbeddingStore(client, verbose=True)
+    store = Chroma_EmbeddingStore(
+        client, chunk_embedding_store=chunk_embeddings, verbose=True
+    )
 
     for model_name in model_names:
         for process_text_type in process_text_types:
@@ -139,11 +143,39 @@ def load_embedding_model(model_name: str) -> EmbeddingModel:
 
 
 if __name__ == "__main__":
-    # model_names = ["gte_large", "multilingual_e5_large"]
-    # process_text_types = ["basic", "relevant"]
+    process_text_types = ["basic", "relevant"]
+    model_names = ["gte_large", "multilingual_e5_large", "multilingual_e5_large", "bge_large"]
 
-    model_names = ["RAG-gpt_4o-gte_large"]
-    process_text_types = ["basic"]
+    chunk_embeddings = [False, False, True, True]
+    for model_name, chunk_emb in zip(model_names, chunk_embeddings):
+        for text_type in process_text_types:
+            precision_evaluation(
+                [model_name], [text_type], topk=10, chunk_embeddings=chunk_emb,
+                heuristic_function=False
+            )
 
-    precision_evaluation(model_names, process_text_types, heuristic_function=False)
-    # recall_evaluation(model_names, process_text_types, topk=10)
+    exit()
+    precision_evaluation(
+        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+        heuristic_function=False
+    )
+    precision_evaluation(
+        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+        heuristic_function=True
+    )
+    recall_evaluation(model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings)
+
+
+    ##### CHUNK EMBEDDINGS ##### <- for VM
+    model_names = ["multilingual_e5_large", "bge_large"]
+    chunk_embeddings = True
+
+    precision_evaluation(
+        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+        heuristic_function=False
+    )
+    precision_evaluation(
+        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+        heuristic_function=True
+    )
+    recall_evaluation(model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings)

@@ -43,8 +43,13 @@ class EmbeddingStore(ABC):
         
 
 class Chroma_EmbeddingStore(EmbeddingStore):
-    def __init__(self, client: Client, verbose: bool = False) -> None:
+    def __init__(
+        self, client: Client, 
+        chunk_embedding_store: bool = False, 
+        verbose: bool = False
+    ) -> None:
         self.client = client
+        self.chunk_embedding_store = chunk_embedding_store
         self.verbose = verbose
 
     def _get_collection(
@@ -119,14 +124,13 @@ class Chroma_EmbeddingStore(EmbeddingStore):
 
     def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
-        save_dirpath: str | None = None, load_dirpath: str | None = None,
+        save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
         emb_collection_name: str | None = None, chroma_batch_size: int = 50,
-        chunk_embedding_store: bool = False
     ) -> list[SemanticSearchResult]:
-        if load_dirpath is not None:
+        if load_dirpaths is not None:
             try:
-                topk_store = LocalTopKDocumentsStore(load_dirpath, topk=topk)
-                return topk_store.load_topk_documents(query_loader)
+                topk_store = LocalTopKDocumentsStore(topk=topk)
+                return topk_store.load_topk_documents(query_loader, load_dirpaths)
             except:
                 pass
 
@@ -162,7 +166,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
 
                 sem_search_results = collection.query(
                     query_embeddings=all_embeddings,
-                    n_results=topk * 10 if chunk_embedding_store else topk,
+                    n_results=topk * 10 if self.chunk_embedding_store else topk+1,
                     include=["metadatas", "distances"]
                 )
                 doc_ids = [
@@ -195,9 +199,8 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             model.train()
 
         if save_dirpath is not None:
-            LocalTopKDocumentsStore(save_dirpath, topk=topk).store_topk_documents(
-                all_results
-            )
+            topk_store = LocalTopKDocumentsStore(topk=topk)
+            topk_store.store_topk_documents(all_results, save_dirpath)
         return all_results
     
     def translate_sem_results_to_documents(
@@ -251,12 +254,12 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
 
     def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10,
-        save_dirpath: str | None = None, load_dirpath: str | None = None,
+        save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
     ) -> list[SemanticSearchResult]:
-        if load_dirpath is not None:
+        if load_dirpaths is not None:
             try:
-                topk_store = LocalTopKDocumentsStore(load_dirpath, topk=topk)
-                return topk_store.load_topk_documents(query_loader)
+                topk_store = LocalTopKDocumentsStore(topk=topk)
+                return topk_store.load_topk_documents(query_loader, load_dirpaths)
             except:
                 pass
 
@@ -297,9 +300,8 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
             ))
 
         if save_dirpath is not None:
-            LocalTopKDocumentsStore(save_dirpath, topk=topk).store_topk_documents(
-                all_results
-            )
+            topk_store = LocalTopKDocumentsStore(topk=topk)
+            topk_store.store_topk_documents(all_results, save_dirpath)
         return all_results
     
     def translate_sem_results_to_documents(
@@ -327,14 +329,13 @@ class Filesystem_EmbeddingStore(EmbeddingStore):
 
 
 class LocalTopKDocumentsStore:
-    def __init__(self, dirpath: str, topk: int) -> None:
-        self.dirpath = dirpath
+    def __init__(self, topk: int) -> None:
         self.topk = topk
         
     def store_topk_documents(
-        self, sem_search_results: list[SemanticSearchResult]
+        self, sem_search_results: list[SemanticSearchResult], save_dirpath: str
     ) -> None:
-        os.makedirs(self.dirpath, exist_ok=True)
+        os.makedirs(save_dirpath, exist_ok=True)
 
         for query_results in sem_search_results:
             docs_to_save = [
@@ -344,17 +345,24 @@ class LocalTopKDocumentsStore:
                 for it, dist in enumerate(query_results.distances):
                     docs_to_save[it]["distance"] = dist
             
-            path = os.path.join(self.dirpath, f"{query_results.query_id}.json")
+            path = os.path.join(save_dirpath, f"{query_results.query_id}.json")
             with open(path, "w") as f:
                 json.dump(docs_to_save, f, ensure_ascii=False)
     
     def load_topk_documents(
-        self, query_loader: DataLoader
+        self, query_loader: DataLoader, load_dirpaths: str | list[str]
     ) -> list[SemanticSearchResult]:
-        available_query_ids = [
-            filename[:filename.rfind(".")]
-            for filename in sorted(os.listdir(self.dirpath))
-        ]
+        if type(load_dirpaths) is str:
+            load_dirpaths = [load_dirpaths]
+
+        available_query_ids_path_map = {}
+        for path in load_dirpaths:
+            available_query_ids_path_map.update({ 
+                filename[:filename.rfind(".")]: path  
+                for filename in sorted(os.listdir(path))
+            })            
+        available_query_ids = list(available_query_ids_path_map.keys())
+        
         requested_query_ids = [
             query.id
             for query in query_loader.dataset.queries
@@ -363,11 +371,12 @@ class LocalTopKDocumentsStore:
             raise ValueError(
                 "Not all requested top K documents for each are stored locally"
             )
-        
+                
         topk_documents: list[SemanticSearchResult] = []
         for query_id in requested_query_ids:
-            path = os.path.join(self.dirpath, f"{query_id}.json")
-            with open(path) as f:
+            dirpath = available_query_ids_path_map[query_id]
+            fullpath = os.path.join(dirpath, f"{query_id}.json")
+            with open(fullpath) as f:
                 data = json.load(f)
             
             topk_documents.append(SemanticSearchResult(

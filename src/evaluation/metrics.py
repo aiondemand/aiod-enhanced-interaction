@@ -230,7 +230,7 @@ def _generic_evaluation_loop(
     sem_search_results = retrieval_system(
         query_loader, 
         retrieve_topk_document_ids_func_kwargs={
-            "load_dirpath": load_topk_docs_dirpath
+            "load_dirpaths": load_topk_docs_dirpath
         }
     )
     

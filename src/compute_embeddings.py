@@ -13,9 +13,9 @@ import utils
 
 
 def store_embeddings_wrapper(
-        model_names: list[str], process_text_types: list[str], 
-        chunk_embeddings: bool = False
-    ) -> None:
+    model_names: list[str], process_text_types: list[str], 
+    chunk_embeddings: bool = False
+) -> None:
     client = utils.init()
     collection_name_placeholder = (
         "chunk_embeddings-{model_name}-{text_type}-v0"
@@ -50,24 +50,26 @@ def store_embeddings_wrapper(
                 client,
                 text_dirpath=text_dirpath, 
                 collection_name=collection_name,
+                chunk_embeddings=chunk_embeddings,
                 loader_kwargs=loader_kwargs
             )
 
 
 def store_embeddings(
         model: EmbeddingModel, client: Client, text_dirpath: str, 
-        collection_name: str, loader_kwargs: dict | None = None
+        collection_name: str, chunk_embeddings: bool = False,
+        loader_kwargs: dict | None = None
     ) -> None:
     ds = AIoD_Documents(text_dirpath, testing_random_texts=False)
     ds.filter_out_already_computed_docs(client, collection_name)
     loader = ds.build_loader(loader_kwargs)
 
-    store = Chroma_EmbeddingStore(client, verbose=True)
+    store = Chroma_EmbeddingStore(client, chunk_embedding_store=chunk_embeddings, verbose=True)
     store.store_embeddings(model, loader, collection_name)
 
 
 if __name__ == "__main__":
-    process_text_types = ["basic", "relevant"] 
+    process_text_types = ["basic"] 
     model_names = ["multilingual_e5_large"]
 
     store_embeddings_wrapper(model_names, process_text_types, chunk_embeddings=True)

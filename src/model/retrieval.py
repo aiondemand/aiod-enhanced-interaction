@@ -105,13 +105,13 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
         if translate_documents_func_kwargs is None:
             translate_documents_func_kwargs = {}
         
-        load_dirpath = retrieve_topk_document_ids_func_kwargs.pop("load_dirpath", None)
+        load_dirpaths = retrieve_topk_document_ids_func_kwargs.pop("load_dirpaths", None)
         save_dirpath = retrieve_topk_document_ids_func_kwargs.pop("save_dirpath", None)
 
-        if load_dirpath is not None:
+        if load_dirpaths is not None:
             try:
                 topk_store = LocalTopKDocumentsStore(
-                    load_dirpath, topk=self.topk
+                    load_dirpaths, topk=self.topk
                 )
                 return topk_store.load_topk_documents(query_loader)
             except:
@@ -177,14 +177,6 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
                     context_docs.document_objects
                 )
 
-                # TODO testing direct invocation
-                # pred = self.llm_chain.chain.invoke({
-                #     "query": query.text,
-                #     "multiple_docs": multiple_doc_string,
-                #     "doc_type": self.doc_type_name,
-                #     "output_count": self.topk
-                # })
-
                 for _ in range(retry_count_wrong_doc_ids):
                     try:
                         out = self.llm_chain.invoke({
@@ -193,11 +185,10 @@ class RAG_Pipeline(torch.nn.Module, RetrievalSystem):
                             "doc_type": self.doc_type_name,
                             "output_count": self.topk
                         }) 
-                    
                         valid_pred_ids = np.isin(
                             np.array(out["document_ids"]), np.array(sem_results.doc_ids)
                         )
-                        if (valid_pred_ids == False).sum() > 0:
+                        if (valid_pred_ids == False).sum() > 0 or len(out) != self.topk:
                             raise ValueError("Invalid LLM predictions")
 
                         final_retrieved_doc_ids.append(SemanticSearchResult(

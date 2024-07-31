@@ -68,59 +68,100 @@ class PrecisionEvaluationPipeline:
         self.query_generation.generate(savedir=self.generate_queries_dirpath)
         query_types = self.query_generation.get_query_types()
     
+        # all the query types separately
         for query_type in query_types:
             self._inner_pipeline(
-                query_type=query_type,
+                query_type_list=[query_type],
+                query_type_name=query_type,
                 score_function=score_function, 
                 relevance_function=relevance_function
             )
 
+        # all the query types grouped together
+        self._inner_pipeline(
+            query_type_list=query_types, 
+            query_type_name="all",
+            score_function=score_function, 
+            relevance_function=relevance_function
+        )
+
         print(f"=========== PRECISION EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
 
-    def _inner_pipeline(self, query_type: str,
+    def _inner_pipeline(
+        self, 
+        query_type_list: list[str], 
+        query_type_name: str,
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
-        print(f"===== Evaluating '{query_type}' queries =====")
-        query_filepath = os.path.join(self.generate_queries_dirpath, f"{query_type}.json")
-        topk_dirpath = os.path.join(self.topk_dirpath, self.model_name, query_type)
-        llm_eval_dirpath = os.path.join(self.llm_eval_dirpath, query_type)
-        
+        print(f"===== Evaluating '{query_type_name}' queries =====")
+        query_filepaths = [
+            os.path.join(self.generate_queries_dirpath, f"{path}.json") 
+            for path in query_type_list
+        ]
+        load_topk_dirpaths = [
+            os.path.join(self.topk_dirpath, self.model_name, path)
+            for path in query_type_list
+        ]
+        save_topk_dirpath = (
+            os.path.join(self.topk_dirpath, self.model_name, query_type_name)
+            if len(query_type_list) == 1
+            else None
+        )    
+        llm_eval_dirpath = (
+            os.path.join(self.llm_eval_dirpath, query_type_name)
+            if len(query_type_list) == 1
+            else None
+        )    
         annot_query_filename = (
-            "llm_scores_queries.json" if score_function is None else "heuristic_scores_queries.json"
+            "llm_scores_queries.json" 
+            if score_function is None 
+            else "heuristic_scores_queries.json"
         )
         metrics_filename = (
-            "llm_scores_results.json" if score_function is None else "heuristic_scores_results.json"
+            "llm_scores_results.json" 
+            if score_function is None 
+            else "heuristic_scores_results.json"
         )
-        annotated_query_savepath = os.path.join(
-            self.annotated_query_dirpath, self.model_name, query_type, annot_query_filename
+        load_annotated_query_savepaths = [
+            os.path.join(self.annotated_query_dirpath, self.model_name, path, annot_query_filename)
+            for path in query_type_list
+        ]
+        save_annotated_query_savepath = (
+            os.path.join(self.annotated_query_dirpath, self.model_name, query_type_name, annot_query_filename)
+            if len(query_type_list) == 1
+            else None
         )
         metrics_savepath = os.path.join(
-            self.metrics_dirpath, self.model_name, query_type, metrics_filename
+            self.metrics_dirpath, self.model_name, query_type_name, metrics_filename
         )
 
-        print("=== Retreving top K documents to each query ===")
-        query_loader = Queries(json_path=query_filepath).build_loader()
-        sem_search_results = self.retrieval_system(
-            query_loader, 
-            retrieve_topk_document_ids_func_kwargs={
-                "load_dirpath": topk_dirpath,
-                "save_dirpath": topk_dirpath
-            })
-    
-        print("=== Using LLM-as-a-judge principle to evaluate (query, doc) pairs ===")
-        self.llm_evaluator.evaluate_query_doc_pairs(
-            query_loader, sem_search_results, 
-            text_dirpath=self.asset_text_dirpath, 
-            save_dirpath=llm_eval_dirpath
-        )
-        LLM_Evaluator.build_query_json_from_llm_eval(
-            query_loader.dataset, sem_search_results, 
-            llm_eval_dirpath, 
-            savepath=annotated_query_savepath,
-            score_function=score_function
-        )
-        query_loader_with_gt = Queries(json_path=annotated_query_savepath).build_loader()
+        if llm_eval_dirpath is not None:
+            print("=== Retreving top K documents to each query ===")
+            query_loader = Queries(json_paths=query_filepaths).build_loader()
+            sem_search_results = self.retrieval_system(
+                query_loader, 
+                retrieve_topk_document_ids_func_kwargs={
+                    "load_dirpaths": load_topk_dirpaths,
+                    "save_dirpath": save_topk_dirpath
+                })
+            print("=== Using LLM-as-a-judge principle to evaluate (query, doc) pairs ===")
+            self.llm_evaluator.evaluate_query_doc_pairs(
+                query_loader, sem_search_results, 
+                text_dirpath=self.asset_text_dirpath, 
+                save_dirpath=llm_eval_dirpath
+            )
+            return #TODO
+
+            LLM_Evaluator.build_query_json_from_llm_eval(
+                query_loader.dataset, sem_search_results, 
+                llm_eval_dirpath, 
+                savepath=save_annotated_query_savepath,
+                score_function=score_function
+            )
+        return #TODO
+
+        query_loader_with_gt = Queries(json_paths=load_annotated_query_savepaths).build_loader()
 
         print("=== Computing retrieval metrics ===")
         topk_levels = np.array([3, 5, 10], dtype=np.int32)
@@ -129,7 +170,7 @@ class PrecisionEvaluationPipeline:
         eval.evaluate(
             self.retrieval_system, 
             query_loader_with_gt, 
-            load_topk_docs_dirpath=topk_dirpath,
+            load_topk_docs_dirpath=load_topk_dirpaths,
             metrics_savepath=metrics_savepath, 
             topk_levels=topk_levels
         )
