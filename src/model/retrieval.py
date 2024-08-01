@@ -1,6 +1,3 @@
-# TODO Rag implementation
-# start off with general implementation, RAG with ChromaDB
-# Once its done, we may want to further extract RAG specific code to a seperate file
 from typing import Callable, Literal, Type
 import torch
 import numpy as np

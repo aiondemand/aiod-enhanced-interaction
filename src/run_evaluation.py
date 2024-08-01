@@ -50,7 +50,7 @@ def precision_evaluation(
                 asset_type="dataset",
                 generate_queries_dirpath="./data/queries/generic",
                 asset_text_dirpath=asset_text_dirpath,
-                topk_dirpath="./data/topk-results",
+                topk_dirpath=f"./data/topk-results/topk-results-{topk}",
                 llm_eval_dirpath="./data/llm_evaluations",
                 annotated_query_dirpath=f"./data/annotated-queries",
                 metrics_dirpath=f"./data/results/precision",
@@ -60,7 +60,7 @@ def precision_evaluation(
 
 def recall_evaluation(
     model_names: list[str], process_text_types: list[str],
-    topk: int = 100, chunk_embeddings: bool = False
+    topk: int = 30, chunk_embeddings: bool = False
 ) -> None:
     client = init()
     store = Chroma_EmbeddingStore(
@@ -85,7 +85,7 @@ def recall_evaluation(
                 orig_json_assets_dirpath="./data/jsons",
                 quality_assets_path="./data/queries/asset-specific/handpicked_datasets.json",
                 generate_queries_dirpath="./data/queries/asset-specific",
-                topk_dirpath="./data/topk-results",
+                topk_dirpath=f"./data/topk-results/topk-results-{topk}",
                 metrics_dirpath=f"./data/results/hit_rate",
             )
             pipeline.execute()
@@ -134,6 +134,8 @@ def load_retrieval_system(
 def load_embedding_model(model_name: str) -> EmbeddingModel:
     if model_name == "gte_large":
         return ModelSetup._setup_gte_large()
+    if model_name == "gte_large_hierarchical":
+        return ModelSetup._setup_gte_large_hierarchical()
     if model_name == "multilingual_e5_large":
         return ModelSetup._setup_multilingual_e5_large()
     if model_name == "bge_large":
@@ -144,38 +146,32 @@ def load_embedding_model(model_name: str) -> EmbeddingModel:
 
 if __name__ == "__main__":
     process_text_types = ["basic", "relevant"]
-    model_names = ["gte_large", "multilingual_e5_large", "multilingual_e5_large", "bge_large"]
 
-    chunk_embeddings = [False, False, True, True]
-    for model_name, chunk_emb in zip(model_names, chunk_embeddings):
-        for text_type in process_text_types:
-            precision_evaluation(
-                [model_name], [text_type], topk=10, chunk_embeddings=chunk_emb,
-                heuristic_function=False
-            )
+    ##### DOC EMBEDDINGS #####
+    model_names = ["gte_large", "multilingual_e5_large"]
+    chunk_embeddings = False
 
-    exit()
-    precision_evaluation(
-        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
-        heuristic_function=False
-    )
-    precision_evaluation(
-        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
-        heuristic_function=True
-    )
-    recall_evaluation(model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings)
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=False
+    # )
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=True
+    # )
+    recall_evaluation(model_names, process_text_types, topk=30, chunk_embeddings=chunk_embeddings)
 
 
-    ##### CHUNK EMBEDDINGS ##### <- for VM
+    ##### CHUNK EMBEDDINGS #####
     model_names = ["multilingual_e5_large", "bge_large"]
     chunk_embeddings = True
 
-    precision_evaluation(
-        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
-        heuristic_function=False
-    )
-    precision_evaluation(
-        model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
-        heuristic_function=True
-    )
-    recall_evaluation(model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings)
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=False
+    # )
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=True
+    # )
+    recall_evaluation(model_names, process_text_types, topk=30, chunk_embeddings=chunk_embeddings)

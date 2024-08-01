@@ -207,6 +207,32 @@ class ModelSetup:
         model.eval()
         model.to(utils.get_device())
         return model
+    
+    @classmethod
+    def _setup_gte_large_hierarchical(
+        cls, chunk_pooling: Literal["mean", "none"] = "none", 
+        max_supported_chunks: int = 11
+    ) -> Hierarchical_EmbeddingModel:
+        transformer = SentenceTransformerToHF(
+            "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
+        )
+        if model_max_length is None:
+            model_max_length = 512
+        
+        text_splitter = TokenizerTextSplitter(
+            transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
+        )
+        model = Hierarchical_EmbeddingModel(
+            transformer, 
+            tokenizer=transformer.tokenizer,
+            token_pooling="none",
+            chunk_pooling=chunk_pooling,
+            max_supported_chunks=max_supported_chunks,
+            text_splitter=text_splitter,
+        )
+        model.eval()
+        model.to(utils.get_device())
+        return model
         
     @classmethod
     def _setup_gte_qwen2(

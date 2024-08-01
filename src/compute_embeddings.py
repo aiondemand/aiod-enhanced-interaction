@@ -30,6 +30,9 @@ def store_embeddings_wrapper(
         if model_name == "gte_large":
             embedding_model = ModelSetup._setup_gte_large()
             loader_kwargs["batch_size"] = 8
+        if model_name == "gte_large_hierarchical":
+            embedding_model = ModelSetup._setup_gte_large_hierarchical()
+            loader_kwargs["batch_size"] = 16
         elif model_name == "multilingual_e5_large":
             embedding_model = ModelSetup._setup_multilingual_e5_large()
             loader_kwargs["batch_size"] = 16
@@ -69,7 +72,7 @@ def store_embeddings(
 
 
 if __name__ == "__main__":
-    process_text_types = ["basic"] 
-    model_names = ["multilingual_e5_large"]
+    process_text_types = ["basic", "relevant"] 
+    model_names = ["gte_large_hierarchical"]
 
     store_embeddings_wrapper(model_names, process_text_types, chunk_embeddings=True)

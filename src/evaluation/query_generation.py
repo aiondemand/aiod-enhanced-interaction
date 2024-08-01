@@ -38,7 +38,7 @@ class QueryGeneration(ABC):
 
 
 class AssetSpecificQueryGeneration(QueryGeneration):
-    asset_quality = [
+    asset_qualities = [
         "long_description_many_tags",
         "long_description_few_tags",
         "moderate_description_many_tags",
@@ -111,7 +111,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
             return
 
         with get_openai_callback() as cb:
-            for asset_type_it, asset_q in enumerate(self.asset_quality):
+            for asset_type_it, asset_q in enumerate(self.asset_qualities):
                 print(f"...Generating asset-specific queries for '{asset_q}' documents...")
                 for doc in tqdm(self.all_assets[asset_q], total=len(self.all_assets[asset_q])):    
                     name = doc["name"].split("/")[-1]
@@ -146,7 +146,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
 
     def get_query_types(self) -> list[str]:
         all_query_types = []
-        for asset in self.asset_quality:
+        for asset in self.asset_qualities:
             all_query_types.extend([
                 f"{level}-{asset}" for level in self.descriptiveness_levels
             ])
@@ -210,7 +210,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         ]
         json_data = {}
         ds_ids = np.array(ds_ids)
-        for doc_ids, asset_q in zip(all_id_subsets, cls.asset_quality):
+        for doc_ids, asset_q in zip(all_id_subsets, cls.asset_qualities):
             indices = [np.where(ds_ids == doc_id)[0][0] for doc_id in doc_ids]
             selected_datasets = [all_good_datasets[idx] for idx in indices]
             json_data[asset_q] = selected_datasets

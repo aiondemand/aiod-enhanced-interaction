@@ -151,15 +151,12 @@ class PrecisionEvaluationPipeline:
                 text_dirpath=self.asset_text_dirpath, 
                 save_dirpath=llm_eval_dirpath
             )
-            return #TODO
-
             LLM_Evaluator.build_query_json_from_llm_eval(
                 query_loader.dataset, sem_search_results, 
                 llm_eval_dirpath, 
                 savepath=save_annotated_query_savepath,
                 score_function=score_function
             )
-        return #TODO
 
         query_loader_with_gt = Queries(json_paths=load_annotated_query_savepaths).build_loader()
 

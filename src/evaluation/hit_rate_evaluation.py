@@ -60,6 +60,18 @@ class HitRateEvaluationPipeline:
                 query_type_name=descr_lvl
             )
             
+        # query types grouped by asset quality
+        asset_qualities = query_generation.asset_qualities
+        for asset_quality in asset_qualities:
+            query_types_subset = [
+                q_type for q_type in query_types 
+                if q_type.endswith(asset_quality)
+            ]
+            self._inner_pipeline(
+                query_type_list=query_types_subset, 
+                query_type_name=asset_quality
+            )
+
         # all the query types grouped together
         self._inner_pipeline(
             query_type_list=query_types, 
@@ -100,7 +112,7 @@ class HitRateEvaluationPipeline:
             )
     
         print("=== Computing accuracy metrics ===")
-        topk_levels = np.array([5, 10, 20, 50, 100], dtype=np.int32)
+        topk_levels = np.array([5, 10, 20, 30], dtype=np.int32)
         topk_levels = topk_levels[topk_levels <= self.retrieval_system.topk].tolist()
         eval = SpecificAssetQueriesEvaluation()
         eval.evaluate(
