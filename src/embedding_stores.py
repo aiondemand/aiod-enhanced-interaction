@@ -125,7 +125,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
     def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
         save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
-        emb_collection_name: str | None = None, chroma_batch_size: int = 50,
+        emb_collection_name: str | None = None, chroma_batch_size: int = 1, #TODO
     ) -> list[SemanticSearchResult]:
         if load_dirpaths is not None:
             try:
@@ -159,14 +159,14 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             all_queries.extend(queries)
             
             if (
-                it != 0 and it % chroma_batch_size == 0 
+                it % chroma_batch_size == 0  #TODO
                 or it == len(query_loader) - 1
             ):
                 all_embeddings = np.stack(all_embeddings)
 
                 sem_search_results = collection.query(
                     query_embeddings=all_embeddings,
-                    n_results=topk * 10 if self.chunk_embedding_store else topk+1,
+                    n_results=120 if self.chunk_embedding_store else topk+1, #TODO
                     include=["metadatas", "distances"]
                 )
                 doc_ids = [

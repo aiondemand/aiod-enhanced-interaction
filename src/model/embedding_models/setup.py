@@ -216,9 +216,6 @@ class ModelSetup:
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
         )
-        if model_max_length is None:
-            model_max_length = 512
-        
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
         )

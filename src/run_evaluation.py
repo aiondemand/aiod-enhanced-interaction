@@ -113,7 +113,7 @@ def load_retrieval_system(
             emb_collection_name=collection_name,
             document_collection_name="datasets",
             stringify_document_func=ConvertJsonToString.extract_very_basic_info,
-            retrieval_topk=topk*5,
+            retrieval_topk=topk*3,
             output_topk=topk,
             llm=llm
         )
@@ -145,7 +145,25 @@ def load_embedding_model(model_name: str) -> EmbeddingModel:
 
 
 if __name__ == "__main__":
+    client = init()
     process_text_types = ["basic", "relevant"]
+
+    model_names = ["gte_large_hierarchical"]
+    chunk_embeddings = True
+
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=False
+    # )
+    # precision_evaluation(
+    #     model_names, process_text_types, topk=10, chunk_embeddings=chunk_embeddings,
+    #     heuristic_function=True
+    # )
+    recall_evaluation(model_names, process_text_types, topk=90, chunk_embeddings=chunk_embeddings)
+
+    # recall_evaluation(model_names, process_text_types, topk=30, chunk_embeddings=chunk_embeddings)
+
+    exit()
 
     ##### DOC EMBEDDINGS #####
     model_names = ["gte_large", "multilingual_e5_large"]
