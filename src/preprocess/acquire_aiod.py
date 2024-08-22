@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import json
 import requests
@@ -6,14 +7,16 @@ from time import sleep
 from tqdm import tqdm
 import json
 import os
-from chromadb.api.client import Client
+from chromadb.api.client import Client as ChromaClient
+from pymilvus import MilvusClient
 
+from data_types import VectorDbClient
 import utils
 
 
 def populate_database_with_assets(base_url: str, asset_name: str, savedir: str) -> None:
     new_collection_name = f"{asset_name}-docs"    
-    chroma_client = utils.init(return_chroma_client=True)
+    chroma_client = utils.init(return_db_client=True)
     collection_names = [col.name for col in chroma_client.list_collections()]
 
     if new_collection_name in collection_names:
@@ -74,30 +77,29 @@ def _perform_request(
     raise ValueError("We couldn't connect to AIoD API")
     
 
-def dummy_embeddings(texts: str) -> list[list[float]]:
-    return [[0] for _ in range(len(texts))]
+def dummy_embeddings(texts: str, dim: int = 1) -> list[list[float]]:
+    return [np.zeros(dim).tolist() for _ in range(len(texts))]
 
 
 def create_document_collection(
-    client: Client, collection_name: str, json_dirpath: str,
-    chroma_batch_size: int = 10
+    client: VectorDbClient, collection_name: str, json_dirpath: str,
+    batch_size: int = 10
 ) -> None:
-    try:
-        client.delete_collection(name=collection_name)
-    except:
-        pass
-
-    collection = client.create_collection(
-        name=collection_name
-    )
+    if type(client) == ChromaClient:
+        if collection_name in client.list_collections():
+            client.delete_collection(name=collection_name)
+        
+        chroma_collection = client.create_collection(name=collection_name)
+    elif type(client) == MilvusClient:
+        if client.has_collection(collection_name):
+            client.drop_collection(collection_name)
+        client.create_collection(collection_name, dimension=2, auto_id=False)
+    else:
+        raise ValueError("Invalid DB client")
+    
     filenames = sorted(os.listdir(json_dirpath))
-
-    counter = 0
-    all_meta = []
-    all_ids = []
-    for it, file in tqdm(
-        enumerate(filenames), total=len(filenames)
-    ):
+    counter, all_meta, all_ids = 0, [], []
+    for it, file in tqdm(enumerate(filenames), total=len(filenames)):
         json_filepath = os.path.join(json_dirpath, file)
         with open(json_filepath) as f:
             data = json.load(f)
@@ -106,20 +108,45 @@ def create_document_collection(
         all_ids.extend([str(obj["identifier"]) for obj in data])
         all_meta.extend([{"json_string": json.dumps(obj)} for obj in data])
 
-        if counter == chroma_batch_size or it == len(filenames) - 1:
-            collection.add(
-                embeddings=dummy_embeddings(all_ids),
-                metadatas=all_meta,
-                ids=all_ids
-            )
+        if counter == batch_size or it == len(filenames) - 1:
+            if type(client) == ChromaClient:
+                chroma_collection.add(
+                    embeddings=dummy_embeddings(all_ids),
+                    metadatas=all_meta,
+                    ids=all_ids
+                )
+            elif type(client) == MilvusClient:
+                raise ValueError(
+                    "We dont support this function utilizing Milvus database as there's apparently a hard cap of 2^16 characters for strings." + 
+                    "Due to this limitation, we are unable to store the stringified JSONs of the assets in the vector database (which is not requested in the first place I assume)"
+                )
+                pass
+                data = [
+                    {
+                        "id": int(id),
+                        "vector": dummy_vector,
+                        "json_string": meta["json_string"]
+                    }
+                    for id, meta, dummy_vector in zip(
+                        all_ids, all_meta, dummy_embeddings(all_ids, dim=2)
+                    )
+                ]
+                client.insert(
+                    collection_name=collection_name,
+                    data=data
+                )
+            else:
+                raise ValueError("Invalid DB client")
 
             all_meta = []
             all_ids = []
             counter = 0
 
-
 if __name__ == "__main__":    
     # base_url = "https://aiod-dev.i3a.es"
-    base_url = "https://api.aiod.eu"
+    # populate_database_with_assets(base_url, "datasets", "./temp/datasets")
 
-    populate_database_with_assets(base_url, "datasets", "./temp/datasets")
+    client = utils.init()
+    create_document_collection(
+        client, collection_name="datasets", json_dirpath="data/jsons", batch_size=10
+    )

@@ -68,10 +68,7 @@ class ModelSetup:
         elif model_path in cls.tested_hf_hierarchical_transformers:
             transformer = AutoModel.from_pretrained(model_path)
             tokenizer = AutoTokenizer.from_pretrained(model_path)
-                    
-        enc = tokenizer("test", return_tensors="pt")
-        transformer.embedding_dim = transformer(**enc)[0].shape[-1]
-        
+                        
         chunk_transformer = None
         if use_chunk_transformer:
             chunk_transformer = cls._init_chunk_transformer(
@@ -195,6 +192,7 @@ class ModelSetup:
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
         )
+
         if model_max_length is None:
             model_max_length = transformer.tokenizer.model_max_length
 

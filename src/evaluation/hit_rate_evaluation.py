@@ -110,7 +110,6 @@ class HitRateEvaluationPipeline:
                     "save_dirpath": save_topk_dirpath
                 }
             )
-        return #TODO
     
         print("=== Computing accuracy metrics ===")
         topk_levels = np.array([5, 10, 20, 30], dtype=np.int32)

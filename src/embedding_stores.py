@@ -3,7 +3,8 @@ import pandas as pd
 import os
 import sys
 from torch.utils.data import DataLoader
-from chromadb.api.client import Client
+from chromadb.api.client import Client as ChromaClient
+from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient
 from chromadb import Collection
 from tqdm import tqdm
 import torch
@@ -17,7 +18,6 @@ sys.path.append(src_dir)
 
 from model.base import EmbeddingModel
 import utils
-from dataset import AIoD_Documents, Queries
 from data_types import RetrievedDocuments, SemanticSearchResult
 
 
@@ -31,7 +31,8 @@ class EmbeddingStore(ABC):
     @abstractmethod
     def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
-        save_dirpath: str | None = None, load_dirpath: str | None = None, **kwargs
+        save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
+        **kwargs
     ) -> list[SemanticSearchResult]:
         pass
 
@@ -42,9 +43,188 @@ class EmbeddingStore(ABC):
         pass
         
 
+class Milvus_EmbeddingStore(EmbeddingStore):
+    def __init__(
+        self, client: MilvusClient, 
+        emb_dimensionality: int, 
+        chunk_embedding_store: bool = False, 
+        verbose: bool = False
+    ) -> None:
+        self.client = client
+        self.emb_dimensionality = emb_dimensionality
+        self.chunk_embedding_store = chunk_embedding_store
+        self.verbose = verbose
+
+    def _create_collection(self, collection_name: str) -> None:
+        if self.client.has_collection(collection_name) is False:
+            self.client.create_collection(
+                collection_name=collection_name, 
+                dimension=self.emb_dimensionality, 
+                auto_id=True
+            )
+
+
+        return
+        
+        # TODO later on we may want to further modify the schema/index, etc...
+        if self.client.has_collection(collection_name) is False:
+            schema = MilvusClient.create_schema(auto_id=False, enable_dynanmic_field=True)
+            schema.add_field(FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=36))
+            schema.add_field(FieldSchema(name="doc_id", dtype=DataType.VARCHAR, max_length=20))
+            schema.add_field(FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=self.emb_dimensionality))
+                    
+            index_params = self.client.prepare_index_params()
+            # TODO index
+
+            index_params.add_index(
+                field_name="vector", 
+                index_type="HNSW",
+                metric_TYPE="COSINE",
+                params={}
+            )
+
+
+            self.client.create_collection(collection_name, schema=schema)
+
+            out = self.client.get_collection_stats(collection_name)
+            print(out)
+            # self.client.create_collection(
+            #     collection_name=collection_name, 
+            #     dimension=self.emb_dimensionality,
+            #     id_type="string"
+            # )
+        
+    def store_embeddings(
+        self, model: EmbeddingModel, loader: DataLoader, 
+        collection_name: str, milvus_batch_size: int = 50
+    ) -> None:
+        was_training = model.training
+        model.eval()
+        self._create_collection(collection_name)
+    
+        all_embeddings = []
+        all_ids = []
+        all_doc_ids = []
+        for it, (texts, doc_ids) in tqdm(
+            enumerate(loader), total=len(loader), disable=self.verbose is False
+        ):
+            with torch.no_grad():
+                chunks_embeddings_of_multiple_docs = model(texts)
+            if chunks_embeddings_of_multiple_docs[0].ndim == 1:
+                chunks_embeddings_of_multiple_docs = [emb[None] for emb in chunks_embeddings_of_multiple_docs]
+
+            for chunk_embeds_of_a_doc, doc_id in zip(chunks_embeddings_of_multiple_docs, doc_ids):
+                all_embeddings.extend([
+                    chunk_emb for chunk_emb in chunk_embeds_of_a_doc.cpu().numpy()
+                ])
+                all_ids.extend([
+                    str(uuid.uuid4()) for _ in range(len(chunk_embeds_of_a_doc))
+                ])
+                all_doc_ids.extend([doc_id] * len(chunk_embeds_of_a_doc))
+    
+            if (len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1):
+                data = [
+                    {
+                        # "id": id, # TODO for now we dont pass ID as we have auto ID set up
+                        "vector": emb,
+                        "doc_id": doc_id
+                    }
+                    for id, emb, doc_id in zip(all_ids, all_embeddings, all_doc_ids)
+                ]
+                self.client.insert(collection_name=collection_name, data=data)
+                
+                all_embeddings = []
+                all_ids = []
+                all_doc_ids = []
+
+        if was_training:
+            model.train()
+
+    def retrieve_topk_document_ids(
+        self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
+        save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
+        emb_collection_name: str | None = None, milvus_batch_size: int = 50,
+    ) -> list[SemanticSearchResult]: 
+        if load_dirpaths is not None:
+            try:
+                topk_store = LocalTopKDocumentsStore(topk=topk)
+                return topk_store.load_topk_documents(query_loader, load_dirpaths)
+            except:
+                pass
+
+        was_training = model.training
+        model.eval()
+        if self.client.has_collection(emb_collection_name) is False:
+            raise ValueError(f"Collection '{emb_collection_name}' doesnt exist")
+
+        all_results = []
+        all_embeddings = []
+        all_queries = []
+        
+        for it, queries in tqdm(
+            enumerate(query_loader), 
+            total=len(query_loader), 
+            disable=self.verbose is False
+        ):
+            texts = [q.text for q in queries]
+            with torch.no_grad():
+                query_embeddings = model(texts)
+            if query_embeddings[0].ndim == 2:
+                if sum([len(q_emb) != 1 for q_emb in query_embeddings]) > 0:
+                    raise ValueError("We dont support queries that consist of multiple chunks")
+                query_embeddings = [q_emb[0] for q_emb in query_embeddings]
+
+            all_embeddings.extend(q_emb.cpu().numpy() for q_emb in query_embeddings)
+            all_queries.extend(queries)
+            
+            if (len(all_embeddings) >= milvus_batch_size or it == len(query_loader) - 1):
+                all_embeddings = np.stack(all_embeddings).tolist()
+
+                sem_search_results = self.client.search(
+                    collection_name=emb_collection_name,
+                    data=all_embeddings,
+                    limit=topk * 10 if self.chunk_embedding_store else topk+1,
+                    output_fields=["doc_id"]
+
+                )
+                for query, query_results in zip(all_queries, sem_search_results):
+                    query_id = (
+                        f"query_{len(all_results)}" 
+                        if query.id is None 
+                        else query.id
+                    )
+                    doc_ids = [match["entity"]["doc_id"] for match in query_results]
+                    distances = [match["distance"] for match in query_results]
+                    
+                    all_results.append(SemanticSearchResult(
+                        query_id=query_id,
+                        doc_ids=doc_ids,
+                        distances=distances
+                    ))
+                    
+                all_embeddings = []
+                all_queries = []
+        
+        if was_training:
+            model.train()
+
+        if save_dirpath is not None:
+            topk_store = LocalTopKDocumentsStore(topk=topk)
+            topk_store.store_topk_documents(all_results, save_dirpath)
+        return all_results
+
+    def translate_sem_results_to_documents(
+        self, result_set: list[SemanticSearchResult], document_collection_name: str
+    ) -> list[RetrievedDocuments]:
+        # There is no collection containing the whole stringified JSON documents of 
+        # assets, hence we cannot translate doc IDs to whole documents using vector 
+        # database only
+        pass
+
+
 class Chroma_EmbeddingStore(EmbeddingStore):
     def __init__(
-        self, client: Client, 
+        self, client: ChromaClient, 
         chunk_embedding_store: bool = False, 
         verbose: bool = False
     ) -> None:
@@ -61,11 +241,11 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             if create_collection is False:
                 print(f"Collection '{collection_name}' doesn't exist.")
                 raise e
-            collection = self.create_collection(collection_name)
+            collection = self._create_collection(collection_name)
         
         return collection
 
-    def create_collection(self, collection_name: str) -> Collection:
+    def _create_collection(self, collection_name: str) -> Collection:
         return self.client.create_collection(
             name=collection_name,
             metadata={
@@ -104,10 +284,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
                     {"doc_id": doc_id} for _ in range(len(chunk_embeds_of_a_doc))
                 ])
     
-            if (
-                it != 0 and len(all_embeddings) % chroma_batch_size == 0
-                or it == len(loader) - 1
-            ):
+            if (len(all_embeddings) >= chroma_batch_size or it == len(loader) - 1):
                 all_embeddings = np.stack(all_embeddings)
                 collection.add(
                     embeddings=all_embeddings, 
@@ -125,7 +302,7 @@ class Chroma_EmbeddingStore(EmbeddingStore):
     def retrieve_topk_document_ids(
         self, model: EmbeddingModel, query_loader: DataLoader, topk: int = 10, 
         save_dirpath: str | None = None, load_dirpaths: str | list[str] | None = None,
-        emb_collection_name: str | None = None, chroma_batch_size: int = 1, #TODO
+        emb_collection_name: str | None = None, chroma_batch_size: int = 50,
     ) -> list[SemanticSearchResult]:
         if load_dirpaths is not None:
             try:
@@ -158,15 +335,12 @@ class Chroma_EmbeddingStore(EmbeddingStore):
             all_embeddings.extend(q_emb.cpu().numpy() for q_emb in query_embeddings)
             all_queries.extend(queries)
             
-            if (
-                it % chroma_batch_size == 0  #TODO
-                or it == len(query_loader) - 1
-            ):
+            if (len(all_embeddings) >= chroma_batch_size or it == len(query_loader) - 1):
                 all_embeddings = np.stack(all_embeddings)
 
                 sem_search_results = collection.query(
                     query_embeddings=all_embeddings,
-                    n_results=120 if self.chunk_embedding_store else topk+1, #TODO
+                    n_results=topk * 10 if self.chunk_embedding_store else topk+1,
                     include=["metadatas", "distances"]
                 )
                 doc_ids = [

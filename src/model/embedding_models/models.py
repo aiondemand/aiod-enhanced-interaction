@@ -56,6 +56,9 @@ class SentenceTransformerToHF(torch.nn.Module):
         self.tokenizer = self.sentence_transformer[0].tokenizer
         self.tokenizer.model_max_length = self.sentence_transformer[0].max_seq_length
 
+        enc = self.tokenizer("test", return_tensors="pt")
+        self.embedding_dim = self.hf_transformer(**enc)[0].shape[-1]
+
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs
     ) -> torch.Tensor:

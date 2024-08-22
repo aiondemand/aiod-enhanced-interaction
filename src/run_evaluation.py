@@ -1,6 +1,7 @@
 import sys
 import os
 from langchain_community.llms import Ollama
+from pymilvus import MilvusClient
 
 src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.append(src_dir)
@@ -107,6 +108,13 @@ def load_retrieval_system(
             else f"embeddings-{embedding_model_name}-{process_text_type}-v0"
         )
 
+        if type(embedding_store.client) == MilvusClient:
+            collection_name = (
+                f"chunk_embeddings_{embedding_model_name}_{process_text_type}"
+                if chunk_embeddings
+                else f"embeddings_{embedding_model_name}_{process_text_type}"
+            )
+
         return RAG_Pipeline(
             embedding_model, 
             embedding_store,
@@ -124,6 +132,12 @@ def load_retrieval_system(
         if chunk_embeddings
         else f"embeddings-{model_name}-{process_text_type}-v0"
     )
+    if type(embedding_store.client) == MilvusClient:
+        collection_name = (
+            f"chunk_embeddings_{model_name}_{process_text_type}"
+            if chunk_embeddings
+            else f"embeddings_{model_name}_{process_text_type}"
+        )
 
     return EmbeddingModel_Pipeline(
         embedding_model, embedding_store, topk=topk, 

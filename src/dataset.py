@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from typing import Callable
+from pymilvus import MilvusClient
 from tqdm import tqdm
 import json
 import os
 import os
 from torch.utils.data import Dataset, DataLoader
-from chromadb.api.client import Client
+from chromadb.api.client import Client as ChromaClient
 import numpy as np
 import random
 from nltk.corpus import words
 
-from data_types import QueryDatapoint
+from data_types import QueryDatapoint, VectorDbClient
     
 
 class AIoD_Documents(Dataset):
@@ -55,23 +56,36 @@ class AIoD_Documents(Dataset):
         return DataLoader(self, **loader_kwargs)
     
     def filter_out_already_computed_docs(
-        self, client: Client, collection_name: str
+        self, client: VectorDbClient, collection_name: str
     ) -> None:
-        try:
+        if type(client) == ChromaClient:
+            if collection_name not in client.list_collections():
+                return
             collection = client.get_collection(collection_name)
             metadatas = collection.get(include=["metadatas"])["metadatas"]
             computed_doc_ids = np.unique(np.array([m["doc_id"] for m in metadatas]))
+        elif type(client) == MilvusClient:
+            if client.has_collection(collection_name) is False:
+                return        
+            results = client.query(
+                collection_name=collection_name, 
+                filter="id > -1", 
+                output_fields=["doc_id"]
+            )
+            computed_doc_ids = np.unique(np.array([doc["doc_id"] for doc in results]))
+        else:
+            raise ValueError("Invalid DB client")
 
-            self.split_document_ids = self.split_document_ids[
-                ~np.isin(self.split_document_ids, computed_doc_ids)
-            ]
-        except:
-            return
-        
+        self.split_document_ids = self.split_document_ids[
+            ~np.isin(self.split_document_ids, computed_doc_ids)
+        ]
+
 
 class Queries(Dataset):
     def __init__(
-        self, json_paths: str | list[str] | None = None, queries: list[dict] | None = None
+        self, 
+        json_paths: str | list[str] | None = None, 
+        queries: list[dict] | None = None
     ) -> None:
         if json_paths is None and queries is None or queries == []:
             raise ValueError("You need to define source of queries")
@@ -108,24 +122,33 @@ class Queries(Dataset):
             
             
 def process_documents_and_store_to_filesystem(
-    client: Client, collection_name: str, 
+    client: VectorDbClient, collection_name: str,
     extraction_function: Callable[[dict], str],
     savedir: str, docs_window_size: int = 10_000,
     extension: str = ".txt"
 ) -> None:
     os.makedirs(savedir, exist_ok=True)
-    collection = client.get_collection(collection_name)
 
-    for offset in tqdm(range(0, collection.count(), docs_window_size)):
-        docs = collection.get(
-            limit=docs_window_size, offset=offset, include=["metadatas"]
-        )
-        doc_ids, metadata = docs["ids"], docs["metadatas"]
+    if type(client) == ChromaClient:
+        collection = client.get_collection(collection_name)
+
+        for offset in tqdm(range(0, collection.count(), docs_window_size)):
+            docs = collection.get(
+                limit=docs_window_size, offset=offset, include=["metadatas"]
+            )
+            doc_ids, metadata = docs["ids"], docs["metadatas"]
+            
+            objects = [json.loads(d["json_string"]) for d in metadata]
+            extracted_texts = [extraction_function(o) for o in objects]
+
+            for id, text in zip(doc_ids, extracted_texts):
+                with open(os.path.join(savedir, f"{id}{extension}"), "w") as f:
+                    f.write(text)
         
-        objects = [json.loads(d["json_string"]) for d in metadata]
-        extracted_texts = [extraction_function(o) for o in objects]
-
-        for id, text in zip(doc_ids, extracted_texts):
-            with open(os.path.join(savedir, f"{id}{extension}"), "w") as f:
-                f.write(text)
-    
+    elif type(client) == MilvusClient:
+        raise ValueError(
+            "We dont support this function utilizing Milvus database as there's apparently a hard cap of 2^16 characters for strings." + 
+            "Due to this limitation, we are unable to store the stringified JSONs of the assets in the vector database (which is not requested in the first place I assume)"
+        )
+    else:
+        raise ValueError("Invalid DB client")

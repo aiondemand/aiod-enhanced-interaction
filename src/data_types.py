@@ -1,6 +1,11 @@
 from abc import abstractmethod
-from typing import Callable
+from typing import Callable, TypeAlias
 from pydantic import BaseModel
+from pymilvus import MilvusClient
+from chromadb.api.client import Client as ChromaClient
+
+
+VectorDbClient: TypeAlias = ChromaClient | MilvusClient
 
 
 class AnnotatedDoc(BaseModel):
