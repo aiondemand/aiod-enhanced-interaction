@@ -193,13 +193,18 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                         if query.id is None 
                         else query.id
                     )
+
                     doc_ids = [match["entity"]["doc_id"] for match in query_results]
-                    distances = [match["distance"] for match in query_results]
-                    
+                    distances = [1 - match["distance"] for match in query_results] #be aware we work with similarities, not distances
+
+                    indices = pd.Series(data=doc_ids).drop_duplicates().index.values[:topk]
+                    filtered_docs = [doc_ids[idx] for idx in indices]
+                    filtered_distances = [distances[idx] for idx in indices]
+    
                     all_results.append(SemanticSearchResult(
                         query_id=query_id,
-                        doc_ids=doc_ids,
-                        distances=distances
+                        doc_ids=filtered_docs,
+                        distances=filtered_distances
                     ))
                     
                 all_embeddings = []

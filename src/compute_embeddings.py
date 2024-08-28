@@ -104,7 +104,8 @@ def store_embeddings(
     from dataset import Queries
     query_loader = Queries(queries=queries).build_loader()
 
-    store.retrieve_topk_document_ids(model, query_loader, topk=10, emb_collection_name=collection_name)
+    topk_documents = store.retrieve_topk_document_ids(model, query_loader, topk=10, emb_collection_name=collection_name)
+    topk_documents
 
 
 if __name__ == "__main__":
