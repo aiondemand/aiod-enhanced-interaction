@@ -3,3 +3,4 @@ target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
+known_local_folder = ["api/app"]

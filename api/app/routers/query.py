@@ -1,12 +1,11 @@
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
-
 from app.schemas.query import QueryStatus, QueueItem
 from app.schemas.SemanticSearchResults import SemanticSearchResult
 from app.services.threads.search_process import QUERY_QUEUE, QueryResultsManager
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 

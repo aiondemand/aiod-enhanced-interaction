@@ -4,14 +4,13 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 import torch
-from pymilvus import MilvusClient
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
 from app.config import settings
 from app.schemas.query import QueueItem
 from app.schemas.SemanticSearchResults import SemanticSearchResult
 from app.services.inference.model import AiModel
+from pymilvus import MilvusClient
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 class EmbeddingStore(ABC):

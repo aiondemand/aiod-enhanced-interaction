@@ -1,8 +1,5 @@
 import threading
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 from app.routers import query as query_router
 from app.services.embedding_store import Milvus_EmbeddingStore
 from app.services.inference.model import AiModel
@@ -11,6 +8,8 @@ from app.services.threads.search_process import (
     QueryResultsManager,
     start_search_thread,
 )
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 batch_thread: threading.Thread | None = None
 query_thread: threading.Thread | None = None

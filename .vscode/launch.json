@@ -5,14 +5,27 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Debug Python file for prototyping",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "env": {
                 "PYTHONPATH": "${cwd}/src"
             },
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Debug FastAPI service",
+            "type": "debugpy",
+            "request": "launch",
+            "program":"${workspaceFolder}/api/app/main.py",
+            "cwd": "${workspaceFolder}/api",
+            "env": {
+                "PYTHONPATH": "${cwd}/api"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }
