@@ -8,18 +8,9 @@ from .architecture import (
     SentenceTransformerToHF,
     TokenizerTextSplitter,
 )
-from .utils import get_device
 
 
 class AiModel:
-    _instance: AiModel | None = None
-
-    def __new__(cls) -> AiModel:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.init()
-        return cls._instance
-
     def init(self) -> None:
         self.model = self.load_model()
 
@@ -37,10 +28,9 @@ class AiModel:
             chunk_pooling="none",
             max_supported_chunks=11,
             text_splitter=text_splitter,
+            dev="cpu",
         )
         model.eval()
-        model.to(get_device())
-
         return model
 
     def compute_embeddings(self, queries: list[str]) -> list[list[float]]:
@@ -49,3 +39,27 @@ class AiModel:
         with torch.no_grad():
             embeddings = self.model(queries)
             return torch.vstack([emb[0] for emb in embeddings]).cpu().numpy().tolist()
+
+    def to_device(self, device: torch.device = "cpu") -> None:
+        self.model.dev(device)
+        self.model.to(device)
+
+
+class AiModelForUserQueries(AiModel):
+    _instance: AiModel | None = None
+
+    def __new__(cls) -> AiModel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.init()
+        return cls._instance
+
+
+class AiModelForBatchProcessing(AiModel):
+    _instance: AiModel | None = None
+
+    def __new__(cls) -> AiModel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.init()
+        return cls._instance

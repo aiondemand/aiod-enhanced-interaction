@@ -1,24 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
-from enum import Enum
-
+from app.schemas.query_status import QueryStatus
 from pydantic import BaseModel
 
 
-class QueryStatus(Enum):
-    QUEUED = "Queued"
-    IN_PROGESS = "In_progress"
-    COMPLETED = "Completed"
-
-
-class Query(BaseModel):
-    id: str
+class UserQueryResponse(BaseModel):
     status: QueryStatus = QueryStatus.QUEUED
-    result: list[str] | None = None
-    expires_at: datetime | None = None
-
-
-class QueueItem(BaseModel):
-    id: str
-    query: str
+    result_doc_ids: list[str] | None = None

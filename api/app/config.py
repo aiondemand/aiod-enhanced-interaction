@@ -24,6 +24,15 @@ class MilvusConfig(BaseModel):
 
 class Settings(BaseSettings):
     MILVUS: MilvusConfig
+    USE_GPU: bool = False
+    DB_FILEPATH: str
+
+    @field_validator("USE_GPU", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str) -> bool:
+        if value.lower() == "true":
+            return True
+        return False
 
     class Config:
         env_file = ".env"

@@ -5,8 +5,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import torch
 from app.config import settings
-from app.schemas.query import QueueItem
-from app.schemas.SemanticSearchResults import SemanticSearchResult
+from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 from pymilvus import MilvusClient
 from torch.utils.data import DataLoader
@@ -24,10 +23,11 @@ class EmbeddingStore(ABC):
     def retrieve_topk_document_ids(
         self,
         model: AiModel,
-        queue_item: QueueItem,
+        query_id: str,
+        query_text: str,
         collection_name: str,
         topk: int = 10,
-    ) -> SemanticSearchResult:
+    ) -> SearchResults:
         pass
 
 
@@ -100,15 +100,16 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     def retrieve_topk_document_ids(
         self,
         model: AiModel,
-        queue_item: QueueItem,
+        query_id: str,
+        query_text: str,
         collection_name: str,
         topk: int = 10,
-    ) -> SemanticSearchResult:
+    ) -> SearchResults:
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
 
         with torch.no_grad():
-            query_embeddings = model.compute_embeddings([queue_item.query])
+            query_embeddings = model.compute_embeddings([query_text])
 
         query_results = self.client.search(
             collection_name=collection_name,
@@ -124,6 +125,4 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         filtered_docs = [doc_ids[idx] for idx in indices]
         filtered_distances = [distances[idx] for idx in indices]
 
-        return SemanticSearchResult(
-            query_id=queue_item.id, doc_ids=filtered_docs, distances=filtered_distances
-        )
+        return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
