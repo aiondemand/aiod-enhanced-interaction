@@ -6,8 +6,6 @@ import torch
 from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
-from .utils import get_device
-
 
 class EmbeddingModel(ABC):
     @abstractmethod
@@ -108,6 +106,73 @@ class SentenceTransformerToHF(torch.nn.Module):
         return [encodings["sentence_embedding"]]
 
 
+class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
+    """
+    Class representing models that process the input documents in their entirety
+    without needing to divide them into seperate chunks.
+    """
+
+    def __init__(
+        self,
+        transformer: PreTrainedModel | SentenceTransformerToHF,
+        tokenizer: PreTrainedTokenizer,
+        pooling: str = "max",
+        document_max_length: int = -1,
+        global_attention_mask: bool = False,
+        preprocess_text_fn: Callable[[str], str] | None = None,
+        dev: torch.device = "cpu",
+    ) -> None:
+        """
+        Arguments:
+        'pooling': represents how the final representation of the input
+        documents are computed
+        """
+        super().__init__()
+        assert pooling in ["mean", "max", "CLS_token", "none"]
+
+        self.transformer = transformer
+        self.tokenizer = tokenizer
+        self.pooling = pooling
+        self.document_max_length = document_max_length
+        self.global_attention_mask = global_attention_mask
+        self.preprocess_text_fn = preprocess_text_fn
+
+        self.dev = dev
+
+    def forward(self, texts: list[str]) -> list[torch.Tensor]:
+        encoding = self.preprocess_input(texts)
+        return self._forward(encoding)
+
+    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
+        out = self.transformer(**encodings)[0]
+        out = _pool(out, encodings["attention_mask"], self.pooling)
+        return [emb for emb in out]
+
+    def preprocess_input(self, texts: list[str]) -> dict:
+        if self.preprocess_text_fn is not None:
+            texts = [self.preprocess_text_fn(t) for t in texts]
+
+        doc_max_length = (
+            self.document_max_length
+            if self.document_max_length > 0
+            else self.tokenizer.model_max_length
+        )
+        encodings = self.tokenizer(
+            texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=doc_max_length,
+        ).to(self.dev)
+
+        if self.global_attention_mask:
+            encodings["global_attention_mask"] = torch.zeros_like(
+                encodings["attention_mask"], device=self.dev
+            )
+            encodings["global_attention_mask"][:, 0] = 1
+        return encodings
+
+
 class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
     """
     Class representing models that process the input documents by firstly individually
@@ -126,7 +191,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         max_supported_chunks: int = -1,
         text_splitter: TokenizerTextSplitter | None = None,
         preprocess_text_fn: Callable[[str], str] | None = None,
-        dev: torch.device = get_device(),
+        dev: torch.device = "cpu",
     ) -> None:
         """
         Arguments:
@@ -355,7 +420,7 @@ def weighted_sum_pooling(
     hidden_states: torch.Tensor,
     attention_mask: torch.Tensor,
     weights: torch.Tensor,
-    dev: torch.device = get_device,
+    dev: torch.device = "cpu",
 ) -> torch.Tensor:
     """Pooling method: Apply a weighted average of all the representations"""
     input_mask_expanded = (

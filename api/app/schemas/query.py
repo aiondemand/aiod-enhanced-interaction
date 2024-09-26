@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.schemas.query_status import QueryStatus
+from app.schemas.enums import QueryStatus
 from pydantic import BaseModel
 
 

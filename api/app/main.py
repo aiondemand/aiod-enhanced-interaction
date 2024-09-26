@@ -1,17 +1,29 @@
 import threading
+from contextlib import asynccontextmanager
+from functools import partial
 
 from app.routers import query as query_router
-from app.services.database import UserQueryDatabase
-from app.services.embedding_store import Milvus_EmbeddingStore
-from app.services.inference.model import AiModelForBatchProcessing
+from app.services.database import Database
+from app.services.threads.embedding_thread import (
+    compute_embeddings_for_AIoD_assets_wrapper,
+)
 from app.services.threads.search_thread import QUERY_QUEUE, start_search_thread
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-batch_thread: threading.Thread | None = None
 query_thread: threading.Thread | None = None
 
-app = FastAPI(title="[AIoD] Semantic Search")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app_init()
+    yield
+    app_shutdown()
+
+
+app = FastAPI(title="[AIoD] Semantic Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 
@@ -23,33 +35,31 @@ app.add_middleware(
 )
 
 
-# TODO replace the deprecated methods
-@app.on_event("startup")
-async def app_init() -> None:
-    instantiate_singletons()
-
-    # global batch_process
-    # batch_process = start_embedding_process()
+def app_init() -> None:
+    # Instantiate singletons before utilizing them in other threads
+    Database()
 
     global query_thread
     query_thread = start_search_thread()
-    pass
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        compute_embeddings_for_AIoD_assets_wrapper, CronTrigger(hour=0, minute=0)
+    )
+    scheduler.start()
+
+    threading.Thread(
+        target=partial(
+            compute_embeddings_for_AIoD_assets_wrapper, first_invocation=True
+        )
+    ).start()
 
 
-@app.on_event("shutdown")
-async def app_shutdown() -> None:
+def app_shutdown() -> None:
     QUERY_QUEUE.put(None)
     query_thread.join(timeout=5)
-    # batch_process.join(timeout=5)
 
-
-def instantiate_singletons() -> None:
-    # Instantiate all the singletons before utilizing them in other threads
-    Milvus_EmbeddingStore()
-    UserQueryDatabase()
-
-    # TODO I suppose these models should be loaded in their respective threads
-    AiModelForBatchProcessing()
+    # TODO stop the scheduler and interrupt all the jobs running in the background
 
 
 if __name__ == "__main__":

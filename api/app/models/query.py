@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from functools import partial
 from uuid import uuid4
 
+from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import UserQueryResponse
-from app.schemas.query_status import QueryStatus
 from app.schemas.search_results import SearchResults
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 class UserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     query: str
+    asset_type: AssetType
     status: QueryStatus = QueryStatus.QUEUED
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))

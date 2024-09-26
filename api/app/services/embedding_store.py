@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import numpy as np
 import pandas as pd
 import torch
 from app.config import settings
@@ -20,10 +21,17 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
+    def exists_collection(self, collection_name: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_all_document_ids(self, collection_name: str) -> list[str]:
+        pass
+
+    @abstractmethod
     def retrieve_topk_document_ids(
         self,
         model: AiModel,
-        query_id: str,
         query_text: str,
         collection_name: str,
         topk: int = 10,
@@ -32,19 +40,9 @@ class EmbeddingStore(ABC):
 
 
 class Milvus_EmbeddingStore(EmbeddingStore):
-    _instance: Milvus_EmbeddingStore | None = None
-
-    def __new__(cls) -> Milvus_EmbeddingStore:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.init()
-        return cls._instance
-
-    def init(self) -> None:
+    def __init__(self) -> None:
         db_opt = settings.MILVUS
-
-        milvus_token = f"{db_opt.USER}:{db_opt.PASS}"
-        self.client = MilvusClient(uri=db_opt.URI, token=milvus_token)
+        self.client = MilvusClient(uri=db_opt.URI, token=db_opt.MILVUS_TOKEN)
 
         self.emb_dimensionality = db_opt.EMB_DIM
         self.chunk_embedding_store = db_opt.STORE_CHUNKS
@@ -57,6 +55,23 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                 dimension=self.emb_dimensionality,
                 auto_id=True,
             )
+
+    def exists_collection(self, collection_name: str) -> bool:
+        return self.client.has_collection(collection_name)
+
+    def get_all_document_ids(self, collection_name: str) -> list[str]:
+        if self.client.has_collection(collection_name) is False:
+            return []
+
+        data = list(
+            self.client.query(
+                collection_name=collection_name,
+                filter="id > 0",
+                output_fields=["doc_id"],
+            )
+        )
+        all_doc_ids = [str(x["doc_id"]) for x in data]
+        np.unique(np.array(all_doc_ids)).tolist()
 
     def store_embeddings(
         self,
@@ -72,12 +87,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         for it, (texts, doc_ids) in tqdm(
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
-            with torch.no_grad():
-                chunks_embeddings_of_multiple_docs = model(texts)
-            if chunks_embeddings_of_multiple_docs[0].ndim == 1:
-                chunks_embeddings_of_multiple_docs = [
-                    emb[None] for emb in chunks_embeddings_of_multiple_docs
-                ]
+            chunks_embeddings_of_multiple_docs = model.compute_asset_embeddings(texts)
 
             for chunk_embeds_of_a_doc, doc_id in zip(
                 chunks_embeddings_of_multiple_docs, doc_ids
@@ -100,7 +110,6 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     def retrieve_topk_document_ids(
         self,
         model: AiModel,
-        query_id: str,
         query_text: str,
         collection_name: str,
         topk: int = 10,
@@ -109,7 +118,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
 
         with torch.no_grad():
-            query_embeddings = model.compute_embeddings([query_text])
+            query_embeddings = model.compute_query_embeddings([query_text])
 
         query_results = self.client.search(
             collection_name=collection_name,

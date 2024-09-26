@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import torch
+from app.config import settings
 
 from .architecture import (
+    Basic_EmbeddingModel,
     EmbeddingModel,
     Hierarchical_EmbeddingModel,
     SentenceTransformerToHF,
@@ -11,55 +13,59 @@ from .architecture import (
 
 
 class AiModel:
-    def init(self) -> None:
-        self.model = self.load_model()
+    def __init__(self, device: torch.device = "cpu") -> None:
+        self.use_chunking = settings.MILVUS.STORE_CHUNKS
+        self.model = self.load_model(self.use_chunking, device)
 
-    def load_model(self) -> EmbeddingModel:
+    def load_model(
+        self, use_chunking: bool, device: torch.device = "cpu"
+    ) -> EmbeddingModel:
         transformer = SentenceTransformerToHF(
             "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
         )
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
         )
-        model = Hierarchical_EmbeddingModel(
-            transformer,
-            tokenizer=transformer.tokenizer,
-            token_pooling="none",
-            chunk_pooling="none",
-            max_supported_chunks=11,
-            text_splitter=text_splitter,
-            dev="cpu",
-        )
+
+        if use_chunking:
+            model = Hierarchical_EmbeddingModel(
+                transformer,
+                tokenizer=transformer.tokenizer,
+                token_pooling="none",
+                chunk_pooling="none",
+                max_supported_chunks=11,
+                text_splitter=text_splitter,
+                dev=device,
+            )
+        else:
+            model = Basic_EmbeddingModel(
+                transformer,
+                transformer.tokenizer,
+                pooling="none",
+                document_max_length=4096,
+                dev=device,
+            )
+
         model.eval()
+        model.to(device)
         return model
 
-    def compute_embeddings(self, queries: list[str]) -> list[list[float]]:
-        # TODO later -> queries can be potentionally longer than 512 tokens
-        # for now we dont bother with long queries, they will truncated...
+    def compute_asset_embeddings(self, assets: list[str]) -> list[torch.Tensor]:
+        with torch.no_grad():
+            chunks_embeddings_of_multiple_docs = self.model(assets)
+        if self.use_chunking is False:
+            chunks_embeddings_of_multiple_docs = [
+                emb[None] for emb in chunks_embeddings_of_multiple_docs
+            ]
+        return chunks_embeddings_of_multiple_docs
+
+    def compute_query_embeddings(self, queries: list[str]) -> list[list[float]]:
         with torch.no_grad():
             embeddings = self.model(queries)
+        if self.use_chunking:
             return torch.vstack([emb[0] for emb in embeddings]).cpu().numpy().tolist()
+        return torch.vstack(embeddings).cpu().numpy().tolist()
 
     def to_device(self, device: torch.device = "cpu") -> None:
-        self.model.dev(device)
+        self.model.dev = device
         self.model.to(device)
-
-
-class AiModelForUserQueries(AiModel):
-    _instance: AiModel | None = None
-
-    def __new__(cls) -> AiModel:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.init()
-        return cls._instance
-
-
-class AiModelForBatchProcessing(AiModel):
-    _instance: AiModel | None = None
-
-    def __new__(cls) -> AiModel:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.init()
-        return cls._instance

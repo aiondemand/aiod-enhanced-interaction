@@ -9,3 +9,6 @@ pymilvus==2.4.5
 torch==2.4.0
 transformers==4.44.2
 sentence-transformers==3.0.1
+tinydb==4.8.0
+tinydb-serialization==2.1.1
+apscheduler==3.10.4
