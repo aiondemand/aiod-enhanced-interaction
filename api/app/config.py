@@ -5,6 +5,14 @@ from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings
 
 
+class Validators:
+    @classmethod
+    def str_to_bool(cls, value: str) -> bool:
+        if value.lower() not in ["true", "false"]:
+            raise ValueError("Invalid value for boolean attribute")
+        return value.lower() == "true"
+
+
 class MilvusConfig(BaseModel):
     URI: str
     USER: str
@@ -19,9 +27,7 @@ class MilvusConfig(BaseModel):
     @field_validator("STORE_CHUNKS", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
-        if value.lower() == "true":
-            return True
-        return False
+        return Validators.str_to_bool(value)
 
     @property
     def MILVUS_TOKEN(self):
@@ -33,14 +39,30 @@ class MilvusConfig(BaseModel):
 
 class AIoDConfig(BaseModel):
     URL: str
-    COMMA_SEPARETED_ASSET_TYPES: str  # TODO validator needed
+    COMMA_SEPARETED_ASSET_TYPES: str
     WINDOW_SIZE: int = 1000
     TIMEOUT_REQUEST_INTERVAL_SEC: int = 3
+    TESTING: bool = False
 
     @field_validator("URL", mode="before")
     @classmethod
     def remove_trailing_slash(cls, value: str) -> str:
         return value.strip("/")
+
+    @field_validator("COMMA_SEPARETED_ASSET_TYPES", mode="before")
+    @classmethod
+    def validate_asset_types(cls, value: str) -> str:
+        try:
+            types = value.lower().split("")
+            types = [AssetType(typ) for typ in types]
+        except ValueError:
+            ValueError("Invalid asset types defined")
+        return value
+
+    @field_validator("TESTING", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str) -> bool:
+        return Validators.str_to_bool(value)
 
     @property
     def ASSET_TYPES(self) -> list[str]:
@@ -64,9 +86,7 @@ class Settings(BaseSettings):
     @field_validator("USE_GPU", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
-        if value.lower() == "true":
-            return True
-        return False
+        return Validators.str_to_bool(value)
 
     class Config:
         env_file = ".env"

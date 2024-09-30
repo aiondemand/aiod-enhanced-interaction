@@ -17,13 +17,12 @@ async def submit_query(
     asset_type: AssetType,
     database: Annotated[Database, Depends(Database)],
 ) -> RedirectResponse:
-    # TODO uncomment
-    # rs = database.asset_collections.search(Query().asset_type == asset_type)
-    # if len(rs) == 0:
-    #     raise HTTPException(
-    #         status_code=501,
-    #         detail=f"The database for the asset type '{asset_type.value}' has yet to be built"
-    #     )
+    asset_col = database.get_asset_collection_by_type(asset_type)
+    if asset_col is None:
+        raise HTTPException(
+            status_code=501,
+            detail=f"The database for the asset type '{asset_type.value}' has yet to be built",
+        )
 
     userQuery = UserQuery(query=query, asset_type=asset_type)
     database.queries.insert(userQuery)

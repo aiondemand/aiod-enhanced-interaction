@@ -70,6 +70,14 @@ class Database:
             self.db.table("asset_collections"), self.db_lock
         )
 
+    def get_asset_collection_by_type(
+        self, asset_type: AssetType
+    ) -> AssetCollection | None:
+        rs = self.asset_collections.search(Query().aiod_asset_type == asset_type)
+        if len(rs) == 0:
+            return None
+        return rs[0]
+
 
 T = TypeVar("T", bound=BaseModel)
 

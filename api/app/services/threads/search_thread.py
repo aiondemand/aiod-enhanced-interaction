@@ -52,8 +52,9 @@ def search_thread() -> None:
 
         userQuery = database.queries.find_by_id(query_id)
         if userQuery is None:
-            # TODO
-            pass
+            raise ValueError(
+                f"UserQuery id={query_id} doesn't exist even though it should."
+            )
 
         userQuery.update_status(QueryStatus.IN_PROGESS)
         database.queries.upsert(userQuery)

@@ -17,7 +17,7 @@ class EmbeddingStore(ABC):
     @abstractmethod
     def store_embeddings(
         self, model: AiModel, loader: DataLoader, collection_name: str, **kwargs
-    ) -> None:
+    ) -> list[str]:
         pass
 
     @abstractmethod
@@ -40,13 +40,13 @@ class EmbeddingStore(ABC):
 
 
 class Milvus_EmbeddingStore(EmbeddingStore):
-    def __init__(self) -> None:
+    def __init__(self, verbose: bool = False) -> None:
         db_opt = settings.MILVUS
         self.client = MilvusClient(uri=db_opt.URI, token=db_opt.MILVUS_TOKEN)
 
         self.emb_dimensionality = db_opt.EMB_DIM
         self.chunk_embedding_store = db_opt.STORE_CHUNKS
-        self.verbose = True  # TODO
+        self.verbose = verbose
 
     def _create_collection(self, collection_name: str) -> None:
         if self.client.has_collection(collection_name) is False:
@@ -71,7 +71,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
             )
         )
         all_doc_ids = [str(x["doc_id"]) for x in data]
-        np.unique(np.array(all_doc_ids)).tolist()
+        return np.unique(np.array(all_doc_ids)).tolist()
 
     def store_embeddings(
         self,
@@ -79,11 +79,12 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         loader: DataLoader,
         collection_name: str,
         milvus_batch_size: int = 50,
-    ) -> None:
+    ) -> list[str]:
         self._create_collection(collection_name)
 
         all_embeddings = []
         all_doc_ids = []
+        really_all_doc_ids = []
         for it, (texts, doc_ids) in tqdm(
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
@@ -103,9 +104,12 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                     for emb, doc_id in zip(all_embeddings, all_doc_ids)
                 ]
                 self.client.insert(collection_name=collection_name, data=data)
+                really_all_doc_ids.extend(all_doc_ids)
 
                 all_embeddings = []
                 all_doc_ids = []
+
+        return really_all_doc_ids
 
     def retrieve_topk_document_ids(
         self,

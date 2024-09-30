@@ -50,7 +50,6 @@ class TokenizerTextSplitter:
         self.chunk_overlap = chunk_overlap
 
     def __call__(self, text: str) -> list[str]:
-        # TODO Suppress warnings
         tokens = self.tokenizer.tokenize(text)
 
         chunks = []

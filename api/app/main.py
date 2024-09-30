@@ -5,7 +5,7 @@ from functools import partial
 from app.routers import query as query_router
 from app.services.database import Database
 from app.services.threads.embedding_thread import (
-    compute_embeddings_for_AIoD_assets_wrapper,
+    compute_embeddings_for_aiod_assets_wrapper,
 )
 from app.services.threads.search_thread import QUERY_QUEUE, start_search_thread
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,7 +13,8 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-query_thread: threading.Thread | None = None
+QUERY_THREAD: threading.Thread | None = None
+SCHEDULER: BackgroundScheduler | None = None
 
 
 @asynccontextmanager
@@ -39,27 +40,27 @@ def app_init() -> None:
     # Instantiate singletons before utilizing them in other threads
     Database()
 
-    global query_thread
-    query_thread = start_search_thread()
+    global QUERY_THREAD
+    QUERY_THREAD = start_search_thread()
 
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        compute_embeddings_for_AIoD_assets_wrapper, CronTrigger(hour=0, minute=0)
+    global SCHEDULER
+    SCHEDULER = BackgroundScheduler()
+    SCHEDULER.add_job(
+        compute_embeddings_for_aiod_assets_wrapper, CronTrigger(hour=0, minute=0)
     )
-    scheduler.start()
+    SCHEDULER.start()
 
     threading.Thread(
         target=partial(
-            compute_embeddings_for_AIoD_assets_wrapper, first_invocation=True
+            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
         )
     ).start()
 
 
 def app_shutdown() -> None:
     QUERY_QUEUE.put(None)
-    query_thread.join(timeout=5)
-
-    # TODO stop the scheduler and interrupt all the jobs running in the background
+    QUERY_THREAD.join(timeout=5)
+    SCHEDULER.shutdown(wait=False)
 
 
 if __name__ == "__main__":
