@@ -1,19 +1,21 @@
-import threading
 from contextlib import asynccontextmanager
 from functools import partial
+from threading import Thread
 
 from app.routers import query as query_router
 from app.services.database import Database
+from app.services.threads import threads
 from app.services.threads.embedding_thread import (
     compute_embeddings_for_aiod_assets_wrapper,
 )
-from app.services.threads.search_thread import QUERY_QUEUE, start_search_thread
+from app.services.threads.search_thread import QUERY_QUEUE, search_thread
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-QUERY_THREAD: threading.Thread | None = None
+QUERY_THREAD: Thread | None = None
+IMMEDIATE_EMB_THREAD: Thread | None = None
 SCHEDULER: BackgroundScheduler | None = None
 
 
@@ -41,25 +43,30 @@ def app_init() -> None:
     Database()
 
     global QUERY_THREAD
-    QUERY_THREAD = start_search_thread()
+    QUERY_THREAD = threads.start_async_thread(search_thread())
 
     global SCHEDULER
     SCHEDULER = BackgroundScheduler()
     SCHEDULER.add_job(
-        compute_embeddings_for_aiod_assets_wrapper, CronTrigger(hour=0, minute=0)
+        partial(
+            threads.run_async_in_thread,
+            coroutine=compute_embeddings_for_aiod_assets_wrapper(),
+        ),
+        CronTrigger(hour=0, minute=0),
     )
     SCHEDULER.start()
 
-    threading.Thread(
-        target=partial(
-            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
-        )
-    ).start()
+    # Immediate computation of asset embeddings
+    global IMMEDIATE_EMB_THREAD
+    IMMEDIATE_EMB_THREAD = threads.start_async_thread(
+        compute_embeddings_for_aiod_assets_wrapper(first_invocation=True)
+    )
 
 
 def app_shutdown() -> None:
     QUERY_QUEUE.put(None)
     QUERY_THREAD.join(timeout=5)
+    IMMEDIATE_EMB_THREAD.join(timeout=5)
     SCHEDULER.shutdown(wait=False)
 
 

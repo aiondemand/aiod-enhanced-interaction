@@ -184,3 +184,6 @@ nohup.out
 data/
 temp/
 db/
+
+.env.milvus
+.env.app

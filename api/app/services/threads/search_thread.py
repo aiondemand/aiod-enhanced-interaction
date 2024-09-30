@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 from queue import Queue
 
 from app.config import settings
@@ -36,9 +35,9 @@ def fill_query_queue(database: Database) -> None:
     )
 
 
-def search_thread() -> None:
+async def search_thread() -> None:
     model = AiModel("cpu")
-    embedding_store = Milvus_EmbeddingStore()
+    embedding_store = await Milvus_EmbeddingStore.init()
 
     # Singleton - already instantialized
     database = Database()
@@ -69,9 +68,3 @@ def search_thread() -> None:
         userQuery.result_set = results
         userQuery.update_status(QueryStatus.COMPLETED)
         database.queries.upsert(userQuery)
-
-
-def start_search_thread() -> threading.Thread:
-    thread = threading.Thread(target=search_thread)
-    thread.start()
-    return thread

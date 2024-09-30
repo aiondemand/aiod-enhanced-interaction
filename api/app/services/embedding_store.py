@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -41,12 +42,30 @@ class EmbeddingStore(ABC):
 
 class Milvus_EmbeddingStore(EmbeddingStore):
     def __init__(self, verbose: bool = False) -> None:
-        db_opt = settings.MILVUS
-        self.client = MilvusClient(uri=db_opt.URI, token=db_opt.MILVUS_TOKEN)
-
-        self.emb_dimensionality = db_opt.EMB_DIM
-        self.chunk_embedding_store = db_opt.STORE_CHUNKS
+        self.emb_dimensionality = settings.MILVUS.EMB_DIM
+        self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
+
+        self.client = None
+
+    async def init() -> Milvus_EmbeddingStore:
+        obj = Milvus_EmbeddingStore()
+        await obj.init_connection()
+        return obj
+
+    async def init_connection(self) -> None:
+        for _ in range(5):
+            try:
+                self.client = MilvusClient(
+                    uri=settings.MILVUS.URI, token=settings.MILVUS.MILVUS_TOKEN
+                )
+                return True
+            except Exception:  # TODO
+                await asyncio.sleep(5)
+        else:
+            raise ValueError(
+                "Connection to Milvus vector database has not been established"
+            )
 
     def _create_collection(self, collection_name: str) -> None:
         if self.client.has_collection(collection_name) is False:

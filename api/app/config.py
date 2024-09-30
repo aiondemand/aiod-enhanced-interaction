@@ -89,7 +89,7 @@ class Settings(BaseSettings):
         return Validators.str_to_bool(value)
 
     class Config:
-        env_file = ".env"
+        env_file = ".env.app"
         env_nested_delimiter = "__"
         case_sensitive = True
 

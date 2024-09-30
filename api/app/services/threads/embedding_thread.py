@@ -23,7 +23,9 @@ job_lock = threading.Lock()
 logger = logging.getLogger("uvicorn")
 
 
-def compute_embeddings_for_aiod_assets_wrapper(first_invocation: bool = False) -> None:
+async def compute_embeddings_for_aiod_assets_wrapper(
+    first_invocation: bool = False,
+) -> None:
     if job_lock.acquire(blocking=False):
         try:
             log_msg = (
@@ -32,7 +34,7 @@ def compute_embeddings_for_aiod_assets_wrapper(first_invocation: bool = False) -
                 else "Scheduled task for computing asset embeddings has started"
             )
             logger.info(log_msg)
-            compute_embeddings_for_aiod_assets(first_invocation)
+            await compute_embeddings_for_aiod_assets(first_invocation)
             logger.info("Scheduled task for computing asset embeddings has ended.")
         finally:
             job_lock.release()
@@ -40,11 +42,15 @@ def compute_embeddings_for_aiod_assets_wrapper(first_invocation: bool = False) -
         logger.info("Scheduled task skipped (previous task is still running)")
 
 
-def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
+async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
+    import asyncio
+
+    await asyncio.sleep(5)
+
     dev = "cuda" if first_invocation and torch.cuda.is_available() else "cpu"
     model = AiModel(dev)
-    embedding_store = Milvus_EmbeddingStore()
     database = Database()
+    embedding_store = await Milvus_EmbeddingStore.init()
 
     try:
         asset_types = settings.AIOD.ASSET_TYPES
@@ -169,6 +175,13 @@ def regular_update_aiod_assets(
     # ASSETS
     # new added assets
     # updates of the old assets
+
+    # Update logic
+    # Since the number of chunks in an updated document may be different to the original
+    # number of chunks stored in the database, we need to initially delete the data
+    # tied to the old documents... Having deleted documents, we may then insert them
+    # once again
+    # We dont do UPDATE/UPSERT
 
     pass
 

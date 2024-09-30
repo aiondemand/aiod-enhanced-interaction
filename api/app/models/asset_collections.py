@@ -32,8 +32,12 @@ class SetupCollectionUpdate(CollectionUpdate):
 
 
 class RecurringCollectionUpdate(CollectionUpdate):
-    from_time: datetime
+    assets_from_time: datetime
     aiod_assets_updated: int = 0
+
+    @property
+    def assets_to_time(self) -> datetime:
+        return self.created_at
 
     def update(self, assets_added: int, assets_updated: int = 0) -> None:
         self.aiod_assets_updated(assets_updated)
@@ -69,7 +73,7 @@ class AssetCollection(BaseModel):
 
     def add_recurring_update(self) -> None:
         self.recurring_updates.append(
-            RecurringCollectionUpdate(from_time=self.last_update.created_at)
+            RecurringCollectionUpdate(assets_from_time=self.last_update.created_at)
         )
         self.updated_at = datetime.now(tz=timezone.utc)
 
