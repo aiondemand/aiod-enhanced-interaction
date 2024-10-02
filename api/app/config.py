@@ -18,9 +18,6 @@ class MilvusConfig(BaseModel):
     USER: str
     PASS: str
     COLLECTION_PREFIX: str
-
-    TOPK: int = 10
-    EMB_DIM: int = 1024
     BATCH_SIZE: int = 500
     STORE_CHUNKS: bool = True
 

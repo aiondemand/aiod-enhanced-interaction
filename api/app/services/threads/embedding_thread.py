@@ -43,14 +43,13 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
 
 async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
-    import asyncio
-
-    await asyncio.sleep(5)
-
     dev = "cuda" if first_invocation and torch.cuda.is_available() else "cpu"
     model = AiModel(dev)
+    logger.info("model loaded")
     database = Database()
+    logger.info("database loaded")
     embedding_store = await Milvus_EmbeddingStore.init()
+    logger.info("milvus loaded")
 
     try:
         asset_types = settings.AIOD.ASSET_TYPES

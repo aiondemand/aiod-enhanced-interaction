@@ -42,7 +42,7 @@ class EmbeddingStore(ABC):
 
 class Milvus_EmbeddingStore(EmbeddingStore):
     def __init__(self, verbose: bool = False) -> None:
-        self.emb_dimensionality = settings.MILVUS.EMB_DIM
+        self.emb_dimensionality = 1024
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 

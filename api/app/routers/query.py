@@ -16,6 +16,7 @@ async def submit_query(
     query: str,
     asset_type: AssetType,
     database: Annotated[Database, Depends(Database)],
+    topk: int = 10,
 ) -> RedirectResponse:
     asset_col = database.get_asset_collection_by_type(asset_type)
     if asset_col is None:
@@ -24,9 +25,9 @@ async def submit_query(
             detail=f"The database for the asset type '{asset_type.value}' has yet to be built",
         )
 
-    userQuery = UserQuery(query=query, asset_type=asset_type)
+    userQuery = UserQuery(query=query, asset_type=asset_type, topk=topk)
     database.queries.insert(userQuery)
-    QUERY_QUEUE.put(userQuery.id)
+    QUERY_QUEUE.put(id=userQuery.id)
 
     return RedirectResponse(f"/query/{userQuery.id}/result/", status_code=202)
 

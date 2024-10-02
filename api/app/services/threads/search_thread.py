@@ -60,10 +60,7 @@ async def search_thread() -> None:
         collection_name = settings.MILVUS.get_collection_name(userQuery.asset_type)
 
         results = embedding_store.retrieve_topk_document_ids(
-            model,
-            userQuery.query,
-            collection_name=collection_name,
-            topk=settings.MILVUS.TOPK,
+            model, userQuery.query, collection_name=collection_name, topk=userQuery.topk
         )
         userQuery.result_set = results
         userQuery.update_status(QueryStatus.COMPLETED)

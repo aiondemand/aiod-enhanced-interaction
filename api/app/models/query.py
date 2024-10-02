@@ -14,6 +14,7 @@ class UserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     query: str
     asset_type: AssetType
+    topk: int
     status: QueryStatus = QueryStatus.QUEUED
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
@@ -28,7 +29,9 @@ class UserQuery(BaseModel):
         if self.result_set is not None:
             doc_ids = self.result_set.doc_ids
 
-        return UserQueryResponse(status=self.status, result_doc_ids=doc_ids)
+        return UserQueryResponse(
+            status=self.status, num_doc_ids=len(doc_ids), result_doc_ids=doc_ids
+        )
 
     @staticmethod
     def sort_function_to_populate_queue(query):

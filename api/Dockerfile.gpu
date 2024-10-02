@@ -1,8 +1,6 @@
-FROM python:3.11
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime
 
 WORKDIR /code
-
-RUN pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 
 COPY ./requirements.txt .
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
