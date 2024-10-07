@@ -27,7 +27,7 @@ async def submit_query(
 
     userQuery = UserQuery(query=query, asset_type=asset_type, topk=topk)
     database.queries.insert(userQuery)
-    QUERY_QUEUE.put(id=userQuery.id)
+    QUERY_QUEUE.put(userQuery.id)
 
     return RedirectResponse(f"/query/{userQuery.id}/result/", status_code=202)
 

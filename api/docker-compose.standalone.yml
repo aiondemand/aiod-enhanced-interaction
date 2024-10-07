@@ -1,0 +1,17 @@
+services:
+  # FastAPI service
+  app:
+    container_name: fastapi-app
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.app
+    environment:
+      - TINYDB_FILEPATH=/data/tinydb.json
+      - USE_GPU=false
+    ports:
+      - "${APP_HOST_PORT}:80"
+    volumes:
+      - ${DATA_DIRPATH}/volumes/tinydb:/data
+      - ${DATA_DIRPATH}/model:/model

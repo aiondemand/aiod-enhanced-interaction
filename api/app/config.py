@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from app.schemas.enums import AssetType
@@ -38,7 +39,7 @@ class AIoDConfig(BaseModel):
     URL: str
     COMMA_SEPARETED_ASSET_TYPES: str
     WINDOW_SIZE: int = 1000
-    TIMEOUT_REQUEST_INTERVAL_SEC: int = 3
+    TIMEOUT_REQUEST_INTERVAL_SEC: float = 0.1
     TESTING: bool = False
 
     @field_validator("URL", mode="before")
@@ -78,12 +79,22 @@ class Settings(BaseSettings):
     AIOD: AIoDConfig
     USE_GPU: bool = False
     TINYDB_FILEPATH: str
+    MODEL_LOADPATH: str
     MODEL_BATCH_SIZE: int
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
         return Validators.str_to_bool(value)
+
+    @field_validator("MODEL_LOADPATH", mode="before")
+    @classmethod
+    def validate_model_loadpath(cls, value: str) -> str:
+        if value == "Alibaba-NLP/gte-large-en-v1.5" or os.path.exists(
+            os.path.abspath(value)
+        ):
+            return value
+        raise ValueError("Invalid loadpath for the model.")
 
     class Config:
         env_file = ".env.app"

@@ -5,6 +5,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+    command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     env_file:
       - .env.app
     environment:
@@ -13,30 +14,16 @@ services:
       - MILVUS__URI=http://standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
+      - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
     ports:
       - "${APP_HOST_PORT}:80"
     depends_on:
-      - "credentials_setup"
+      - standalone
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
+      - ${DATA_DIRPATH}/model:/model
   
-  # Milvus services 
-  credentials_setup:
-    container_name: milvus-credentials_setup
-    image: python:3.11
-    environment:
-      - MILVUS_URI=http://standalone:19530
-      - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
-      - MILVUS_AIOD_USER=${MILVUS_AIOD_USER}
-      - MILVUS_AIOD_PASS=${MILVUS_AIOD_PASS}
-    volumes:
-      - ./scripts:/usr/src/app
-    working_dir: /usr/src/app
-    depends_on:
-      - standalone
-    command: >
-      /bin/sh -c "pip install pymilvus==2.4.5 && python milvus_credentials_setup.py"
-
+  # Milvus services
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.5
@@ -96,5 +83,5 @@ services:
       - "${MILVUS_HOST_PORT_19530}:19530"
       - "${MILVUS_HOST_PORT_9091}:9091"
     depends_on:
-      - "etcd"
-      - "minio"
+      - etcd
+      - minio

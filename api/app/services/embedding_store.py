@@ -9,7 +9,8 @@ import torch
 from app.config import settings
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
-from pymilvus import MilvusClient
+from pymilvus import DataType, MilvusClient
+from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -69,6 +70,16 @@ class Milvus_EmbeddingStore(EmbeddingStore):
 
     def _create_collection(self, collection_name: str) -> None:
         if self.client.has_collection(collection_name) is False:
+            schema = self.client.create_schema(auto_id=True)
+            schema.add_field("id", DataType.INT64, is_primary=True)
+            schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
+            schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
+            schema.verify()
+
+            index_params = IndexParams()
+            index_params.add_index("vector", "", "", metric_type="COSINE")
+            index_params.add_index("doc_id", "", "")
+
             self.client.create_collection(
                 collection_name=collection_name,
                 dimension=self.emb_dimensionality,
@@ -81,6 +92,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     def get_all_document_ids(self, collection_name: str) -> list[str]:
         if self.client.has_collection(collection_name) is False:
             return []
+        self.client.load_collection(collection_name)
 
         data = list(
             self.client.query(
@@ -139,6 +151,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     ) -> SearchResults:
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
+        self.client.load_collection(collection_name)
 
         with torch.no_grad():
             query_embeddings = model.compute_query_embeddings([query_text])

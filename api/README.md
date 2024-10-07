@@ -39,6 +39,7 @@ is processed, the results are saved in a local nosql file-based database and are
 # Repo Setup
 
 In this section, we describe the necessary steps to take to setup this repository for either development or deployment purposes. 
+
 **Moving forward, we assume your working directory is pointed to the `api/` directory.**
 
 ## Enviroment variables and configs
@@ -46,6 +47,9 @@ Regardless whether you want to further develop this codespace or deploy the serv
 In this file you find the following ENV variables:
 - `TINYDB_FILEPATH`: A filepath where to store a file-based noSQL database, specifically a JSON file, e.g., `./data/db.json` *(Is overwritten in docker-compose.yml)*
 - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not. *(Is overwritten in docker-compose.yml)*
+- `MODEL_LOADPATH`: String representing the name of the model to either download from HuggingFace or load from the files locally found on your machine. The string must either be:
+    - `Alibaba-NLP/gte-large-en-v1.5`: To download the specific model from the HuggingFace
+    - `<PATH_TO_LOCAL_MODEL>`: To load the weights of GTE large model from the local path on your machine / in the container
 - `MODEL_BATCH_SIZE`: Number of assets model can compute embeddings for in parallel
 - `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
 - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
@@ -71,45 +75,51 @@ Create a Python v11 environment preferably using conda:
 - `conda activate aiod-env; pip install -r requirements-dev.txt`
 
 To start the application you can either:
-- Use a .vscode launch option called `Debug FastAPI service` if you use said IDE
+- Use a .vscode launch option called `Debug FastAPI service` if you use VSCode as your IDE
 - Execute the following command: `uvicorn app.main:app --reload`
 
 ## Deployment
 
 For deploying purposes, we use a Docker compose config enabling us to deploy not only FastAPI service, but also Milvus vector database. If you wish to deploy the Milvus vector database
-and the FastAPI service separatelly, update the environment files accordingly and comment out all the services in the `docker-compose.yml` file but the app service.
+and the FastAPI service separatelly, you may do so by setting the `DEPLOY_FASTAPI_ONLY` to `True` allowing you to deploy the FastAPI service on its own, assuming you have the Milvus database set up on a different machine.
 
-The following setup describes the situation you want to deploy FastAPI and Milvus service together:
+Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:
-    - `DATA_DIRPATH`: Path to a directory that should contain all the files and volumes related to Milvus services as well as TinyDB database 
+    - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
+    - `DEPLOY_FASTAPI_ONLY`: Boolean value that denotes whether we wish to deploy only the FastAPI service or also other services related to the Milvus database.
+    - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
 
-    - Milvus credentials to use/initiate services with:
+    - Milvus credentials to use/initiate services with (Only necessary to define when deploying Milvus services -> `DEPLOY_FASTAPI_ONLY` is set to `False`):
         - `MILVUS_NEW_ROOT_PASS`: New root password used to replace a default one. The password change is only performed during the first initialization of the Milvus service.
         - `MILVUS_AIOD_USER`: Username of the user to log into the Milvus database. During the Milvus initialization, a user with these credentials is created. *(Overrides value set by `MILVUS__USER` in `env.app`)*
         - `MILVUS_AIOD_PASS`: Password of the user to log into the Milvus database. During the Milvus initialization, a user with these credentials is created. *(Overrides value set by `MILVUS__PASS` in `env.app`)*
 
-    - Minio credential setup:
+    - Minio credential setup (Only necessary to define when deploying Milvus services -> `DEPLOY_FASTAPI_ONLY` is set to `False`):
         - `MINIO_ACCESS_KEY`: Access key to connect to Minio service (During the Milvus initialization, these credentials are used to set up the authorization)
         - `MINIO_SECRET_KEY`: Secret key to connect to Minio service (During the Milvus initialization, these credentials are used to set up the authorization)
 
-    - Mapping of host ports to Docker services:
-        - `APP_HOST_PORT`: Host port we wish the FastAPI service to be mapped to
+    - Mapping of host ports to Docker services (Apart from `APP_HOST_POST`, these ENV variables are only necessary to define when deploying Milvus services -> `DEPLOY_FASTAPI_ONLY` is set to `False`):
+        - `APP_HOST_PORT`: Host port we wish the FastAPI service to be mapped to (Necessary to define regardless of the `DEPLOY_FASTAPI_ONLY` value)
         - `MINIO_HOST_PORT_9001`: Host port we wish the Minio service to be mapped to (Minio container port: 9001)
         - `MINIO_HOST_PORT_9000`: Host port we wish the Minio service to be mapped to (Minio container port: 9000)
         - `MILVUS_HOST_PORT_19530`: Host port we wish the Milvus service to be mapped to (Milvus container port: 19530)
         - `MILVUS_HOST_PORT_9091`: Host port we wish the Milvus service to be mapped to (Milvus container port: 9091)
 
-1. Run the Docker containers by running the docker compose. Depending on whether you wish to utilize a GPU for model inference in the initial setup of Milvus database, you execute one of the following commands:
-    - CPU only: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build`
-    - With GPU: `docker compose up -d --build`
+1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
+    1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
+    1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
+
+1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `DEPLOY_FASTAPI_ONLY` ENV variables: `./deploy.sh`
+
+Docker containers by running the docker compose. Depending on whether you wish to utilize a GPU for model inference in the initial setup of Milvus database, you execute one of the following commands:
+    - CPU only: `docker compose up -d --build`
+    - With GPU: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build`
+    
     
 
 ### VM preparations
 
-In order for our application to work properly on a hostmachine, we need to check whether the following applications are downloaded:
+In order for our application to work properly on a host machine, we need to check whether the following software dependencdies are met:
 - Docker (test command: `docker ps`)
 - CUDA (test command: `nvidia-smi`)
-    - CUDA is only necessary for the instances you wish to use a GPU inside the Docker container
-
-
-TODO
+    - CUDA is only necessary for the instances you wish to use a GPU inside the Docker container (`USE_GPU` set to `True`)

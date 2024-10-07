@@ -21,7 +21,7 @@ class AiModel:
         self, use_chunking: bool, device: torch.device = "cpu"
     ) -> EmbeddingModel:
         transformer = SentenceTransformerToHF(
-            "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
+            settings.MODEL_LOADPATH, trust_remote_code=True
         )
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
