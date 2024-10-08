@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from queue import Queue
 
 from app.config import settings
@@ -36,32 +37,44 @@ def fill_query_queue(database: Database) -> None:
 
 
 async def search_thread() -> None:
-    model = AiModel("cpu")
-    embedding_store = await Milvus_EmbeddingStore.init()
+    try:
+        model = AiModel("cpu")
+        embedding_store = await Milvus_EmbeddingStore.init()
 
-    # Singleton - already instantialized
-    database = Database()
-    fill_query_queue(database)
+        # Singleton - already instantialized
+        database = Database()
+        fill_query_queue(database)
 
-    while True:
-        query_id = QUERY_QUEUE.get()
-        if query_id is None:
-            return
-        logger.info(f"Searching relevant assets for query ID: {query_id}")
+        while True:
+            query_id = QUERY_QUEUE.get()
+            if query_id is None:
+                return
+            logger.info(f"Searching relevant assets for query ID: {query_id}")
 
-        userQuery = database.queries.find_by_id(query_id)
-        if userQuery is None:
-            raise ValueError(
-                f"UserQuery id={query_id} doesn't exist even though it should."
+            userQuery = database.queries.find_by_id(query_id)
+            if userQuery is None:
+                err_msg = (
+                    f"UserQuery id={query_id} doesn't exist even though it should."
+                )
+                logger.error(err_msg)
+                continue
+
+            userQuery.update_status(QueryStatus.IN_PROGESS)
+            database.queries.upsert(userQuery)
+            collection_name = settings.MILVUS.get_collection_name(userQuery.asset_type)
+
+            results = embedding_store.retrieve_topk_document_ids(
+                model,
+                userQuery.query,
+                collection_name=collection_name,
+                topk=userQuery.topk,
             )
-
-        userQuery.update_status(QueryStatus.IN_PROGESS)
-        database.queries.upsert(userQuery)
-        collection_name = settings.MILVUS.get_collection_name(userQuery.asset_type)
-
-        results = embedding_store.retrieve_topk_document_ids(
-            model, userQuery.query, collection_name=collection_name, topk=userQuery.topk
+            userQuery.result_set = results
+            userQuery.update_status(QueryStatus.COMPLETED)
+            database.queries.upsert(userQuery)
+    except Exception:
+        logger.error(
+            "An error has been encountered in the query processing thread. "
+            + "Entire Application is being terminated now"
         )
-        userQuery.result_set = results
-        userQuery.update_status(QueryStatus.COMPLETED)
-        database.queries.upsert(userQuery)
+        os._exit(1)

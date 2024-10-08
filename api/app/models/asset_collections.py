@@ -11,11 +11,17 @@ class CollectionUpdate(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    aiod_assets_added: int = 0
+    embeddings_added: int = 0
+    aiod_asset_offset: int = 0
     finished: bool = False
 
-    def update(self, assets_added: int) -> None:
-        self.aiod_assets_added += assets_added
+    @property
+    def to_time(self) -> datetime:
+        return self.created_at
+
+    def update(self, embeddings_added: int, embeddings_removed: int = 0) -> None:
+        self.embeddings_added += embeddings_added
+        self.aiod_asset_offset += settings.AIOD.WINDOW_SIZE
         self.updated_at = datetime.now(tz=timezone.utc)
 
     def finish(self) -> None:
@@ -24,24 +30,16 @@ class CollectionUpdate(BaseModel):
 
 
 class SetupCollectionUpdate(CollectionUpdate):
-    aiod_asset_offset: int = 0
-
-    def update(self, assets_added: int, **kwargs) -> None:
-        self.aiod_asset_offset += settings.AIOD.WINDOW_SIZE
-        super().update(assets_added)
+    pass
 
 
 class RecurringCollectionUpdate(CollectionUpdate):
-    assets_from_time: datetime
-    aiod_assets_updated: int = 0
+    from_time: datetime
+    embeddings_removed: int = 0
 
-    @property
-    def assets_to_time(self) -> datetime:
-        return self.created_at
-
-    def update(self, assets_added: int, assets_updated: int = 0) -> None:
-        self.aiod_assets_updated(assets_updated)
-        super().update(assets_added)
+    def update(self, embeddings_added: int, embeddings_removed: int = 0) -> None:
+        self.embeddings_removed += embeddings_removed
+        super().update(embeddings_added)
 
 
 class AssetCollection(BaseModel):
@@ -66,20 +64,22 @@ class AssetCollection(BaseModel):
 
     @property
     def num_assets(self) -> int:
-        setup_assets = self.setup_update.aiod_assets_added
-        return setup_assets + sum(
-            [update.aiod_assets_added for update in self.recurring_updates]
-        )
+        setup_assets_added = self.setup_update.embeddings_added
+
+        recurr_add = sum([upd.embeddings_added for upd in self.recurring_updates])
+        recurr_del = sum([upd.embeddings_removed for upd in self.recurring_updates])
+
+        return setup_assets_added + recurr_add - recurr_del
 
     def add_recurring_update(self) -> None:
         self.recurring_updates.append(
-            RecurringCollectionUpdate(assets_from_time=self.last_update.created_at)
+            RecurringCollectionUpdate(from_time=self.last_update.created_at)
         )
         self.updated_at = datetime.now(tz=timezone.utc)
 
-    def update(self, assets_added: int, assets_updated: int = 0) -> None:
+    def update(self, embeddings_added: int, embeddings_removed: int = 0) -> None:
         self.last_update.update(
-            assets_added=assets_added, assets_updated=assets_updated
+            embeddings_added=embeddings_added, embeddings_removed=embeddings_removed
         )
         self.updated_at = datetime.now(tz=timezone.utc)
 

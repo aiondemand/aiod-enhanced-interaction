@@ -16,6 +16,9 @@ Currently supported AIoD asset types:
 - Dataset
 - ML_Model
 - Publication
+- Case studies
+- Educational resources
+- Experiments
 
 ## Acquisition of AIoD assets 
 

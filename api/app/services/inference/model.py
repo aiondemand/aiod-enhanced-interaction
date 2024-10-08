@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 from app.config import settings
+from transformers.utils import logging
 
 from .architecture import (
     Basic_EmbeddingModel,
@@ -10,6 +11,9 @@ from .architecture import (
     SentenceTransformerToHF,
     TokenizerTextSplitter,
 )
+
+# Hide unwanted warnings regarding tokenization
+logging.set_verbosity(40)
 
 
 class AiModel:

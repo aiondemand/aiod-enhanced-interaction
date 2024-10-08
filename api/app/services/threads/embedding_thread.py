@@ -1,6 +1,7 @@
 import gc
 import logging
 import threading
+from datetime import datetime
 from functools import partial
 from time import sleep
 from typing import Callable
@@ -9,7 +10,8 @@ import numpy as np
 import requests
 import torch
 from app.config import settings
-from app.models.asset_collections import AssetCollection, SetupCollectionUpdate
+from app.helper import parse_asset_date
+from app.models.asset_collections import AssetCollection
 from app.schemas.enums import AssetType
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
@@ -55,15 +57,23 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
 
             asset_collection = database.get_asset_collection_by_type(asset_type)
             if asset_collection is None:
-                # Very first invocation of this function, start setup
+                # DB setup
                 asset_collection = AssetCollection(aiod_asset_type=asset_type)
                 database.asset_collections.insert(asset_collection)
-            elif asset_collection.last_update.finished:
-                # Last update was finished, thus we create a new recurring update
+            elif asset_collection.last_update.finished and first_invocation is False:
+                # Create a new recurring DB update
                 asset_collection.add_recurring_update()
                 database.asset_collections.upsert(asset_collection)
+            elif asset_collection.last_update.finished:
+                # The last DB update was sucessful, we skip this asset in the
+                # first invocation
+                continue
+            else:
+                # The last DB update has not been finished yet, lets continue with
+                # that one...
+                pass
 
-            fn_kwargs = dict(
+            process_aiod_assets_wrapper(
                 model=model,
                 stringify_function=partial(
                     ConvertJsonToString.extract_relevant_info, asset_type=asset_type
@@ -73,11 +83,7 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 asset_collection=asset_collection,
                 asset_type=asset_type,
             )
-            if asset_collection.setup_done is False:
-                setup_all_aiod_assets(**fn_kwargs)
-            else:
-                database.asset_collections
-                regular_update_aiod_assets(**fn_kwargs)
+
     finally:
         model.to_device("cpu")
         del model
@@ -85,7 +91,7 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
         gc.collect()
 
 
-def setup_all_aiod_assets(
+def process_aiod_assets_wrapper(
     model: AiModel,
     stringify_function: Callable[[dict], str],
     embedding_store: EmbeddingStore,
@@ -93,56 +99,61 @@ def setup_all_aiod_assets(
     asset_collection: AssetCollection,
     asset_type: AssetType,
 ) -> None:
-    asset_url = settings.AIOD.get_asset_url(asset_type)
-    count_url = settings.AIOD.get_asset_count_url(asset_type)
+    is_setup_stage = asset_collection.setup_done is False
+    asset_url = settings.AIOD.get_asset_url(asset_type, is_setup_stage)
+    count_url = settings.AIOD.get_asset_count_url(asset_type, is_setup_stage)
     collection_name = settings.MILVUS.get_collection_name(asset_type)
     existing_doc_ids = embedding_store.get_all_document_ids(collection_name)
 
     last_update = asset_collection.last_update
-    if isinstance(last_update, SetupCollectionUpdate):
-        offset = last_update.aiod_asset_offset
-        if offset > 0:
-            logger.info(
-                f"\tContinue SETUP asset embedding process with offset={offset}"
-            )
-    else:
-        raise TypeError(
-            "The last collection update is supposed to be of type 'SetupCollectionUpdate'"
-        )
+    offset = last_update.aiod_asset_offset
+    if offset > 0:
+        logger.info(f"\tContinue asset embedding process from asset offset={offset}")
 
     while True:
-        assets = recursive_fetch(asset_url, offset, settings.AIOD.WINDOW_SIZE)
-
-        if len(assets) == 0:
-            number_of_assets = _perform_request(count_url)
-            if offset >= number_of_assets:
-                # We have traversed all the assets
-                break
-            offset += settings.AIOD.WINDOW_SIZE
-            continue
-        elif settings.AIOD.TESTING and offset >= 500:
-            # End of testing
+        assets_to_add, asset_ids_to_remove = get_assets_to_add_and_delete(
+            asset_url,
+            offset,
+            existing_doc_ids=existing_doc_ids,
+            count_url=count_url,
+            setup_stage=is_setup_stage,
+            from_time=getattr(last_update, "from_time", None),
+            to_time=last_update.to_time,
+        )
+        if assets_to_add is None:
             break
 
-        stringified_assets = [stringify_function(obj) for obj in assets]
-        asset_ids = [str(obj["identifier"]) for obj in assets]
-        indices = np.where(~np.isin(asset_ids, existing_doc_ids))[0]
-        if len(indices) == 0:
-            continue
+        # Remove embeddings
+        num_emb_removed = 0
+        if len(asset_ids_to_remove) > 0:
+            num_emb_removed = embedding_store.remove_embeddings(
+                asset_ids_to_remove, collection_name
+            )
+            existing_doc_ids = np.array(existing_doc_ids)[
+                ~np.isin(existing_doc_ids, asset_ids_to_remove)
+            ].tolist()
 
-        data = [(stringified_assets[idx], asset_ids[idx]) for idx in indices]
-        loader = DataLoader(data, batch_size=settings.MODEL_BATCH_SIZE, num_workers=0)
-        new_doc_ids = embedding_store.store_embeddings(
-            model,
-            loader,
-            collection_name=collection_name,
-            milvus_batch_size=settings.MILVUS.BATCH_SIZE,
+        # Add embeddings
+        num_emb_added = 0
+        if len(assets_to_add) > 0:
+            stringified_assets = [stringify_function(obj) for obj in assets_to_add]
+            asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
+
+            data = [(obj, id) for obj, id in zip(stringified_assets, asset_ids)]
+            loader = DataLoader(
+                data, batch_size=settings.MODEL_BATCH_SIZE, num_workers=0
+            )
+            num_emb_added = embedding_store.store_embeddings(
+                model,
+                loader,
+                collection_name=collection_name,
+                milvus_batch_size=settings.MILVUS.BATCH_SIZE,
+            )
+            existing_doc_ids += asset_ids
+
+        asset_collection.update(
+            embeddings_added=num_emb_added, embeddings_removed=num_emb_removed
         )
-        existing_doc_ids = np.hstack(
-            [np.array(existing_doc_ids), np.unique(new_doc_ids)]
-        ).tolist()
-
-        asset_collection.update(assets_added=len(np.unique(new_doc_ids)))
         database.asset_collections.upsert(asset_collection)
         offset += settings.AIOD.WINDOW_SIZE
 
@@ -150,36 +161,52 @@ def setup_all_aiod_assets(
     database.asset_collections.upsert(asset_collection)
 
 
-def regular_update_aiod_assets(
-    model: AiModel,
-    stringify_function: Callable[[dict], str],
-    embedding_store: EmbeddingStore,
-    database: Database,
-    asset_collection: AssetCollection,
-    asset_type: AssetType,
-) -> None:
-    logger.info("Placeholder for recurring embedding function")
+def get_assets_to_add_and_delete(
+    url: str,
+    offset: int,
+    existing_doc_ids: list[str],
+    count_url: str | None = None,
+    setup_stage: bool = False,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+) -> tuple[list[dict] | None, list[str] | None]:
+    assets = recursive_fetch(url, offset, settings.AIOD.WINDOW_SIZE)
 
-    # TODO
-    # Retrieve all the asset changes made after specific TIMESTAMP
-    # TIMESTAMP -> update.created_at time of the last update
-    # this also catches changes made to assets throughout the execution of the last update
+    if len(assets) == 0:
+        if count_url is None:
+            return None, None
+        total_number_of_assets = _perform_request(count_url).json()
+        if offset >= total_number_of_assets:
+            return None, None
+        return [], []
+    elif settings.AIOD.TESTING and offset >= 500:
+        return None, None
 
-    # No matter whether we have specific assets in our vector database, we wish to
-    # overwrite them with new data
+    # TODO this function will be changed once we have a new AIoD endpoints
+    # that work with different schemas etc...
 
-    # ASSETS
-    # new added assets
-    # updates of the old assets
+    # Only assets updated till the start of this job
+    assets = [
+        obj for obj in assets if (parse_asset_date(obj, none_value="zero") < to_time)
+    ]
+    asset_ids = [str(obj["identifier"]) for obj in assets]
+    new_indices = np.where(~np.isin(asset_ids, existing_doc_ids))[0]
+    assets_to_add = [assets[idx] for idx in new_indices]
 
-    # Update logic
-    # Since the number of chunks in an updated document may be different to the original
-    # number of chunks stored in the database, we need to initially delete the data
-    # tied to the old documents... Having deleted documents, we may then insert them
-    # once again
-    # We dont do UPDATE/UPSERT
+    if setup_stage:
+        asset_ids_to_del = []
+        return assets_to_add, asset_ids_to_del
+    else:
+        modified_dates = np.array(
+            [parse_asset_date(obj, none_value="now") for obj in assets]
+        )
+        update_indices = np.where(
+            (np.isin(asset_ids, existing_doc_ids)) & (modified_dates > from_time)
+        )[0]
 
-    pass
+        assets_to_add.extend([assets[idx] for idx in update_indices])
+        asset_ids_to_del = [asset_ids[idx] for idx in update_indices]
+        return assets_to_add, asset_ids_to_del
 
 
 def recursive_fetch(url: str, offset: int, limit: int) -> list:
@@ -216,8 +243,11 @@ def _perform_request(
             response.raise_for_status()
             return response
         except ConnectTimeout:
+            logging.warning("AIoD endpoints are unresponsive. Retrying...")
             sleep(connection_timeout_sec)
 
     # This exception will be only raised if we encounter
     # ConnectTimeout consecutively for multiple times
-    raise ValueError("We couldn't connect to AIoD API")
+    err_msg = "We couldn't connect to AIoD API"
+    logging.error(err_msg)
+    raise ValueError(err_msg)

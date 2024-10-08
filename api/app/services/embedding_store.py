@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -14,12 +15,18 @@ from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+logger = logging.getLogger("uvicorn")
+
 
 class EmbeddingStore(ABC):
     @abstractmethod
     def store_embeddings(
         self, model: AiModel, loader: DataLoader, collection_name: str, **kwargs
-    ) -> list[str]:
+    ) -> int:
+        pass
+
+    @abstractmethod
+    def remove_embeddings(self, doc_ids: list[str], collection_name: str) -> int:
         pass
 
     @abstractmethod
@@ -61,12 +68,15 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                     uri=settings.MILVUS.URI, token=settings.MILVUS.MILVUS_TOKEN
                 )
                 return True
-            except Exception:  # TODO
+            except Exception:
+                logger.warning(
+                    "Failed to connect to Milvus vector database. Retrying..."
+                )
                 await asyncio.sleep(5)
         else:
-            raise ValueError(
-                "Connection to Milvus vector database has not been established"
-            )
+            err_msg = "Connection to Milvus vector database has not been established"
+            logger.error(err_msg)
+            raise ValueError(err_msg)
 
     def _create_collection(self, collection_name: str) -> None:
         if self.client.has_collection(collection_name) is False:
@@ -110,12 +120,12 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         loader: DataLoader,
         collection_name: str,
         milvus_batch_size: int = 50,
-    ) -> list[str]:
+    ) -> int:
         self._create_collection(collection_name)
 
         all_embeddings = []
         all_doc_ids = []
-        really_all_doc_ids = []
+        total_inserted = 0
         for it, (texts, doc_ids) in tqdm(
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
@@ -134,13 +144,19 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                     {"vector": emb, "doc_id": doc_id}
                     for emb, doc_id in zip(all_embeddings, all_doc_ids)
                 ]
-                self.client.insert(collection_name=collection_name, data=data)
-                really_all_doc_ids.extend(all_doc_ids)
+                total_inserted += self.client.insert(
+                    collection_name=collection_name, data=data
+                )["insert_count"]
 
                 all_embeddings = []
                 all_doc_ids = []
 
-        return really_all_doc_ids
+        return total_inserted
+
+    def remove_embeddings(self, doc_ids: list[str], collection_name: str) -> int:
+        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")[
+            "delete_count"
+        ]
 
     def retrieve_topk_document_ids(
         self,

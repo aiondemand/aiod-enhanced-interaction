@@ -10,6 +10,7 @@ class ConvertJsonToString:
         "platform",
         "name",
         "date_published",
+        "type",
     ]
     orig_array_fields = [
         "keyword",
@@ -18,17 +19,23 @@ class ConvertJsonToString:
         "industrial_sector",
         "research_area",
         "scientific_domain",
+        "badge",
     ]
     orig_distrib_fields = ["distribution", "media"]
 
-    new_flat_fields = [
-        "year_published",
-        "month_published",
-        "day_published",
-        "description",
-        "size",
+    educational_flat_fields = ["time_required", "pace"]
+    educational_array_fields = [
+        "access_mode",
+        "educational_level",
+        "in_language",
+        "prerequisite",
+        "target_audience",
     ]
-    new_array_fields = ["note"]
+    experiment_flat_fields = [
+        "experimental_workflow",
+        "execution_settings",
+        "reproducibility_explanation",
+    ]
 
     @classmethod
     def stringify(cls, data: dict) -> str:
@@ -63,28 +70,35 @@ class ConvertJsonToString:
     def extract_relevant_info(
         cls, data: dict, asset_type: AssetType, stringify: bool = False
     ) -> str:
-        # TODO process multiple types of assets
-        if asset_type != AssetType.DATASETS:
-            raise ValueError("Invalid asset type")
-
-        simple_data = cls._extract_relevant_fields(data)
+        simple_data = cls._extract_relevant_fields(data, asset_type)
         if stringify:
             return json.dumps(simple_data)
 
         string = ""
+        flat_fields, array_fields, distrib_fields = [], [], []
+        for k, v in simple_data.items():
+            if k in cls.orig_distrib_fields:
+                distrib_fields.append(k)
+            elif isinstance(v, str) or isinstance(v, int) or isinstance(v, float):
+                flat_fields.append(k)
+            elif isinstance(v, list):
+                array_fields.append(k)
+            else:
+                raise ValueError("Unknown field to deal with")
 
-        for flat_field in cls.orig_flat_fields + cls.new_flat_fields:
-            if flat_field in simple_data:
-                string += f"{flat_field}: {simple_data[flat_field]}\n"
-        for array_field in cls.orig_array_fields + cls.new_array_fields:
-            if array_field in simple_data:
-                string += f"{array_field}: {', '.join(simple_data[array_field])}\n"
-        for distrib_field in cls.orig_distrib_fields:
-            if distrib_field in simple_data:
-                string += f"{distrib_field.upper()}:\n"
-                for distrib in simple_data[distrib_field]:
-                    distrib_str_arr = [f"{k}:{v}" for k, v in distrib.items()]
-                    string += f"\t{', '.join(distrib_str_arr)}\n"
+        for flat_field in flat_fields:
+            string += f"{flat_field}: {simple_data[flat_field]}\n"
+        string += "\n"
+
+        for array_field in array_fields:
+            string += f"{array_field}: {', '.join(simple_data[array_field])}\n"
+        string += "\n"
+
+        for distrib_field in distrib_fields:
+            string += f"{distrib_field.upper()}:\n"
+            for distrib in simple_data[distrib_field]:
+                distrib_str_arr = [f"{k}:{v}" for k, v in distrib.items()]
+                string += f"\t{', '.join(distrib_str_arr)}\n"
 
         return string
 
@@ -96,7 +110,7 @@ class ConvertJsonToString:
             "platform": data["platform"],
             "name": data["name"],
         }
-        description = cls._get_description(data)
+        description = cls._get_text_like_field(data)
         if description is not None:
             new_object["description"] = description
 
@@ -107,10 +121,15 @@ class ConvertJsonToString:
         return new_object
 
     @classmethod
-    def _extract_relevant_fields(cls, data: dict) -> dict:
-        # basic fields to copy
+    def _extract_relevant_fields(cls, data: dict, asset_type: AssetType) -> dict:
         new_object = {}
-        for field_value in cls.orig_flat_fields:
+
+        flat_fields = cls.orig_flat_fields
+        if asset_type == AssetType.EDUCATIONAL_RESOURCES:
+            flat_fields.extend(cls.educational_flat_fields)
+        elif asset_type == AssetType.EXPERIMENTS:
+            flat_fields.extend(cls.experiment_flat_fields)
+        for field_value in flat_fields:
             x = data.get(field_value, None)
             if x is not None:
                 new_object[field_value] = x
@@ -121,15 +140,19 @@ class ConvertJsonToString:
             new_object["month_published"] = dt.month
             new_object["day_published"] = dt.day
 
-        for field_value in cls.orig_array_fields:
+        array_fields = cls.orig_array_fields
+        if asset_type == AssetType.EDUCATIONAL_RESOURCES:
+            array_fields.extend(cls.educational_array_fields)
+        for field_value in array_fields:
             x = data.get(field_value, None)
             if x is not None and len(x) > 0:
                 new_object[field_value] = x
 
-        # description
-        description = cls._get_description(data)
-        if description is not None:
-            new_object["description"] = description
+        # description & content
+        for field in ["description", "content"]:
+            val = cls._get_text_like_field(data, field)
+            if val is not None:
+                new_object[field] = val
 
         # Distribution type data (fields: distribution, media)
         dist_relevant_fields = [
@@ -138,6 +161,18 @@ class ConvertJsonToString:
             "content_size_kb",
             "encoding_format",
         ]
+        if asset_type == AssetType.ML_MODELS:
+            dist_relevant_fields.extend(["hardware_requirement", "os_requirement"])
+        elif asset_type == AssetType.EXPERIMENTS:
+            dist_relevant_fields.extend(
+                [
+                    "hardware_requirement",
+                    "os_requirement",
+                    "installation",
+                    "deployment",
+                    "dependency",
+                ]
+            )
         for field_name in cls.orig_distrib_fields:
             field_value = data.get(field_name, None)
             if field_value is not None and len(field_value) > 0:
@@ -161,25 +196,28 @@ class ConvertJsonToString:
             new_object["note"] = [note["value"] for note in notes if "value" in note]
 
         # Size
-        size = data.get("size", None)
-        if size is not None and "unit" in size and "value" in size:
-            new_object["size"] = f"{size['value']} {size['unit']}"
+        if asset_type == AssetType.DATASETS:
+            size = data.get("size", None)
+            if size is not None and "unit" in size and "value" in size:
+                new_object["size"] = f"{size['value']} {size['unit']}"
 
         return new_object
 
     @classmethod
-    def _get_description(cls, data: dict) -> str | None:
-        description = data.get("description", None)
+    def _get_text_like_field(cls, data: dict, field: str) -> str | None:
+        description = data.get(field, None)
         if description is None:
             return None
 
         plain_descr = description.get("plain", None)
         html_descr = description.get("html", None)
+        if html_descr is not None:
+            html_descr = re.sub(r"<[^>]*>", " ", html_descr)
 
+        if plain_descr is not None and html_descr is not None:
+            return f"{plain_descr} {html_descr}"
         if plain_descr is not None:
             return plain_descr
-        elif html_descr is not None:
-            html_descr = re.sub(re.compile(r"<.*?>"), "", html_descr)
+        if html_descr is not None:
             return html_descr
-
         return None

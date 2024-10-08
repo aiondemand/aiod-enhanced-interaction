@@ -67,10 +67,16 @@ class AIoDConfig(BaseModel):
         types = self.COMMA_SEPARETED_ASSET_TYPES.lower().split(",")
         return [AssetType(typ) for typ in types]
 
-    def get_asset_url(self, asset_type: AssetType) -> str:
+    def get_asset_url(self, asset_type: AssetType, setup_stage: bool) -> str:
+        if setup_stage:
+            return f"{self.URL}/{asset_type.value}/v1"
+        # TODO will be changed later on
         return f"{self.URL}/{asset_type.value}/v1"
 
-    def get_asset_count_url(self, asset_type: AssetType) -> str:
+    def get_asset_count_url(self, asset_type: AssetType, setup_stage: bool) -> str:
+        if setup_stage:
+            return f"{self.URL}/counts/{asset_type.value}/v1"
+        # TODO will be changed later on
         return f"{self.URL}/counts/{asset_type.value}/v1"
 
 
