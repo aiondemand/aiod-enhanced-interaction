@@ -114,12 +114,7 @@ Perform the following steps to deploy the service:
 
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `DEPLOY_FASTAPI_ONLY` ENV variables: `./deploy.sh`
 
-Docker containers by running the docker compose. Depending on whether you wish to utilize a GPU for model inference in the initial setup of Milvus database, you execute one of the following commands:
-    - CPU only: `docker compose up -d --build`
-    - With GPU: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build`
-    
-    
-
+        
 ### VM preparations
 
 In order for our application to work properly on a host machine, we need to check whether the following software dependencdies are met:
