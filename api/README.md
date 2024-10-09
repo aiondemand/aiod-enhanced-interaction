@@ -114,6 +114,8 @@ Perform the following steps to deploy the service:
 
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `DEPLOY_FASTAPI_ONLY` ENV variables: `./deploy.sh`
 
+### Stop the application
+If you wish to stop the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop`
         
 ### VM preparations
 

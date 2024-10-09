@@ -28,9 +28,15 @@ if [ "$DEPLOY_FASTAPI_ONLY" == "true" ]; then
   MAIN_COMPOSE_FILE="docker-compose.standalone.yml"
 fi
 
+# What operation we wish to perform
+COMPOSE_COMMAND="up -d --build"
+if [ "$1" == "--stop" ]; then  
+  COMPOSE_COMMAND="down"
+fi
+
 # Override some properties in order to use GPU for your service
 if [ "$USE_GPU" == "true" ]; then
-  docker compose -f $MAIN_COMPOSE_FILE -f docker-compose.gpu.yml up -d --build
+  docker compose -f $MAIN_COMPOSE_FILE -f docker-compose.gpu.yml $COMPOSE_COMMAND
 else
-  docker compose -f $MAIN_COMPOSE_FILE up -d --build 
+  docker compose -f $MAIN_COMPOSE_FILE $COMPOSE_COMMAND
 fi
