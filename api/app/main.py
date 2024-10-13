@@ -51,11 +51,10 @@ def app_init() -> None:
         partial(
             threads.run_async_in_thread,
             target_func=partial(
-                compute_embeddings_for_aiod_assets_wrapper,
-                first_invocation=False
-            )
+                compute_embeddings_for_aiod_assets_wrapper, first_invocation=False
+            ),
         ),
-        CronTrigger(hour=0, minute=0)
+        CronTrigger(hour=0, minute=0),
     )
     SCHEDULER.start()
 
@@ -63,8 +62,7 @@ def app_init() -> None:
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
         target_func=partial(
-            compute_embeddings_for_aiod_assets_wrapper,
-            first_invocation=True
+            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
         )
     )
 

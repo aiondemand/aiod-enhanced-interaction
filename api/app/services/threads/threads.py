@@ -1,6 +1,6 @@
 import asyncio
 from threading import Thread
-from typing import Callable, Coroutine
+from typing import Callable
 
 
 def run_async_in_thread(target_func: Callable[[], None]) -> None:
