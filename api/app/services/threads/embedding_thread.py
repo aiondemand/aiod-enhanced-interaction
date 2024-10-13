@@ -45,8 +45,7 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
 
 async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
-    dev = "cuda" if first_invocation and torch.cuda.is_available() else "cpu"
-    model = AiModel(dev)
+    model = AiModel(device=AiModel.get_device(first_invocation))
     database = Database()
     embedding_store = await Milvus_EmbeddingStore.init()
 
@@ -83,7 +82,6 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 asset_collection=asset_collection,
                 asset_type=asset_type,
             )
-
     finally:
         model.to_device("cpu")
         del model

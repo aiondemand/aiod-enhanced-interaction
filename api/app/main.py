@@ -43,23 +43,29 @@ def app_init() -> None:
     Database()
 
     global QUERY_THREAD
-    QUERY_THREAD = threads.start_async_thread(search_thread())
+    QUERY_THREAD = threads.start_async_thread(search_thread)
 
     global SCHEDULER
     SCHEDULER = BackgroundScheduler()
     SCHEDULER.add_job(
         partial(
             threads.run_async_in_thread,
-            coroutine=compute_embeddings_for_aiod_assets_wrapper(),
+            target_func=partial(
+                compute_embeddings_for_aiod_assets_wrapper,
+                first_invocation=False
+            )
         ),
-        CronTrigger(hour=0, minute=0),
+        CronTrigger(hour=0, minute=0)
     )
     SCHEDULER.start()
 
     # Immediate computation of asset embeddings
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
-        compute_embeddings_for_aiod_assets_wrapper(first_invocation=True)
+        target_func=partial(
+            compute_embeddings_for_aiod_assets_wrapper,
+            first_invocation=True
+        )
     )
 
 

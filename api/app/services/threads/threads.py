@@ -3,15 +3,15 @@ from threading import Thread
 from typing import Callable, Coroutine
 
 
-def run_async_in_thread(coroutine: Coroutine) -> None:
+def run_async_in_thread(target_func: Callable[[], None]) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(coroutine)
+    loop.run_until_complete(target_func())
     loop.close()
 
 
-def start_async_thread(coroutine: Coroutine) -> Thread:
-    thread = Thread(target=run_async_in_thread, args=(coroutine,))
+def start_async_thread(target_func: Callable[[], None]) -> Thread:
+    thread = Thread(target=run_async_in_thread, args=(target_func,))
     thread.start()
     return thread
 

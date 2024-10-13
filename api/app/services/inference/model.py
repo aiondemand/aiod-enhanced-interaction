@@ -17,6 +17,14 @@ logging.set_verbosity(40)
 
 
 class AiModel:
+    @classmethod
+    def get_device(cls, first_invocation: bool) -> str:
+        return (
+            "cuda" 
+            if first_invocation and torch.cuda.is_available() and settings.USE_GPU
+            else "cpu"
+        )
+    
     def __init__(self, device: torch.device = "cpu") -> None:
         self.use_chunking = settings.MILVUS.STORE_CHUNKS
         self.model = self.load_model(self.use_chunking, device)

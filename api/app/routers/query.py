@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 router = APIRouter()
 
 
-@router.post("/")
+@router.post("")
 async def submit_query(
     query: str,
     asset_type: AssetType,
@@ -32,7 +32,7 @@ async def submit_query(
     return RedirectResponse(f"/query/{userQuery.id}/result/", status_code=202)
 
 
-@router.get("/{query_id}/result/")
+@router.get("/{query_id}/result")
 async def get_query_result(
     query_id: str,
     database: Annotated[Database, Depends(Database)],
