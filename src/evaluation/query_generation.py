@@ -10,8 +10,7 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 
-from evaluation.llm import LLM_Chain, load_llm
-from lang_chains import SimpleChain
+from lang_chains import SimpleChain, LLM_Chain, load_llm
 from data_types import AnnotatedDoc, QueryDatapoint
 
 
@@ -99,6 +98,9 @@ class AssetSpecificQueryGeneration(QueryGeneration):
         self.chain = chain
         if chain is None:
             self.chain = self.build_chain()
+
+    def __call__(self, input: dict) -> dict | str | None:
+        return self.chain.invoke(input)
         
     def generate(self, savedir: str) -> None:    
         descr_levels = self.descriptiveness_levels
@@ -118,7 +120,7 @@ class AssetSpecificQueryGeneration(QueryGeneration):
                     description = doc["description"]["plain"]
                     keywords = " | ".join(doc["keyword"])
         
-                    output = self.chain.invoke({
+                    output = self({
                         "name": name,
                         "description": description,
                         "keywords": keywords
@@ -280,6 +282,9 @@ class GenericQueryGeneration(QueryGeneration):
         if chain is None:
             self.chain = self.build_chain()
 
+    def __call__(self, input: dict) -> dict | str | None:
+        return self.chain.invoke(input)
+
     def generate(self, savedir: str, num_generative_calls: int = 1) -> None:
         outputs = [[] for _ in range(len(self.query_types))]    
         if sum([
@@ -291,7 +296,7 @@ class GenericQueryGeneration(QueryGeneration):
         print("...Generating generic queries...")
         with get_openai_callback() as cb:
             for _ in tqdm(range(num_generative_calls)):
-                output = self.chain.invoke({})
+                output = self({})
                 if output is not None:
                     for it, qtype in enumerate(self.query_types):
                         queries = [

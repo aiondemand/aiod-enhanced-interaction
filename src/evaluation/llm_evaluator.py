@@ -8,9 +8,8 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.language_models.llms import BaseLLM
 from torch.utils.data import DataLoader
 
-from dataset import AIoD_Documents, Queries
-from lang_chains import SimpleChain
-from evaluation.llm import LLM_Chain, load_llm
+from dataset import Queries
+from lang_chains import SimpleChain, LLM_Chain, load_llm
 from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
 
 
@@ -150,6 +149,9 @@ class LLM_Evaluator:
             self.chain = chain
             self.num_docs_to_compare_at_the_time = num_docs_to_compare_at_the_time
 
+    def __call__(self, input: dict) -> dict | str | None:
+        return self.chain.invoke(input)
+
     def evaluate_query_doc_pairs(
         self,
         query_loader: DataLoader, 
@@ -201,13 +203,13 @@ class LLM_Evaluator:
         self, query: QueryDatapoint, docs: list[str]
     ) -> list[dict | None]:
         if self.num_docs_to_compare_at_the_time == 1:
-            return [self.chain.invoke({
+            return [self({
                 "query": query.text,
                 "document": docs[0]
             })]
         
         multiple_docs_str = self.build_multiple_document_prompt(docs)
-        multiple_pred = self.chain.invoke({
+        multiple_pred = self({
             "query": query.text,
             "multiple_documents": multiple_docs_str
         })
