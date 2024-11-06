@@ -35,7 +35,7 @@ etcd:
   # It is recommended not to change this parameter if there is no specific reason.
   kvSubPath: kv
   log:
-    level: info # Only supports debug, info, warn, error, panic, or fatal. Default 'info'.
+    level: warn # Only supports debug, info, warn, error, panic, or fatal. Default 'info'.
     # path is one of:
     #  - "default" as os.Stderr,
     #  - "stderr" as os.Stderr,
@@ -141,7 +141,7 @@ minio:
   # Custom endpoint for fetch IAM role credentials. when useIAM is true & cloudProvider is "aws".
   # Leave it empty if you want to use AWS default endpoint
   iamEndpoint: 
-  logLevel: fatal # Log level for aws sdk log. Supported level:  off, fatal, error, warn, info, debug, trace
+  logLevel: warn # Log level for aws sdk log. Supported level:  off, fatal, error, warn, info, debug, trace
   region:  # Specify minio storage system location region
   useVirtualHost: false # Whether use virtual host mode for bucket
   requestTimeoutMs: 10000 # minio timeout for request time in milliseconds
@@ -701,7 +701,7 @@ msgChannel:
 log:
   # Milvus log level. Option: debug, info, warn, error, panic, and fatal. 
   # It is recommended to use debug level under test and development environments, and info level in production environment.
-  level: info
+  level: warn
   file:
     # Root path to the log files.
     # The default value is set empty, indicating to output log files to standard output (stdout) and standard error (stderr).
