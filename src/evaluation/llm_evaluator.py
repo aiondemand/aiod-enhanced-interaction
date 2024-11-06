@@ -3,7 +3,7 @@ import json
 import os
 from typing import Type, Callable
 from enum import Enum
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_community.callbacks import get_openai_callback
 from langchain_core.language_models.llms import BaseLLM
 from torch.utils.data import DataLoader

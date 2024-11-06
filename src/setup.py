@@ -4,9 +4,6 @@ from typing import Callable
 from argparse import ArgumentParser
 import importlib
 
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(src_dir)
-
 from dataset import process_documents_and_store_to_filesystem
 from utils import init
 

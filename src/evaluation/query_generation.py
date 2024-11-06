@@ -7,7 +7,7 @@ import os
 from typing import Type, Literal
 from abc import ABC, abstractmethod
 from langchain_community.callbacks import get_openai_callback
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_core.language_models.llms import BaseLLM
 
 from lang_chains import SimpleChain, LLM_Chain, load_llm
