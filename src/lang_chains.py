@@ -10,10 +10,13 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import (
     JsonOutputParser, StrOutputParser, BaseOutputParser
 )
-from langchain_core.pydantic_v1 import BaseModel
+from pydantic import BaseModel
 from langchain_core.language_models.llms import BaseLLM
 from langchain.output_parsers.openai_tools import JsonOutputKeyToolsParser
 from langchain_core.runnables import RunnableParallel, RunnableSequence, RunnableLambda
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from langchain_ollama.chat_models import ChatOllama
+from langchain_openai.chat_models.base import BaseChatOpenAI
 
 
 class ChainOutputOpts:
@@ -27,21 +30,22 @@ class ChainOutputOpts:
         self, langchain_parser_class: Type[BaseOutputParser] | None = None,
         pydantic_model: Type[BaseModel] | None = None,
         schema_placeholder_name: str | None = None,
-        use_openai_bind_tools: bool = False
+        utilize_bind_tools: bool = False
     ) -> None:
         self.pydantic_model = pydantic_model
         self.schema_placeholder_name = schema_placeholder_name
-        self.use_openai_bind_tools = use_openai_bind_tools
+        self.utilize_bind_tools = utilize_bind_tools
 
         # we want to output JSON (perform function calling)
-        if langchain_parser_class is JsonOutputParser or use_openai_bind_tools:
+        if langchain_parser_class is JsonOutputParser or utilize_bind_tools:
             # we utilize OpenAI bind tools function
-            if use_openai_bind_tools:
+            if utilize_bind_tools:
                 if pydantic_model is None:
                     raise ValueError("You need to define Pydantic model that will be adhered to using OpenAI 'bind_tools' function")
-                if langchain_parser_class is not None:
-                    print("Warning: 'langchain_parser_class' argument is being ignored since we shall use OpenAI 'bind_tools' function instead")
                 self.langchain_parser = None
+                if langchain_parser_class is not None and schema_placeholder_name is not None:
+                    print("Warning: We utilize both OpenAI 'bind_tools' functionality as well as explicit definition of schema within the prompt")
+                    self.langchain_parser = langchain_parser_class(pydantic_object=pydantic_model)
             
             # we use a simple JsonOutputParser
             else:
@@ -49,7 +53,7 @@ class ChainOutputOpts:
                     raise ValueError("You need to define Pydantic model that will be adhered to using JsonOutputParser")
                 if schema_placeholder_name is None:
                     raise ValueError("You need to define Schema placeholder name for JSON schema utilized in model prompt")
-                self.langchain_parser = JsonOutputParser(pydantic_object=pydantic_model)
+                self.langchain_parser = langchain_parser_class(pydantic_object=pydantic_model)
         
         # we utilize a different parser 
         else:
@@ -68,10 +72,10 @@ class ChainOutputOpts:
             self.schema_placeholder_name: schema
         })
     
-    def augment_llm_with_openai_function_calling_tool(
+    def function_calling_wrapper(
         self, llm: BaseLLM
     ) -> tuple[BaseLLM, BaseOutputParser]:
-        if self.use_openai_bind_tools is False:
+        if self.utilize_bind_tools is False:
             return llm, self.langchain_parser
         
         schema_name = self.pydantic_model.__name__
@@ -126,9 +130,28 @@ class Chain(ABC):
     def build_chain(self) -> RunnableSequence:
         pass
 
-    @abstractmethod
-    def invoke(self, *args, **kwargs) -> Any:
-        pass
+    def invoke(
+        self, 
+        chain: RunnableSequence, 
+        input: dict, 
+        pydantic_model: Type[BaseModel] | None, 
+        num_retry_attempts: int = 3
+    ) -> dict | str | None:
+        for _ in range(num_retry_attempts):
+            try:
+                # TODO get rid of
+                prompt, llm, parser = chain.steps[:3]
+                llm_out = llm.invoke((prompt.invoke(input)))
+                parsed_out = parser.invoke(llm_out)
+
+                pred = chain.invoke(input)
+                if pydantic_model is not None:
+                    pydantic_model(**pred)
+                return pred
+            except:
+                continue
+
+        return None
 
 
 class TwoStageChain(Chain):
@@ -166,10 +189,7 @@ class TwoStageChain(Chain):
             self.prompt + second_stage_prompt
         )
 
-        llm2, parser = \
-            self.chain_output_opts.augment_llm_with_openai_function_calling_tool(
-                self.llm
-            )
+        llm2, parser = self.chain_output_opts.function_calling_wrapper(self.llm)
         main_chain = self.prompt | self.llm | StrOutputParser()
         second_stage_chain = second_stage_prompt | llm2 | parser
 
@@ -183,17 +203,12 @@ class TwoStageChain(Chain):
         )
         return entire_chain
 
-    def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
-        for _ in range(num_retry_attempts):
-            try:
-                pred = self.chain.invoke(input)
-                self.chain_output_opts.pydantic_model(**pred)
-                return pred
-            except:
-                continue
-        return None
+    def invoke(self, input: dict) -> dict | str | None:
+        return super().invoke(
+            self.chain, input, self.chain_output_opts.pydantic_model
+        )
     
-    
+
 class SimpleChain(Chain):
     """
     A class representing a simple chain consisting of a prompt, an LLM and a parser
@@ -214,21 +229,13 @@ class SimpleChain(Chain):
         self.chain = self.build_chain()
 
     def build_chain(self) -> RunnableSequence:
-        llm, parser = \
-            self.chain_output_opts.augment_llm_with_openai_function_calling_tool(
-                self.llm
-            )
+        llm, parser = self.chain_output_opts.function_calling_wrapper(self.llm)
         return self.prompt | llm | parser | RunnableLambda(self.postprocess_lambda)
 
-    def invoke(self, input: dict, num_retry_attempts: int = 3) -> dict | str | None:
-        for _ in range(num_retry_attempts):
-            try:
-                pred = self.chain.invoke(input)
-                self.chain_output_opts.pydantic_model(**pred)
-                return pred
-            except:
-                continue
-        return None
+    def invoke(self, input: dict) -> dict | str | None:
+        return super().invoke(
+            self.chain, input, self.chain_output_opts.pydantic_model
+        )
 
 
 def build_prompt(
@@ -316,3 +323,55 @@ def apply_chains_on_files_in_directory(
         if success is False:
             failed_docs.append(file)
     return failed_docs
+
+
+class LLM_Chain:
+    @staticmethod
+    def build_simple_chain(
+        llm: BaseLLM,
+        pydantic_model: Type[BaseModel],
+        prompt_templates: tuple[str, str],
+    ) -> SimpleChain:        
+        postprocess_lambda = None
+        utilize_bind_tools = hasattr(llm, "bind_tools")
+
+        if utilize_bind_tools:
+            postprocess_lambda = lambda out: out[0]
+        else:
+            prompt_templates[1] += "\n\n{format}"
+
+        chain_output_opts = ChainOutputOpts(
+            langchain_parser_class=(
+                None if utilize_bind_tools else JsonOutputParser
+            ),
+            pydantic_model=pydantic_model,
+            schema_placeholder_name="format",
+            utilize_bind_tools=utilize_bind_tools
+        )
+        chain_wrapper = SimpleChain(
+            llm, prompt_templates,
+            chain_output_opts=chain_output_opts,
+            postprocess_lambda=postprocess_lambda
+        )
+        return chain_wrapper
+    
+
+def load_llm(ollama_name: str | None = None) -> BaseLLM:
+    if ollama_name is not None:
+        return ChatOllama(model=ollama_name, num_predict=4096)
+    
+    azure_environs = [
+        "OPENAI_API_VERSION", "AZURE_OPENAI_ENDPOINT", 
+        "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"
+    ]
+    for env in azure_environs:
+        if os.environ.get(env, None) is None:
+            break
+    else:
+        return AzureChatOpenAI(
+            azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT"]
+        )
+    if os.environ.get("OPENAI_API_KEY", None) is not None:
+        return ChatOpenAI(model="gpt-4o")
+    
+    return ChatOllama(model="mistral", num_predict=4096)

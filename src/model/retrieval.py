@@ -10,8 +10,7 @@ from time import time
 from tqdm import tqdm
 
 from embedding_stores import EmbeddingStore, LocalTopKDocumentsStore
-from evaluation.llm import LLM_Chain, load_llm
-from lang_chains import SimpleChain
+from lang_chains import SimpleChain, LLM_Chain, load_llm
 from model.base import RetrievalSystem, EmbeddingModel
 from data_types import QueryDatapoint, RetrievedDocuments, SemanticSearchResult
 

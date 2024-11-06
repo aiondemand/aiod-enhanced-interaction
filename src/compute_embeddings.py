@@ -3,9 +3,6 @@ import os
 from chromadb.api.client import Client as ChromaClient
 from pymilvus import MilvusClient
 
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(src_dir)
-
 from data_types import VectorDbClient
 from dataset import AIoD_Documents
 from embedding_stores import Chroma_EmbeddingStore, Milvus_EmbeddingStore
@@ -51,6 +48,10 @@ def store_embeddings_wrapper(
         else:
             raise ValueError("Unsupported model for evaluation")
         
+        # TODO I reduced the computational requirements...
+        loader_kwargs["num_workers"] = 0
+        loader_kwargs["batch_size"] = 2
+
         for process_text_type in process_text_types:
             text_dirpath = f"data/{process_text_type}-texts"
             collection_name = collection_name_placeholder.format(
@@ -109,7 +110,7 @@ def store_embeddings(
 
 
 if __name__ == "__main__":
-    process_text_types = ["basic"] 
+    process_text_types = ["relevant"] 
     model_names = ["gte_large_hierarchical"]
 
     store_embeddings_wrapper(model_names, process_text_types, chunk_embeddings=True)

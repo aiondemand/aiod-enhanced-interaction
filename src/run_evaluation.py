@@ -3,10 +3,7 @@ import os
 from langchain_community.llms import Ollama
 from pymilvus import MilvusClient
 
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(src_dir)
-
-from evaluation.llm import load_llm
+from lang_chains import load_llm
 from model.base import EmbeddingModel, RetrievalSystem
 from preprocess.text_operations import ConvertJsonToString
 from embedding_stores import Chroma_EmbeddingStore, EmbeddingStore
