@@ -17,7 +17,7 @@ from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import ConvertJsonToString
-from requests.exceptions import ConnectTimeout, HTTPError
+from requests.exceptions import HTTPError, Timeout
 from requests.models import Response
 from torch.utils.data import DataLoader
 
@@ -209,10 +209,10 @@ def get_assets_to_add_and_delete(
 
 def recursive_fetch(url: str, offset: int, limit: int) -> list:
     try:
+        sleep(settings.AIOD.TIMEOUT_REQUEST_INTERVAL_SEC)
         queries = {"schema": "aiod", "offset": offset, "limit": limit}
         response = _perform_request(url, queries)
         data = response.json()
-        sleep(settings.AIOD.TIMEOUT_REQUEST_INTERVAL_SEC)
     except HTTPError as e:
         if e.response.status_code != 500:
             raise e
@@ -233,19 +233,24 @@ def _perform_request(
     url: str,
     params: dict | None = None,
     num_retries: int = 3,
-    connection_timeout_sec: int = 60,
+    connection_timeout_sec: int = 30,
 ) -> Response:
+    # timeout based on the size of the requested response
+    # 1000 assets == additional 1 minute of timeout
+    limit = 0 if params is None else params.get("limit", 0)
+    request_timeout = connection_timeout_sec + int(limit * 0.06)
+
     for _ in range(num_retries):
         try:
-            response = requests.get(url, params, timeout=connection_timeout_sec)
+            response = requests.get(url, params, timeout=request_timeout)
             response.raise_for_status()
             return response
-        except ConnectTimeout:
+        except Timeout:
             logging.warning("AIoD endpoints are unresponsive. Retrying...")
             sleep(connection_timeout_sec)
 
-    # This exception will be only raised if we encounter
-    # ConnectTimeout consecutively for multiple times
+    # This exception will be only raised if we encounter exception
+    # Timeout (ReadTimeout / ConnectionTimeout) consecutively for multiple times
     err_msg = "We couldn't connect to AIoD API"
     logging.error(err_msg)
     raise ValueError(err_msg)
