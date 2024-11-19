@@ -27,17 +27,33 @@ def apply_lowercase(obj: Any) -> Any:
         obj = obj.lower()
 
     return obj
-        
+
+
+class Condition(BaseModel):
+    """Condition pertaining to a specific metadata field we can use to filter out ML assets in database"""
+    values: list[Union[str, int, float]] = Field(..., description=f"The values associated with the condition applied to a specific metadata field. Each value is evaluated against the metadata field separately. The values have the same data type and format restrictions imposed to them as the metadata field itself."),
+    comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(..., description="The comparison operator that determines how all the values should be compared to the metadata field."),
+    logical_operator: Literal["AND", "OR"] = Field(..., description="The logical operator that performs logical operations (AND/OR) in between multiple expressions corresponding to each extracted value. If there's only one extracted value pertaining to this metadata field, set this attribute to AND."),
+            
+
+############################################################
+############################################################
+############################################################
+############################################################
+############################################################
 
 class DatasetMetadataTemplate(BaseModel):
-    # General metadata
+    """
+    Extraction of relevant metadata we wish to retrieve from ML assets
+    """
+    
     platform: Literal["huggingface", "openml", "zenodo"] = Field(
         ..., 
-        description="The platform where the asset is hosted."
+        description="The platform where the asset is hosted. ONLY PERMITTED VALUES: ['huggingface', 'openml', 'zenodo']"
     )
     date_published: str = Field(
         ..., 
-        description="The original publication date of the asset in the format 'YYYY-MM-DDTHH:MM:SS'."
+        description="The original publication date of the asset in the format 'YYYY-MM-DD'."
     )
     year: int = Field(
         ..., 
@@ -49,7 +65,7 @@ class DatasetMetadataTemplate(BaseModel):
     )
     domains: Optional[list[Literal["NLP", "Computer Vision", "Audio Processing"]]] = Field(
         None, 
-        description="The AI technical domains of the asset, describing the type of data and AI task involved. Leave the list empty if not specified."
+        description="The AI technical domains of the asset, describing the type of data and AI task involved. ONLY PERMITTED VALUES: ['NLP', 'Computer Vision', 'Audio Processing']. Leave the list empty if not specified."
     )
     task_types: Optional[list[str]] = Field(
         None, 
@@ -83,7 +99,7 @@ class DatasetMetadataTemplate(BaseModel):
     )
     languages: Optional[list[str]] = Field(
         None, 
-        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'EN' for English, 'ES' for Spanish, 'FR' for French, ...). The description of the dataset itself has no relation to the languages present in the dataset we wish to retrieve. Leave the list empty if not specified"
+        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'EN' for English, 'ES' for Spanish, 'FR' for French, ...). Leave the list empty if not specified"
     )
 
 
@@ -109,11 +125,11 @@ def wrap_in_list_type_if_not_already(annotation: Type) -> Type:
 
 def user_query_metadata_extraction_schema_factory(
     template_type: Type[BaseModel], 
-    flatten_schema: bool = False
+    simplified_schema: bool = False
 ) -> Type[BaseModel]:
-    schema_type_name = f'UserQuery_MetadataSchema{"_Flatten" if flatten_schema else ""}_{template_type.__name__}'
+    schema_type_name = f'UserQuery_MetadataSchema{"_Simplified" if simplified_schema else ""}_{template_type.__name__}'
 
-    if flatten_schema is False:
+    if simplified_schema is False:
         new_inner_value_annotations = {
             k: wrap_in_list_type_if_not_already(strip_optional_type(v))
             for k, v in template_type.__annotations__.items()
@@ -134,33 +150,13 @@ def user_query_metadata_extraction_schema_factory(
 
         arguments = {
             '__annotations__': new_field_annotations,
+            "__doc__": "Extraction of user-defined conditions on metadata fields we can filter by"
         }
         arguments.update(new_field_values)
         return type(schema_type_name, (BaseModel, ), arguments)
     
-    else:
-        new_field_annotations = {}
-        for k, v in template_type.__annotations__.items():
-            new_field_annotations[f"{k}__values"] = Optional[list[wrap_in_list_type_if_not_already(strip_optional_type(v))]]
-            new_field_annotations[f"{k}__comparison_operator"] = Optional[list[Literal["<", ">", "<=", ">=", "==", "!="]]]
-            new_field_annotations[f"{k}__logical_operator"] = Optional[list[Literal["AND", "OR"]]]
+    # Simplified schema
 
-        new_field_values = {}
-        for k, v in template_type.model_fields.items():
-            old_descr = v.description
-            descr_value = f"Values of individual expressions within the conditions pertaining to the metadata field `{k}`." + f"The values associated with the condition (or more precisely with expressions constituting the entirery of the condition) applied to specific metadata field. Corresponds to metadata field `{k}`: {old_descr}"
-            descr_comp_op = f"Comparison operators of conditions pertaining to the metadata field `{k}`." + f"The comparison operator that determines how the values should be compared to the metadata field in their respective expresions."
-            descr_log_op = f"Logical operators of conditions pertaining to the metadata field `{k}`" + f"The logical operator that performs logical operations (AND/OR) in between multiple expressions corresponding to each extracted value. If there's only one extracted value pertaining to this metadata field, set this attribute to AND."
-            
-            new_field_values[f"{k}__values"] = Field(None, description=descr_value)
-            new_field_values[f"{k}__comparison_operator"] = Field(None, description=descr_comp_op)
-            new_field_values[f"{k}__logical_operator"] = Field(None, description=descr_log_op)
-        
-        arguments = {
-            '__annotations__': new_field_annotations,
-        }
-        arguments.update(new_field_values)
-        return type(schema_type_name, (BaseModel, ), arguments)
 
 
 def user_query_field_factory(
@@ -286,7 +282,7 @@ class LLM_MetadataExtractor:
             ]
         }}
 
-        **User query:** "Show me the multilingual summarization datasets containing both the French as well as English data. The dataset however can't include any German data or any Slovak data."
+        **User query:** "Show me the multilingual summarization datasets containing both the French as well as English data. The dataset however can't include any German data nor any Slovak data."
  
         **Output:**
         {{
@@ -304,7 +300,7 @@ class LLM_MetadataExtractor:
                     "logical_operator": "AND"
                 }},
                 {{
-                    "values": ["de","sk"],
+                    "values": ["de", "sk"],
                     "comparison_operator": "!=",
                     "logical_operator": "AND"
                 }},
@@ -360,13 +356,11 @@ class LLM_MetadataExtractor:
     ) -> SimpleChain:
         if llm is None:
             llm = load_llm()
-        flatten_schema = False
 
         if pydantic_model is None:
             pydantic_model = (
                 user_query_metadata_extraction_schema_factory(
-                     template_type=DatasetMetadataTemplate,
-                     flatten_schema=flatten_schema
+                     template_type=DatasetMetadataTemplate
                 ) 
                 if parsing_user_query
                 else DatasetMetadataTemplate
@@ -379,7 +373,6 @@ class LLM_MetadataExtractor:
         )
         examples_prompt = (
             "" if parsing_user_query is False else
-            cls.user_query_extraction_examples_flatten if flatten_schema else 
             cls.user_query_extraction_examples_hierarchical
         )
         system_prompt = system_prompt.format(asset_type=asset_type) + examples_prompt
@@ -417,33 +410,45 @@ class LLM_MetadataExtractor:
         }
         return self.chain.invoke(input)
 
-
+    
 if __name__ == "__main__":
+    MODEL_NAME = "llama3.1:8b"
+
     from preprocess.text_operations import ConvertJsonToString
     with open("temp/data_examples/huggingface.json") as f:
         data = json.load(f)[0]
     text_format = ConvertJsonToString().extract_relevant_info(data)
     
-    llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name="llama3.1:8b"), parsing_user_query=False)
+    llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=False)
     extract = LLM_MetadataExtractor(
         chain=llm_chain,
         asset_type="dataset", 
         parsing_user_query=False,
     )
-    output = extract(text_format)
+
+    outputs = []
+    for _ in range(10):
+        outputs.append(extract(text_format))
 
     exit()
 
-    # user_query = "Retrieve all the summarization datasets with at least 10k datapoints, yet no more than 100k datapoints, and the dataset should have contain Slovak language, Polish language, but no Czech language."
+    # user_query = (
+    #     "Retrieve all the summarization datasets with at least 10k datapoints, yet no more than 100k datapoints, " +
+    #     "and the dataset should have contain Slovak language, Polish language, but no Czech language."
+    # )
+    # user_query_2 = (
+    #     "Retrieve all translation datasets that either have at least 10k datapoints and has over 100k KB in size" +
+    #     "or they contain Slovak language and Polish language, but no Czech language."
+    # )
     
-    # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=None), parsing_user_query=True)
+    # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=True)
     # extract_query = LLM_MetadataExtractor(
     #     chain=llm_chain, 
     #     asset_type="dataset", 
     #     parsing_user_query=True
     # )
 
-    # output = extract_query(user_query)
+    # output = extract_query(user_query_2)
     # build_milvus_filter(output)
 
 

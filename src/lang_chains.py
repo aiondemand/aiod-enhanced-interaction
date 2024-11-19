@@ -139,11 +139,6 @@ class Chain(ABC):
     ) -> dict | str | None:
         for _ in range(num_retry_attempts):
             try:
-                # TODO get rid of
-                prompt, llm, parser = chain.steps[:3]
-                llm_out = llm.invoke((prompt.invoke(input)))
-                parsed_out = parser.invoke(llm_out)
-
                 pred = chain.invoke(input)
                 if pydantic_model is not None:
                     pydantic_model(**pred)
@@ -356,9 +351,11 @@ class LLM_Chain:
         return chain_wrapper
     
 
-def load_llm(ollama_name: str | None = None) -> BaseLLM:
+def load_llm(ollama_name: str | None = None, **model_kwargs) -> BaseLLM:
     if ollama_name is not None:
-        return ChatOllama(model=ollama_name, num_predict=4096)
+        return ChatOllama(
+            model=ollama_name, num_predict=4096, num_ctx=8192, **model_kwargs
+        )
     
     azure_environs = [
         "OPENAI_API_VERSION", "AZURE_OPENAI_ENDPOINT", 
@@ -369,9 +366,10 @@ def load_llm(ollama_name: str | None = None) -> BaseLLM:
             break
     else:
         return AzureChatOpenAI(
-            azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT"]
+            azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+            **model_kwargs
         )
     if os.environ.get("OPENAI_API_KEY", None) is not None:
-        return ChatOpenAI(model="gpt-4o")
+        return ChatOpenAI(model="gpt-4o", **model_kwargs)
     
-    return ChatOllama(model="mistral", num_predict=4096)
+    return ChatOllama(model="mistral", num_predict=4096, num_ctx=8192, **model_kwargs)
