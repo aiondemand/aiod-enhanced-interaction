@@ -1,0 +1,100 @@
+[
+    {
+        "input": "Retrieve HuggingFace datasets about stocks",
+        "output": {
+            "topic": "datasets about stocks",
+            "conditions": [
+                {
+                    "condition": "HuggingFace datasets", 
+                    "field": "platform",
+                    "operator": "NONE"
+                }
+            ]
+        }
+    },
+    {
+        "input": "Show me the summarization news datasets containing both the French as well as English data. The dataset however can't include any German data nor any Slovak data.",
+        "output": {
+            "topic": "multilingual news datasets",
+            "conditions": [
+                {
+                    "condition": "summarization datasets", 
+                    "field": "task_types",
+                    "operator": "NONE"
+                },
+                {
+                    "condition": "containing both the French as well as English data", 
+                    "field": "languages",
+                    "operator": "AND"
+                },
+                {
+                    "condition": "can't include any German data nor Slovak data", 
+                    "field": "languages",
+                    "operator": "AND"
+                }
+            ]
+        }
+    },
+    {
+        "input": "Find all chocolate datasets created after January 1, 2022, that are represented in textual or image format with its dataset size smaller than 500 000KB.",
+        "output": {
+            "topic": "chocolate datasets in textual or image modality",
+            "conditions": [
+                {
+                    "condition": "datasets created after January 1, 2022", 
+                    "field": "date_published",
+                    "operator": "NONE"
+                },
+                {
+                    "condition": "represented in textual or image format", 
+                    "field": "modalities",
+                    "operator": "OR"
+                },
+                {
+                    "condition": "dataset size smaller than 500 000KB", 
+                    "field": "size_in_mb",
+                    "operator": "NONE"
+                }
+            ]
+        }
+    },
+    {
+        "input": "Datasets that have either have over 50k datapoints but fewer than 100k, or datasets that have MIT or apache-2.0 license",
+        "output": {
+            "topic": "datasets with licenses for unrestricted use",
+            "conditions": [
+                {
+                    "condition": "have over 50k datapoints and fewer than 100k", 
+                    "field": "num_datapoints",
+                    "operator": "AND"
+
+                },
+                {
+                    "condition": "have MIT or apache-2.0 license", 
+                    "field": "license",
+                    "operator": "OR"
+                }
+            ]
+        }
+    },
+    {
+        "input": "Retrieve textual or video datasets",
+        "output": {
+            "topic": "datasets in textual or video format",
+            "conditions": [
+                {
+                    "condition": "textual or video datasets", 
+                    "field": "modalities",
+                    "operator": "OR"
+                }
+            ]
+        }
+    },
+    {
+        "input": "Search for COVID-19 datasets",
+        "output": {
+            "topic": "COVID-19 datasets",
+            "conditions": []
+        }
+    }
+]

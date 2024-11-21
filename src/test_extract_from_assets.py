@@ -12,41 +12,10 @@ from preprocess.text_operations import ConvertJsonToString
 import re
 import json
 
-tool_prompt_template = """
-    You have access to the following functions:
-
-    Use the function '{function_name}' to '{function_description}':
-    {function_schema}
-
-    If you choose to call a function ONLY reply in the following format with no prefix or suffix:
-
-    <function=example_function_name>{{\"example_name\": \"example_value\"}}</function>
-
-    Reminder:
-    - Function calls MUST follow the specified format, start with <function= and end with </function>
-    - Required parameters MUST be specified
-    - Only call one function at a time
-    - Put the entire function call reply on one line
-    - If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls
-"""
 
 
-def convert_llm_string_output_to_tool(response: str) -> dict | None:
-    function_regex = r"<function=(\w+)>(.*?)</function>"
-    match = re.search(function_regex, response)
 
-    if match:
-        function_name, args_string = match.groups()
-        try:
-            args = literal_eval(args_string)
-            return {
-                "function": function_name,
-                "arguments": args,
-            }
-        except:
-            print(f"Error parsing function arguments")
-            return None
-    return None
+
     
 
 def transform_simple_pydantic_schema_to_tool_schema(pydantic_model: Type[BaseModel]) -> dict:
@@ -71,7 +40,6 @@ def transform_nested_pydantic_schema_to_tool_schema(pydantic_model: Type[BaseMod
     pydantic_schema["parameters"] = {
         "type": "object",
         "properties": pydantic_schema.pop("properties"),
-        # "required": pydantic_schema.pop("required")
         "required": []
     }
 
@@ -85,12 +53,8 @@ def test_asset_extraction():
 
     pydantic_model = DatasetMetadataTemplate
     tool_schema = transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
-    tool_prompt = tool_prompt_template.format(
-        function_name=tool_schema["name"],
-        function_description=tool_schema["description"],
-        function_schema=json.dumps(tool_schema)
-    )
-
+    tool_prompt = populate_tool_prompt(tool_schema)
+    
     system_content = LLM_MetadataExtractor.system_prompt_from_asset.format(asset_type="dataset")
     user_content = LLM_MetadataExtractor.user_prompt_from_asset.format(
         asset_type="dataset",
@@ -137,16 +101,8 @@ def test_query_extraction():
     # pydantic_model = UserQueryConditions
     
     tool_schema = transform_nested_pydantic_schema_to_tool_schema(pydantic_model)
-    tool_prompt = tool_prompt_template.format(
-        function_name=tool_schema["name"],
-        function_description=tool_schema["description"],
-        function_schema=json.dumps(tool_schema)
-    )
+    tool_prompt = populate_tool_prompt(tool_schema)
 
-    # system_content = (
-    #     LLM_MetadataExtractor.system_prompt_from_user_query.format(asset_type="dataset") + 
-    #     LLM_MetadataExtractor.user_query_extraction_examples_hierarchical
-    # )
     system_content = LLM_MetadataExtractor.system_prompt_from_user_query.format(asset_type="dataset")
     user_content = LLM_MetadataExtractor.user_prompt_from_user_query.format(
         asset_type="dataset",
@@ -190,29 +146,3 @@ if __name__ == "__main__":
             test_asset_extraction()
         )
     exit()
-    
-    # outputs = []
-    # for _ in tqdm(range(10)):
-    #     outputs.append(
-    #         test_query_extraction()
-    #     )
-
-    # outputs
-
-
-
-# RESULTS:
-    # LLama 3.2 3B
-        # Metadata extraction from Asset => 0/10 calls were successful
-
-    # LLama 3.1 8B
-        # Metadata extraction from Asset => 7/10 calls were successfull
-                    # Im pretty suprised how good the data it retrieves is
-                    # And how good it adheres to data, albeit its model size
-        # UserQuery extraction => 0/10 calls were successful
-                    # I suppose the schema is too complicated...
-        # UserQuerySimplified schema => 2/10 calls were successful
-    # LLama 3.1 70B
-        # Metadata extraction from Asset => 7/10 calls were successfull
-        # UserQuery extraction => 6/10 calls were successful
-

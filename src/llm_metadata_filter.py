@@ -1,14 +1,21 @@
+from ast import literal_eval
+from operator import itemgetter
 import os
 import json
+import re
 from typing import Any, Self, Literal, Union, Optional, Type, TypeVar, get_origin, get_args, TypeAlias
 from enum import Enum
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 from langchain_community.callbacks import get_openai_callback
 from langchain_core.output_parsers import (
     JsonOutputParser, StrOutputParser, BaseOutputParser
 )
+from langchain_core.prompts import FewShotChatMessagePromptTemplate, ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_core.language_models.llms import BaseLLM
+from langchain_core.runnables import RunnableLambda
 from torch.utils.data import DataLoader
 
 from dataset import Queries
@@ -223,6 +230,108 @@ def build_milvus_filter(data: dict) -> str:
     return " and ".join(condition_strings)
             
 
+class Llama_ManualFunctionCalling:
+    tool_prompt_template = """
+        You have access to the following functions:
+
+        Use the function '{function_name}' to '{function_description}':
+        {function_schema}
+
+        If you choose to call a function ONLY reply in the following format with no prefix or suffix:
+
+        <function=example_function_name>{{\"example_name\": \"example_value\"}}</function>
+
+        Reminder:
+        - Function calls MUST follow the specified format, start with <function= and end with </function>
+        - Required parameters MUST be specified
+        - Only call one function at a time
+        - Put the entire function call reply on one line
+        - If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls
+    """
+
+    def __init__(
+        self, llm: ChatOllama, pydantic_model: Type[BaseModel], 
+        user_query_text: str, examples: list[dict] | None = None
+    ) -> None:
+        self.llm = llm
+        self.pydantic_model = pydantic_model
+        self.user_query_template = user_query_text
+        self.examples = examples
+
+        # build prompt
+        example_prompt = ChatPromptTemplate.from_messages([
+            ("human", "User Query: {input}"),
+            ("ai", "{output}"),
+        ])
+        fewshot_prompt = FewShotChatMessagePromptTemplate(
+            examples=self.transform_fewshot_examples(examples),
+            example_prompt=example_prompt
+        )
+        composite_prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(self.populate_tool_prompt(pydantic_model)), # no input variables, hence the use of message
+            HumanMessage(user_query_text), # no input variables, hence the use of message
+            fewshot_prompt,
+            ("human", "User Query: {query}"),
+        ])
+
+        self.chain = composite_prompt | self.llm | StrOutputParser() | RunnableLambda(
+            self.convert_llm_string_output_to_tool
+        )
+
+    def __call__(self, query: str) -> dict | None:
+        out = self.chain.invoke({"query": query})
+
+        try:
+            self.pydantic_model(**out)
+        except Exception as e:
+            print(e)
+            return None
+        return out
+    
+    def transform_fewshot_examples(self, examples: list[dict]) -> str:
+        return [
+            {
+              "input": ex["input"],
+              "output": f"<function={self.pydantic_model.__name__}>{json.dumps(ex['output'])}</function>"
+            } for ex in examples
+        ]
+    
+    def convert_llm_string_output_to_tool(self, response: str) -> dict | None:
+        function_regex = r"<function=(\w+)>(.*?)</function>"
+        match = re.search(function_regex, response)
+
+        if match:
+            function_name, args_string = match.groups()
+            try:
+                return literal_eval(args_string)
+            except:
+                print(f"Error parsing function arguments")
+                return None
+        return None
+
+    def populate_tool_prompt(self, pydantic_model: Type[BaseModel]) -> str:
+        tool_schema = self.transform_simple_pydantic_schema_to_tool_schema()
+
+        return self.tool_prompt_template.format(
+            function_name=tool_schema["name"],
+            function_description=tool_schema["description"],
+            function_schema=json.dumps(tool_schema)
+        )
+
+    def transform_simple_pydantic_schema_to_tool_schema(self) -> dict:
+        pydantic_schema = self.pydantic_model.model_json_schema()
+        
+        pydantic_schema.pop("type")
+        pydantic_schema["name"] = pydantic_schema.pop("title")
+        pydantic_schema["parameters"] = {
+            "type": "object",
+            "properties": pydantic_schema.pop("properties"),
+            "required": pydantic_schema.pop("required")
+        }
+
+        return pydantic_schema
+
+
 class LLM_MetadataExtractor:
     system_prompt_from_asset = """
         ### Task Overview:
@@ -410,27 +519,124 @@ class LLM_MetadataExtractor:
         }
         return self.chain.invoke(input)
 
-    
+
+class NaturalLanguageCondition(BaseModel):
+    condition: str = Field(
+        ..., 
+        description="Natural language condition corresponding to a particular metadata field we use for filtering. It may contain either only one value to be compared to metadata field, or multiple values if there's an OR logical operator in between those values"
+    )
+    field: str = Field(..., description="Name of the metadata field")
+    operator: Literal["AND", "OR", "NONE"] = Field("NONE", description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead.")
+
+
+class UserQueryParsing(BaseModel):
+    """Extraction and parsing of conditions and a topic found within a user query"""
+    topic: str = Field(..., description="A topic or a main subject of the user query that user seeks for")
+    conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
+
+
 if __name__ == "__main__":
     MODEL_NAME = "llama3.1:8b"
 
-    from preprocess.text_operations import ConvertJsonToString
-    with open("temp/data_examples/huggingface.json") as f:
-        data = json.load(f)[0]
-    text_format = ConvertJsonToString().extract_relevant_info(data)
-    
-    llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=False)
-    extract = LLM_MetadataExtractor(
-        chain=llm_chain,
-        asset_type="dataset", 
-        parsing_user_query=False,
+    attribute_types = {
+        "platform": "string",
+        "date_published": "string",
+        "year": "integer",
+        "month": "integer",
+        "domains": "string",
+        "task_types": "string",
+        "license": "string",
+        "size_in_mb": "float",
+        "num_datapoints": "integer",
+        "size_category": "string",
+        "modalities": "string",
+        "data_formats": "string",
+        "languages": "string",
+    }
+    metadata_field_info = [
+        {
+            "name": name, 
+            "description": field.description, 
+            "type": attribute_types[name]
+        } for name, field in DatasetMetadataTemplate.model_fields.items()
+    ]
+
+    path = "src/fewshot_examples/user_query_extraction_stage1.json"
+    with open(path) as f:
+        fewshot_examples = json.load(f)    
+
+    user_prompt = """
+        Your task is to process a user query that may contain multiple natural language conditions and a general topic. Each condition corresponds to a specific metadata field and describes one or more values that should be compared against that field.
+        These conditions are subsequently used to filter out unsatisfactory data in database. On the other hand, the topic is used in semantic search to find the most relevant documents to the thing user seeks for
+        
+        A simple schema below briefly describes all the metadata fields we use for filtering purposes:
+        {model_schema}
+
+        **Key Guidelines:**
+
+        1. **Conditions and Metadata Fields:**
+        - Each condition must clearly correspond to exactly one metadata field that we use for filtering purposes.
+        - If a condition references multiple metadata fields (e.g., "published after 2020 or in image format"), split it into separate conditions with NONE operators, each tied to its respective metadata field.
+
+        2. **Handling Multiple Values:**
+        - If a condition references multiple values for a single metadata field (e.g., "dataset containing French or English"), include all the values in the natural language condition.
+        - Specify the logical operator (AND/OR) that ties the values:
+            - Use **AND** when the query requires all the values to match simultaneously.
+            - Use **OR** when the query allows any of the values to match.
+
+        3. **Natural Language Representation:**
+        - Preserve the natural language form of the conditions. You're also allowed to modify them slightly to maintain their meaning once they're extracted from their context
+
+        4. **Logical Operators for Conditions:**
+        - Always include a logical operator (AND/OR) for conditions with multiple values.
+        - For conditions with a single value, the logical operator is not required but can default to "NONE" for clarity.
+
+        5. **Extract user query topic**
+        - A topic is a concise, high-level description of the main subject of the query. 
+        - It should exclude specific filtering conditions but capture the core concept or intent of the query.
+        - If the query does not explicitly state a topic, infer it based on the overall context of the query.
+
+    """
+
+    user_prompt = user_prompt.format(model_schema=json.dumps(metadata_field_info))
+
+    model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
+
+    extraction_stage1 = Llama_ManualFunctionCalling(
+        model, 
+        UserQueryParsing, 
+        user_query_text=user_prompt, 
+        examples=fewshot_examples
     )
 
-    outputs = []
-    for _ in range(10):
-        outputs.append(extract(text_format))
+    user_query = (
+        "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints. The dataset has over 100k KB in size " +
+        "and the dataset should contain one or more of the following languages: Slovak, Polish, French, German. However we don't wish the dataset to contain any English nor Spanish"
+    )
+    # user_query = "I dont want news datasets with any textual or video data."
+    # user_query = "I want datasets with Slovak or English. It also needs to have either French or German"
+
+
+    out = extraction_stage1(user_query)
+
 
     exit()
+
+    # from preprocess.text_operations import ConvertJsonToString
+    # with open("temp/data_examples/huggingface.json") as f:
+    #     data = json.load(f)[0]
+    # text_format = ConvertJsonToString().extract_relevant_info(data)
+    
+    # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=False)
+    # extract = LLM_MetadataExtractor(
+    #     chain=llm_chain,
+    #     asset_type="dataset", 
+    #     parsing_user_query=False,
+    # )
+
+    # out = extract(text_format)
+
+    # exit()
 
     # user_query = (
     #     "Retrieve all the summarization datasets with at least 10k datapoints, yet no more than 100k datapoints, " +
