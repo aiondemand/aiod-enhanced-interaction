@@ -1,6 +1,6 @@
 [
     {
-        "input": "{\"condition\": \"contain Czech or Italian data\", \"original_query\": \"Retrieve datasets that have been created this year and contain Czech or Italian data\"}",
+        "input": "contain Czech or Italian data",
         "output": {
             "expressions": [
                 {
@@ -18,7 +18,7 @@
         }
     },
     {
-        "input": "{\"condition\": \"containing all of these languages: French, German, Russian\", \"original_query\": \"Summarization news datasets containing all of these languages: French, German, Russian\"}",
+        "input": "containing all of these languages: French, German, Russian",
         "output": {
             "expressions": [
                 {

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 from ast import literal_eval
 from operator import itemgetter
@@ -37,20 +38,30 @@ def apply_lowercase(obj: Any) -> Any:
     return obj
 
 
-class Condition(BaseModel):
-    """Condition pertaining to a specific metadata field we can use to filter out ML assets in database"""
-    values: list[Union[str, int, float]] = Field(..., description=f"The values associated with the condition applied to a specific metadata field. Each value is evaluated against the metadata field separately. The values have the same data type and format restrictions imposed to them as the metadata field itself."),
-    comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(..., description="The comparison operator that determines how all the values should be compared to the metadata field."),
-    logical_operator: Literal["AND", "OR"] = Field(..., description="The logical operator that performs logical operations (AND/OR) in between multiple expressions corresponding to each extracted value. If there's only one extracted value pertaining to this metadata field, set this attribute to AND."),
+# Classes pertaining to the first stage of user query parsing
+class NaturalLanguageCondition(BaseModel):
+    condition: str = Field(
+        ..., 
+        description="Natural language condition corresponding to a particular metadata field we use for filtering. It may contain either only one value to be compared to metadata field, or multiple values if there's an OR logical operator in between those values"
+    )
+    field: str = Field(..., description="Name of the metadata field")
+    
+    # helper field used for better operator analysis. Even though the model doesnt assign operator correctly all the time
+    # it's a way of forcing the model to focus on logical operators in between conditions
+    # since the value of this attribute is unreliable we dont use it in the second stage
+    operator: Literal["AND", "OR", "NONE"] = Field(
+        ..., 
+        description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead."
+    )
+
+
+class SurfaceQueryParsing(BaseModel):
+    """Extraction and parsing of conditions and a topic found within a user query"""
+    topic: str = Field(..., description="A topic or a main subject of the user query that user seeks for")
+    conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
             
 
-############################################################
-############################################################
-############################################################
-############################################################
-############################################################
-
-
+# Classes representing specific asset metadata 
 class DatasetMetadataTemplate(BaseModel):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
@@ -110,6 +121,16 @@ class DatasetMetadataTemplate(BaseModel):
         None, 
         description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...)."
     )
+
+
+class ModelMetadataTemplate(BaseModel):
+    pass
+
+
+ASSET_METADATA_SCHEMAS = {
+    "dataset": DatasetMetadataTemplate,
+    "model": ModelMetadataTemplate
+}
 
 
 def is_optional_type(annotation: Type) -> bool:
@@ -192,13 +213,13 @@ def user_query_field_factory(
     )]]
 
 
-def build_milvus_filter(data: dict) -> str:    
+def build_milvus_filter(data: dict, asset_schema: Type[BaseModel]) -> str:    
     simple_expression_template = "({field} {op} {val})"
     list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
     format_value = lambda x: f"'{x.lower()}'" if isinstance(x, str) else x
     list_fields = {
         k: get_origin(strip_optional_type(v)) is list
-        for k, v in DatasetMetadataTemplate.__annotations__.items()
+        for k, v in asset_schema.__annotations__.items()
     }
 
     condition_strings = []
@@ -542,26 +563,99 @@ class LLM_MetadataExtractor:
         return self.chain.invoke(input)
 
 
-class NaturalLanguageCondition(BaseModel):
-    condition: str = Field(
-        ..., 
-        description="Natural language condition corresponding to a particular metadata field we use for filtering. It may contain either only one value to be compared to metadata field, or multiple values if there's an OR logical operator in between those values"
-    )
-    field: str = Field(..., description="Name of the metadata field")
-    
-    # helper field used for better operator analysis. Even though the model doesnt assign operator correctly all the time
-    # it's a way of forcing the model to focus on logical operators in between conditions
-    # since the value of this attribute is unreliable we dont use it in the second stage
-    operator: Literal["AND", "OR", "NONE"] = Field("NONE", description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead.")
+class UserQueryParsing:
+    def __init__(
+        self, 
+        asset_type: Literal["dataset", "ml_model"], 
+        db_to_translate: Literal["Milvus"] = "Milvus",
+        stage_1_fewshot_examples_filepath: str | None = None,
+        stage_2_fewshot_examples_dirpath: str | None = None
+    ) -> None:
+        assert asset_type in ASSET_METADATA_SCHEMAS.keys(), f"Invalid asset_type argument '{asset_type}'"
+        assert db_to_translate in ["Milvus"], f"Invalid db_to_translate argument '{db_to_translate}'"
+
+        self.asset_type = asset_type
+        self.db_to_translate = db_to_translate
+
+        self.asset_schema = ASSET_METADATA_SCHEMAS[asset_type]
+        self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
+            asset_schema=self.asset_schema,
+            fewshot_examples_path=stage_1_fewshot_examples_filepath
+        )
+        self.pipe_stage_2 = UserQueryParsingStages.init_stage_2(
+            asset_schema=self.asset_schema,
+            fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath
+        )
+
+    def __call__(self, user_query: str) -> dict:
+        out_stage_1 = self.stage_pipe_1({"query": user_query})
+        if out_stage_1 is None:
+            return {
+                "query": user_query,
+                "filter": ""
+            }
+        
+        topic_list = [out_stage_1["topic"]]
+        [
+            topic_list.append(cond["condition"]) 
+            for cond in out_stage_1["conditions"] 
+            if cond.get("discard", False)
+        ] # discarded conditions
+
+        parsed_conditions = []
+        valid_conditions = [cond for cond in out_stage_1["conditions"] if cond.get("discard", False) is False]
+        for nl_cond in valid_conditions:
+            if nl_cond["field"] not in self.asset_schema.model_fields.keys():
+                topic_list.append(nl_cond["condition"])
+                continue
+            
+            input = {    
+                "condition": nl_cond["condition"],
+                "field": nl_cond["field"]
+            }
+            out_stage_2 = self.pipe_stage_2(input)
+            if out_stage_2 is None:
+                topic = self.expand_query(topic, nl_cond["condition"])
+                continue
+        
+            [
+                topic_list.append(expr["raw_value"])
+                for expr in out_stage_2["expressions"] 
+                if expr.get("discard", False)
+            ] # discarded expressions
+
+            parsed_conditions.append({
+                "field": nl_cond["field"],
+                "logical_operator": out_stage_2["logical_operator"],
+                "expressions": [
+                    expr 
+                    for expr in out_stage_2["expressions"] 
+                    if expr.get("discard", False) is False
+                ]
+            })
+
+        return (
+            " ".join(topic_list),
+            self.milvus_translate(parsed_conditions)
+        )
+
+    def milvus_translate(self, parsed_conditions: list[dict]) -> str:
+        # TODO logic for translating conditions / expressions
+        # There's an AND operation between all the items of the the 'parsed_conditions'
+        # There may be AND/OR operation applied between expressions inside an item of the 'parsed_conditions'
+            # There needs to be 2 or more expressions within one condition in order for it to work
+        # Build filter string
+            # It depends on whether its a list metadata field or a simple one
+
+        # Some logic for translating is already found in the 'build_milvus_filter' function
+
+        return parsed_conditions
+        
+        pass
 
 
-class UserQueryParsing(BaseModel):
-    """Extraction and parsing of conditions and a topic found within a user query"""
-    topic: str = Field(..., description="A topic or a main subject of the user query that user seeks for")
-    conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
 
-
-class UserQueryParsingChains:
+class UserQueryParsingStages:
     task_instructions_stage1 = """
         Your task is to process a user query that may contain multiple natural language conditions and a general topic. Each condition corresponds to a specific metadata field and describes one or more values that should be compared against that field.
         These conditions are subsequently used to filter out unsatisfactory data in database. On the other hand, the topic is used in semantic search to find the most relevant documents to the thing user seeks for
@@ -613,8 +707,7 @@ class UserQueryParsingChains:
 
         **Input:**
         On input You will receive:
-        - `condition**: The natural language condition extracted from the user query.
-        - `original_query`: The full user query for retrieving additional context regarding this condition.
+        - `condition**: The natural language condition extracted from the user query. This query should contain one or more expressions to be extracted.
 
         **Instructions**:
         1. Identify potentionally all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
@@ -623,8 +716,9 @@ class UserQueryParsingChains:
     """
 
     @classmethod
-    def _create_dynamic_stage2_schema(cls, field_name: str) -> Type[BaseModel]:
-        original_field = DatasetMetadataTemplate.model_fields[field_name]
+    def _create_dynamic_stage2_schema(cls, field_name: str, asset_schema: Type[BaseModel]) -> Type[BaseModel]:
+        # TODO tied to datasets
+        original_field = asset_schema.model_fields[field_name]
         
         expression_class = type(
             f"Expression_{field_name}",
@@ -680,25 +774,33 @@ class UserQueryParsingChains:
         }[data_type]
     
     @classmethod
-    def _call_function_2stage(
+    def _call_function_stage_1(
+        cls, 
+        chain: RunnableSequence, 
+        input: dict,
+    ) -> dict | None:
+        return cls._try_invoke_stage_1(chain, input)
+        
+    @classmethod
+    def _call_function_stage_2(
         cls, 
         chain: RunnableSequence, 
         input: dict, 
+        asset_schema: Type[BaseModel],
         fewshot_examples_dirpath: str | None = None
     ) -> dict | None:
-        metadata_field = input.pop("field")
-        dynamic_type = cls._create_dynamic_stage2_schema(metadata_field)
+        metadata_field = input["field"]
+        dynamic_type = cls._create_dynamic_stage2_schema(metadata_field, asset_schema)
 
         chain_to_use = chain
         if fewshot_examples_dirpath is not None:
             examples_path = os.path.join(fewshot_examples_dirpath, f"{metadata_field}.json")
             if os.path.exists(examples_path):
-                # TODO create few shot + create messages to be injected into the LLM
                 with open(examples_path) as f:
                     fewshot_examples = json.load(f)
                 if len(fewshot_examples) > 0:
                     example_prompt = ChatPromptTemplate.from_messages([
-                        ("user", "User Query: {input}"),
+                        ("user", "Condition: {input}"),
                         ("ai", "{output}"),
                     ])
                     fewshot_prompt = FewShotChatMessagePromptTemplate(
@@ -717,35 +819,121 @@ class UserQueryParsingChains:
                     
 
         input_variables = {
-            "query": json.dumps(input),
+            "query": input["condition"],
             "field_name": metadata_field,
             "field_description": DatasetMetadataTemplate.model_fields[metadata_field].description,
             "system_prompt": Llama_ManualFunctionCalling.populate_tool_prompt(dynamic_type)
         }
+        return cls._try_invoke_stage_2(chain_to_use, input_variables, dynamic_type)
+    
+    @classmethod
+    def _try_invoke_stage_1(
+        cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
+    ) -> dict | None:
+        best_output = None
+        best_count = 0
 
-        out = chain_to_use.invoke(input_variables)
-        try:
-            dynamic_type(**out)
-        except:
-            return None
-        return out
+        for _ in range(num_retry_attempts):
+            output = chain.invoke(input)
+            if output is None:
+                continue
+            try:
+                SurfaceQueryParsing(**output)
+                return output
+            except:
+                # TODO needs to be checked
+                curr_count = 0
+                for i in range(len(output["conditions"])):
+                    try:
+                        NaturalLanguageCondition(**output["conditions"][i])
+                        curr_count += 1
+                    except:
+                        output["conditions"][i]["discard"] = True
+                        continue
+                if curr_count > best_count:
+                    # check whether the entire object is correct once we get
+                    # rid of invalid conditions
+
+                    helper_object = deepcopy(output)
+                    helper_object["conditions"] = [
+                        cond 
+                        for cond in output["conditions"]
+                        if cond.get("discard", False) is False
+                    ]
+                    try:
+                        SurfaceQueryParsing(**helper_object)
+                        best_output = output
+                        best_count = curr_count
+                    except:
+                        continue
+
+        return best_output
+
+    @classmethod
+    def _try_invoke_stage_2(
+        cls, chain: RunnableSequence, input: dict, wrapper_schema: Type[BaseModel], num_retry_attempts: int = 5
+    ) -> dict | None:
+        best_output = None
+        best_count = 0
+
+        expression_schema = strip_list_type(
+            wrapper_schema.__annotations__["expressions"]
+        )
+        for _ in range(num_retry_attempts):
+            output = chain.invoke(input)
+            if output is None:
+                continue
+            try:
+                wrapper_schema(**output)
+                return output
+            except:
+                # TODO needs to be checked
+                curr_count = 0
+                for i in range(len(output["expressions"])):
+                    try:
+                        expression_schema(**output["expressions"][i])
+                        curr_count += 1
+                    except:
+                        output["expressions"][i]["discard"] = True
+                        continue
+                if curr_count > best_count:
+                    # check whether the entire object is correct once we get
+                    # rid of invalid expressions
+
+                    helper_object = deepcopy(output)
+                    helper_object["expressions"] = [
+                        expr 
+                        for expr in output["expressions"]
+                        if expr.get("discard", False) is False
+                    ]
+                    try:
+                        wrapper_schema(**helper_object)
+                        best_output = output
+                        best_count = curr_count
+                    except:
+                        continue
+            
+        return best_output
         
     @classmethod
-    def init_first_stage(
-        cls, fewshot_examples_path: str | None = None, 
+    def init_stage_1(
+        cls, 
+        asset_schema: Type[BaseModel],
+        fewshot_examples_path: str | None = None, 
     ) -> Llama_ManualFunctionCalling:
-        pydantic_model = UserQueryParsing
+        pydantic_model = SurfaceQueryParsing
         
         metadata_field_info = [
             {
                 "name": name, 
                 "description": field.description, 
                 "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
-            } for name, field in DatasetMetadataTemplate.model_fields.items()
+            } for name, field in asset_schema.model_fields.items()
         ]
         task_instructions = HumanMessagePromptTemplate.from_template(
             cls.task_instructions_stage1, 
-            partial_variables={"model_schema": json.dumps(metadata_field_info)})
+            partial_variables={"model_schema": json.dumps(metadata_field_info)}
+        )
 
         fewshot_prompt = ("user", "")
         if fewshot_examples_path is not None and os.path.exists(fewshot_examples_path):
@@ -771,23 +959,27 @@ class UserQueryParsingChains:
         return Llama_ManualFunctionCalling(
             model, 
             pydantic_model=pydantic_model, 
-            chat_prompt_no_system=chat_prompt_no_system
+            chat_prompt_no_system=chat_prompt_no_system,
+            call_function=cls._call_function_stage_1
         )
     
     @classmethod
-    def init_second_stage(
-        cls, fewshot_examples_dirpath: str | None = None
+    def init_stage_2(
+        cls, 
+        asset_schema: Type[BaseModel],
+        fewshot_examples_dirpath: str | None = None
     ) -> Llama_ManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages([
             ("user", cls.task_instructions_stage2),
-            ("user", "User Query: {query}"),
+            ("user", "Condition: {query}"),
         ])
         return Llama_ManualFunctionCalling(
             model, 
             pydantic_model=None, 
             chat_prompt_no_system=chat_prompt_no_system,
             call_function=partial(
-                cls._call_function_2stage, 
+                cls._call_function_stage_2, 
+                asset_schema=asset_schema,
                 fewshot_examples_dirpath=fewshot_examples_dirpath
             )
         )
@@ -796,47 +988,50 @@ class UserQueryParsingChains:
 if __name__ == "__main__":
     MODEL_NAME = "llama3.1:8b"
     model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
-
-    # fewshot_examples_path = "src/fewshot_examples/user_query_stage1/stage1.json"
-    # extraction_stage1 = UserQueryParsingChains.init_first_stage(fewshot_examples_path)
     
     # user_query = (
     #     "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints. The dataset has over 100k KB in size " +
     #     "and the dataset should contain one or more of the following languages: Slovak, Polish, French, German. However we don't wish the dataset to contain any English nor Spanish"
     # )
-
     user_query = (
-        "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints " +
+        "Retrieve all the translation datasets that have more than 10k datapoints and fewer than 100k datapoints " +
         "and the dataset should contain one or more of the following languages: Chinese, Inidian."
     )
     # user_query = "I dont want news datasets with any textual or video data."
     # user_query = "I want datasets with Slovak or English. It also needs to have either French or German"
- 
-    # out = extraction_stage1({"query": user_query})
 
-    output_1stage = {
-        "topic": 'translation Stanford datasets',
-        "conditions": [{'condition': 'datasets with more than 10k datapoints and fewer than 100k datapoints', 'field': 'num_datapoints', 'operator': 'AND'}, {'condition': 'contain one or more of the following languages: Chinese, Inidian', 'field': 'languages', 'operator': 'OR'}]
-    }
-    input_2stage = [
-        {    
-            "condition": condition["condition"],
-            "field": condition["field"],
-            "original_query": user_query
-        }
-        for condition in output_1stage["conditions"]
-    ]
 
-    extraction_stage2 = UserQueryParsingChains.init_second_stage()
+    # output_1stage = {
+    #     "topic": 'translation Stanford datasets',
+    #     "conditions": [{'condition': 'datasets with more than 10k datapoints and fewer than 100k datapoints', 'field': 'num_datapoints', 'operator': 'AND'}, {'condition': 'contain one or more of the following languages: Chinese, Inidian', 'field': 'languages', 'operator': 'OR'}]
+    # }
+    # input_2stage = [
+    #     {    
+    #         "condition": condition["condition"],
+    #         "field": condition["field"],
+    #     }
+    #     for condition in output_1stage["conditions"]
+    # ]
 
-    # out = extraction_stage2(input_2stage[-1])
+    # extraction_stage2 = UserQueryParsingStages.init_stage_2(asset_schema=DatasetMetadataTemplate)
 
-    outs = []
-    for inp in input_2stage:
-        out = extraction_stage2(inp)
-        outs.append(out)
+    # outs = []
+    # for inp in input_2stage:
+    #     out = extraction_stage2(inp)
+    #     outs.append(out)
         
+ 
+    user_query_parsing = UserQueryParsing(
+        asset_type="dataset",
+        stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
+    )
+    user_query_parsing(user_query)
+
+
+
     exit()
+
+    #######################
 
     # from preprocess.text_operations import ConvertJsonToString
     # with open("temp/data_examples/huggingface.json") as f:
