@@ -1,9 +1,10 @@
+from functools import partial
 from ast import literal_eval
 from operator import itemgetter
 import os
 import json
 import re
-from typing import Any, Self, Literal, Union, Optional, Type, TypeVar, get_origin, get_args, TypeAlias
+from typing import Any, Callable, Self, Literal, Union, Optional, Type, TypeVar, get_origin, get_args, TypeAlias
 from enum import Enum
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
@@ -11,11 +12,11 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.output_parsers import (
     JsonOutputParser, StrOutputParser, BaseOutputParser
 )
-from langchain_core.prompts import FewShotChatMessagePromptTemplate, ChatPromptTemplate
+from langchain_core.prompts import FewShotChatMessagePromptTemplate, ChatPromptTemplate, SystemMessagePromptTemplate, PromptTemplate, HumanMessagePromptTemplate
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_core.language_models.llms import BaseLLM
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableLambda, RunnableSequence
 from torch.utils.data import DataLoader
 
 from dataset import Queries
@@ -49,6 +50,7 @@ class Condition(BaseModel):
 ############################################################
 ############################################################
 
+
 class DatasetMetadataTemplate(BaseModel):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
@@ -56,57 +58,57 @@ class DatasetMetadataTemplate(BaseModel):
     
     platform: Literal["huggingface", "openml", "zenodo"] = Field(
         ..., 
-        description="The platform where the asset is hosted. ONLY PERMITTED VALUES: ['huggingface', 'openml', 'zenodo']"
+        description="The platform where the asset is hosted. Only permitted values: ['huggingface', 'openml', 'zenodo']"
     )
     date_published: str = Field(
         ..., 
-        description="The original publication date of the asset in the format 'YYYY-MM-DD'."
+        description="The original publication date of the asset in the format 'YYYY-MM-DDTHH-MM-SS'."
     )
     year: int = Field(
         ..., 
-        description="The year extracted from the publication date."
+        description="The year extracted from the publication date in integer data type."
     )
     month: int = Field(
         ..., 
-        description="The month extracted from the publication date."
+        description="The month extracted from the publication date in integer data type."
     )
     domains: Optional[list[Literal["NLP", "Computer Vision", "Audio Processing"]]] = Field(
         None, 
-        description="The AI technical domains of the asset, describing the type of data and AI task involved. ONLY PERMITTED VALUES: ['NLP', 'Computer Vision', 'Audio Processing']. Leave the list empty if not specified."
+        description="The AI technical domains of the asset, describing the type of data and AI task involved. Only permitted values: ['NLP', 'Computer Vision', 'Audio Processing']"
     )
     task_types: Optional[list[str]] = Field(
         None, 
-        description="The machine learning tasks supported by this asset. Acceptable values include task types found on HuggingFace (e.g., 'token-classification', 'question-answering', ...). Leave the list empty if not specified"
+        description="The machine learning tasks supported by this asset. Acceptable values include task types found on HuggingFace (e.g., 'token-classification', 'question-answering', ...)"
     )
     license: Optional[str] = Field(
         None, 
-        description="The license type governing the asset usage, if specified."
+        description="The license type governing the asset usage, e.g., 'mit', 'apache-2.0'"
     )
 
     # Dataset-specific metadata
     size_in_mb: Optional[float] = Field(
         None, 
-        description="The total size of the dataset in megabytes. If the size is not explicitly specified in the dataset descritpion, sum up the sizes of individual files instead if possible. Don't forget to convert the sizes to MBs"
+        description="The total size of the dataset in megabytes (float). If the size is not explicitly specified in the dataset descritpion, sum up the sizes of individual files instead if possible. Don't forget to convert the sizes to MBs"
     )
     num_datapoints: Optional[int] = Field(
         None, 
-        description="The number of data points in the dataset, if specified."
+        description="The number of data points in the dataset in integer data type"
     )
     size_category: Optional[str] = Field(
         None, 
-        description="The general size category of the dataset, typically specified in ranges such as '10k<n<100k' found on HuggingFace. If you know the precise number of datapoints you may infer the size category."
+        description="The general size category of the dataset, typically specified in ranges such as '1k<n<10k', '10k<n<100k', etc... found on HuggingFace."
     )
     modalities: Optional[list[Literal["text", "tabular", "audio", "video", "image"]]] = Field(
         None, 
-        description="The modalities present in the dataset, such as 'text', 'tabular', 'audio', 'video', or 'image'. Leave the list empty if not specified"
+        description="The modalities present in the dataset. Only permitted values: ['text', 'tabular', 'audio', 'video', 'image']"
     )
     data_formats: Optional[list[str]] = Field(
         None, 
-        description="The file formats of the dataset (e.g., 'CSV', 'JSON', 'Parquet'), if specified. Leave the list empty if not specified"
+        description="The file formats of the dataset (e.g., 'CSV', 'JSON', 'Parquet')."
     )
     languages: Optional[list[str]] = Field(
         None, 
-        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'EN' for English, 'ES' for Spanish, 'FR' for French, ...). Leave the list empty if not specified"
+        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...)."
     )
 
 
@@ -116,19 +118,26 @@ def is_optional_type(annotation: Type) -> bool:
     return False
 
 
+def is_list_type(annotation: Type) -> bool:
+    return get_origin(annotation) is list
+
 def strip_optional_type(annotation: Type) -> Type:
-    if get_origin(annotation) is Union:
-        args = get_args(annotation)
-        if type(None) in args:
-            return next(arg for arg in args if arg is not type(None))
+    if is_optional_type(annotation):
+        return next(arg for arg in get_args(annotation) if arg is not type(None))
+    return annotation
+
+
+def strip_list_type(annotation: Type) -> Type:
+    if is_list_type(annotation):
+        return get_args(annotation)[0]
     return annotation
 
 
 def wrap_in_list_type_if_not_already(annotation: Type) -> Type:
-    if get_origin(annotation) is not list:
-        annotation = list[annotation]
-    return annotation
-
+    if is_list_type(annotation):
+        return annotation
+    return list[annotation]
+    
 
 def user_query_metadata_extraction_schema_factory(
     template_type: Type[BaseModel], 
@@ -162,12 +171,9 @@ def user_query_metadata_extraction_schema_factory(
         arguments.update(new_field_values)
         return type(schema_type_name, (BaseModel, ), arguments)
     
-    # Simplified schema
-
-
 
 def user_query_field_factory(
-    field_type_name: str, 
+    field_type_name: str,
     data_type: Type[BaseModel], 
 ) -> Type[BaseModel]:    
     return Optional[list[type(
@@ -250,49 +256,61 @@ class Llama_ManualFunctionCalling:
     """
 
     def __init__(
-        self, llm: ChatOllama, pydantic_model: Type[BaseModel], 
-        user_query_text: str, examples: list[dict] | None = None
+        self, 
+        llm: ChatOllama, 
+        pydantic_model: Type[BaseModel] | None, 
+        chat_prompt_no_system: ChatPromptTemplate,
+        call_function: Callable[[RunnableSequence, dict], dict | None] = None,
     ) -> None:
-        self.llm = llm
         self.pydantic_model = pydantic_model
-        self.user_query_template = user_query_text
-        self.examples = examples
+        self.call_function = call_function
 
-        # build prompt
-        example_prompt = ChatPromptTemplate.from_messages([
-            ("human", "User Query: {input}"),
-            ("ai", "{output}"),
-        ])
-        fewshot_prompt = FewShotChatMessagePromptTemplate(
-            examples=self.transform_fewshot_examples(examples),
-            example_prompt=example_prompt
-        )
         composite_prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(self.populate_tool_prompt(pydantic_model)), # no input variables, hence the use of message
-            HumanMessage(user_query_text), # no input variables, hence the use of message
-            fewshot_prompt,
-            ("human", "User Query: {query}"),
-        ])
+            ("system", "{system_prompt}"),
+        ]) + chat_prompt_no_system
+        if pydantic_model is not None:
+            composite_prompt = composite_prompt.partial(
+                system_prompt = self.populate_tool_prompt(pydantic_model)
+            )
 
-        self.chain = composite_prompt | self.llm | StrOutputParser() | RunnableLambda(
-            self.convert_llm_string_output_to_tool
+        self.chain = (
+            composite_prompt | 
+            llm | 
+            StrOutputParser() | 
+            RunnableLambda(
+                self.convert_llm_string_output_to_tool
+            )
         )
 
-    def __call__(self, query: str) -> dict | None:
-        out = self.chain.invoke({"query": query})
+    def __call__(self, input: dict) -> dict | None:
+        if self.call_function is not None:
+            return self.call_function(self.chain, input)
 
-        try:
-            self.pydantic_model(**out)
-        except Exception as e:
-            print(e)
+        out = self.chain.invoke(input)
+        if self.validate_output(out, self.pydantic_model) is False:
             return None
         return out
     
-    def transform_fewshot_examples(self, examples: list[dict]) -> str:
+
+    @classmethod
+    def validate_output(
+        cls, output: dict, pydantic_model: Type[BaseModel] | None
+    ) -> bool:
+        if pydantic_model is not None:
+            try:
+                pydantic_model(**output)
+            except Exception as e:
+                return False
+        return True
+    
+    @classmethod
+    def transform_fewshot_examples(
+        cls, pydantic_model: Type[BaseModel], examples: list[dict]
+    ) -> str:
         return [
             {
               "input": ex["input"],
-              "output": f"<function={self.pydantic_model.__name__}>{json.dumps(ex['output'])}</function>"
+              "output": f"<function={pydantic_model.__name__}>{json.dumps(ex['output'])}</function>"
             } for ex in examples
         ]
     
@@ -309,17 +327,21 @@ class Llama_ManualFunctionCalling:
                 return None
         return None
 
-    def populate_tool_prompt(self, pydantic_model: Type[BaseModel]) -> str:
-        tool_schema = self.transform_simple_pydantic_schema_to_tool_schema()
+    @classmethod
+    def populate_tool_prompt(cls, pydantic_model: Type[BaseModel]) -> str:
+        tool_schema = cls.transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
 
-        return self.tool_prompt_template.format(
+        return cls.tool_prompt_template.format(
             function_name=tool_schema["name"],
             function_description=tool_schema["description"],
             function_schema=json.dumps(tool_schema)
         )
 
-    def transform_simple_pydantic_schema_to_tool_schema(self) -> dict:
-        pydantic_schema = self.pydantic_model.model_json_schema()
+    @classmethod
+    def transform_simple_pydantic_schema_to_tool_schema(
+        cls, pydantic_model: Type[BaseModel]
+    ) -> dict:
+        pydantic_schema = pydantic_model.model_json_schema()
         
         pydantic_schema.pop("type")
         pydantic_schema["name"] = pydantic_schema.pop("title")
@@ -526,6 +548,10 @@ class NaturalLanguageCondition(BaseModel):
         description="Natural language condition corresponding to a particular metadata field we use for filtering. It may contain either only one value to be compared to metadata field, or multiple values if there's an OR logical operator in between those values"
     )
     field: str = Field(..., description="Name of the metadata field")
+    
+    # helper field used for better operator analysis. Even though the model doesnt assign operator correctly all the time
+    # it's a way of forcing the model to focus on logical operators in between conditions
+    # since the value of this attribute is unreliable we dont use it in the second stage
     operator: Literal["AND", "OR", "NONE"] = Field("NONE", description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead.")
 
 
@@ -535,37 +561,8 @@ class UserQueryParsing(BaseModel):
     conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
 
 
-if __name__ == "__main__":
-    MODEL_NAME = "llama3.1:8b"
-
-    attribute_types = {
-        "platform": "string",
-        "date_published": "string",
-        "year": "integer",
-        "month": "integer",
-        "domains": "string",
-        "task_types": "string",
-        "license": "string",
-        "size_in_mb": "float",
-        "num_datapoints": "integer",
-        "size_category": "string",
-        "modalities": "string",
-        "data_formats": "string",
-        "languages": "string",
-    }
-    metadata_field_info = [
-        {
-            "name": name, 
-            "description": field.description, 
-            "type": attribute_types[name]
-        } for name, field in DatasetMetadataTemplate.model_fields.items()
-    ]
-
-    path = "src/fewshot_examples/user_query_extraction_stage1.json"
-    with open(path) as f:
-        fewshot_examples = json.load(f)    
-
-    user_prompt = """
+class UserQueryParsingChains:
+    task_instructions_stage1 = """
         Your task is to process a user query that may contain multiple natural language conditions and a general topic. Each condition corresponds to a specific metadata field and describes one or more values that should be compared against that field.
         These conditions are subsequently used to filter out unsatisfactory data in database. On the other hand, the topic is used in semantic search to find the most relevant documents to the thing user seeks for
         
@@ -595,36 +592,255 @@ if __name__ == "__main__":
         - A topic is a concise, high-level description of the main subject of the query. 
         - It should exclude specific filtering conditions but capture the core concept or intent of the query.
         - If the query does not explicitly state a topic, infer it based on the overall context of the query.
-
     """
 
-    user_prompt = user_prompt.format(model_schema=json.dumps(metadata_field_info))
+    task_instructions_stage2 = """
+        Your task is to parse a single condition extracted from a user query and transform it into a structured format for further processing. The condition consists of one or more expressions combined with a logical operator.
 
+        **Key Terminology:**
+        1. **Expression**:
+        - Represents a single comparison between a value and a metadata field.
+        - Includes:
+            - `raw_value`: The original value directly retrieved from the natural language condition.
+            - `processed_value`: The transformed value, converted to the appropriate data type and format based on the value restrictions imposed on the metadata field '{field_name}'.
+            - `comparison_operator`: The operator used for comparison (e.g., >, <, ==, !=).
+
+        2. **Condition**:
+        - Consists of one or more expressions combined with a logical operator.
+        - Includes:
+            - `expressions`: A list of expressions (at least one).
+            - `logical_operator`: The logical relationship between expressions (AND/OR). This operator only makes sense when there are multiple expressions. If there's only one expression, set this to AND
+
+        **Input:**
+        On input You will receive:
+        - `condition**: The natural language condition extracted from the user query.
+        - `original_query`: The full user query for retrieving additional context regarding this condition.
+
+        **Instructions**:
+        1. Identify potentionally all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
+        2. Make sure that you transform the value (processed_value) associated with each expression, so that it has the same data type and complies with the same restrictions as the ones applied to metadata field '{field_name}'. The metadata field description and the its value restrictions are the following: {field_description}
+        3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
+    """
+
+    @classmethod
+    def _create_dynamic_stage2_schema(cls, field_name: str) -> Type[BaseModel]:
+        original_field = DatasetMetadataTemplate.model_fields[field_name]
+        
+        expression_class = type(
+            f"Expression_{field_name}",
+            (BaseModel, ),
+            {
+                "__annotations__": {
+                    "raw_value": str,
+                    "processed_value": strip_list_type(strip_optional_type(original_field.annotation)),
+                    "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
+                },
+
+                # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble
+                # properly processing the values immediately. By defining an explicit intermediate step, to write down the raw value before transforming it,
+                # we have actually managed to improve the model performance
+                "raw_value": Field(..., description=f"The value used to compare to metadata field '{field_name}' in its raw state, extracted from the natural language condition"), 
+                "processed_value": Field(..., description=f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."),
+                "comparison_operator": Field(..., description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'.")
+            }
+        )
+        return type(
+            f"Condition_{field_name}",
+            (BaseModel, ),
+            {
+                "__annotations__": {
+                    "expressions": list[expression_class],
+                    "logical_operator": Literal["AND", "OR"]
+                },
+                "__doc__": f"Parsing of one condition pertaining to metadata field '{field_name}'. Condition comprises one or more expressions used to for filtering purposes",
+                "expressions": Field(..., descriptions="List of expressions composing the entire condition. Each expression is associated with a particular value and a comparison operator used to compare the value to the metadata field."),
+                "logical_operator": Field(..., descriptions="The logical operator that performs logical operations (AND/OR) between multiple expressions. If there's only one expression set this value to 'AND'.")
+            }
+        )
+
+    @classmethod
+    def _get_inner_most_primitive_type(cls, data_type: Type) -> Type:
+        origin = get_origin(data_type)
+        if origin is Literal:
+            return type(get_args(data_type)[0])
+        if origin is not None:
+            args = get_args(data_type)
+            if args: 
+                return cls._get_inner_most_primitive_type(args[0])  # Check the first argument for simplicity
+        return data_type
+
+    @classmethod
+    def _translate_primitive_type_to_str(cls, data_type: Type) -> str:
+        if data_type not in [str, int, float]:
+            raise ValueError("Not supported data type")
+        return {
+            str: "string",
+            int: "integer",
+            float: "float"
+        }[data_type]
+    
+    @classmethod
+    def _call_function_2stage(
+        cls, 
+        chain: RunnableSequence, 
+        input: dict, 
+        fewshot_examples_dirpath: str | None = None
+    ) -> dict | None:
+        metadata_field = input.pop("field")
+        dynamic_type = cls._create_dynamic_stage2_schema(metadata_field)
+
+        chain_to_use = chain
+        if fewshot_examples_dirpath is not None:
+            examples_path = os.path.join(fewshot_examples_dirpath, f"{metadata_field}.json")
+            if os.path.exists(examples_path):
+                # TODO create few shot + create messages to be injected into the LLM
+                with open(examples_path) as f:
+                    fewshot_examples = json.load(f)
+                if len(fewshot_examples) > 0:
+                    example_prompt = ChatPromptTemplate.from_messages([
+                        ("user", "User Query: {input}"),
+                        ("ai", "{output}"),
+                    ])
+                    fewshot_prompt = FewShotChatMessagePromptTemplate(
+                        examples=Llama_ManualFunctionCalling.transform_fewshot_examples(
+                            dynamic_type, fewshot_examples
+                        ),
+                        example_prompt=example_prompt
+                    )
+                    old_prompt: ChatPromptTemplate = chain.steps[0]
+                    new_prompt = ChatPromptTemplate.from_messages([
+                        *old_prompt.messages[:-1],
+                        fewshot_prompt,
+                        old_prompt.messages[-1]
+                    ])
+                    chain_to_use = RunnableSequence(new_prompt, *chain.steps[1:])
+                    
+
+        input_variables = {
+            "query": json.dumps(input),
+            "field_name": metadata_field,
+            "field_description": DatasetMetadataTemplate.model_fields[metadata_field].description,
+            "system_prompt": Llama_ManualFunctionCalling.populate_tool_prompt(dynamic_type)
+        }
+
+        out = chain_to_use.invoke(input_variables)
+        try:
+            dynamic_type(**out)
+        except:
+            return None
+        return out
+        
+    @classmethod
+    def init_first_stage(
+        cls, fewshot_examples_path: str | None = None, 
+    ) -> Llama_ManualFunctionCalling:
+        pydantic_model = UserQueryParsing
+        
+        metadata_field_info = [
+            {
+                "name": name, 
+                "description": field.description, 
+                "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
+            } for name, field in DatasetMetadataTemplate.model_fields.items()
+        ]
+        task_instructions = HumanMessagePromptTemplate.from_template(
+            cls.task_instructions_stage1, 
+            partial_variables={"model_schema": json.dumps(metadata_field_info)})
+
+        fewshot_prompt = ("user", "")
+        if fewshot_examples_path is not None and os.path.exists(fewshot_examples_path):
+            with open(fewshot_examples_path) as f:
+                fewshot_examples = json.load(f)
+            if len(fewshot_examples) > 0:
+                example_prompt = ChatPromptTemplate.from_messages([
+                    ("user", "User Query: {input}"),
+                    ("ai", "{output}"),
+                ])
+                fewshot_prompt = FewShotChatMessagePromptTemplate(
+                    examples=Llama_ManualFunctionCalling.transform_fewshot_examples(
+                        pydantic_model, fewshot_examples
+                    ),
+                    example_prompt=example_prompt
+                )
+    
+        chat_prompt_no_system = ChatPromptTemplate.from_messages([
+            task_instructions,
+            fewshot_prompt,
+            ("user", "User Query: {query}"),
+        ])
+        return Llama_ManualFunctionCalling(
+            model, 
+            pydantic_model=pydantic_model, 
+            chat_prompt_no_system=chat_prompt_no_system
+        )
+    
+    @classmethod
+    def init_second_stage(
+        cls, fewshot_examples_dirpath: str | None = None
+    ) -> Llama_ManualFunctionCalling:
+        chat_prompt_no_system = ChatPromptTemplate.from_messages([
+            ("user", cls.task_instructions_stage2),
+            ("user", "User Query: {query}"),
+        ])
+        return Llama_ManualFunctionCalling(
+            model, 
+            pydantic_model=None, 
+            chat_prompt_no_system=chat_prompt_no_system,
+            call_function=partial(
+                cls._call_function_2stage, 
+                fewshot_examples_dirpath=fewshot_examples_dirpath
+            )
+        )
+
+
+if __name__ == "__main__":
+    MODEL_NAME = "llama3.1:8b"
     model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
 
-    extraction_stage1 = Llama_ManualFunctionCalling(
-        model, 
-        UserQueryParsing, 
-        user_query_text=user_prompt, 
-        examples=fewshot_examples
-    )
+    # fewshot_examples_path = "src/fewshot_examples/user_query_stage1/stage1.json"
+    # extraction_stage1 = UserQueryParsingChains.init_first_stage(fewshot_examples_path)
+    
+    # user_query = (
+    #     "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints. The dataset has over 100k KB in size " +
+    #     "and the dataset should contain one or more of the following languages: Slovak, Polish, French, German. However we don't wish the dataset to contain any English nor Spanish"
+    # )
 
     user_query = (
-        "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints. The dataset has over 100k KB in size " +
-        "and the dataset should contain one or more of the following languages: Slovak, Polish, French, German. However we don't wish the dataset to contain any English nor Spanish"
+        "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints " +
+        "and the dataset should contain one or more of the following languages: Chinese, Inidian."
     )
     # user_query = "I dont want news datasets with any textual or video data."
     # user_query = "I want datasets with Slovak or English. It also needs to have either French or German"
+ 
+    # out = extraction_stage1({"query": user_query})
 
+    output_1stage = {
+        "topic": 'translation Stanford datasets',
+        "conditions": [{'condition': 'datasets with more than 10k datapoints and fewer than 100k datapoints', 'field': 'num_datapoints', 'operator': 'AND'}, {'condition': 'contain one or more of the following languages: Chinese, Inidian', 'field': 'languages', 'operator': 'OR'}]
+    }
+    input_2stage = [
+        {    
+            "condition": condition["condition"],
+            "field": condition["field"],
+            "original_query": user_query
+        }
+        for condition in output_1stage["conditions"]
+    ]
 
-    out = extraction_stage1(user_query)
+    extraction_stage2 = UserQueryParsingChains.init_second_stage()
 
+    # out = extraction_stage2(input_2stage[-1])
 
+    outs = []
+    for inp in input_2stage:
+        out = extraction_stage2(inp)
+        outs.append(out)
+        
     exit()
 
     # from preprocess.text_operations import ConvertJsonToString
     # with open("temp/data_examples/huggingface.json") as f:
-    #     data = json.load(f)[0]
+    #     data = json.load(f)[0]3
     # text_format = ConvertJsonToString().extract_relevant_info(data)
     
     # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=False)

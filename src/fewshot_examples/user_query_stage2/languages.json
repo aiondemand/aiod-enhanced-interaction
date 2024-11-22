@@ -1,0 +1,43 @@
+[
+    {
+        "input": "{\"condition\": \"contain Czech or Italian data\", \"original_query\": \"Retrieve datasets that have been created this year and contain Czech or Italian data\"}",
+        "output": {
+            "expressions": [
+                {
+                    "raw_value": "Czech",
+                    "processed_value": "cz",
+                    "comparison_operator": "=="
+                },
+                {
+                    "raw_value": "Italian",
+                    "processed_value": "it",
+                    "comparison_operator": "=="
+                }
+            ],
+            "logical_operator": "OR"
+        }
+    },
+    {
+        "input": "{\"condition\": \"containing all of these languages: French, German, Russian\", \"original_query\": \"Summarization news datasets containing all of these languages: French, German, Russian\"}",
+        "output": {
+            "expressions": [
+                {
+                    "raw_value": "French",
+                    "processed_value": "fr",
+                    "comparison_operator": "=="
+                },
+                {
+                    "raw_value": "German",
+                    "processed_value": "de",
+                    "comparison_operator": "=="
+                },
+                {
+                    "raw_value": "Russian",
+                    "processed_value": "ru",
+                    "comparison_operator": "=="
+                }
+            ],
+            "logical_operator": "AND"
+        }
+    }
+]

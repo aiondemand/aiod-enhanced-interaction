@@ -80,10 +80,6 @@ class ChainOutputOpts:
         
         schema_name = self.pydantic_model.__name__
         llm_fc = llm.bind_tools([self.pydantic_model], tool_choice=schema_name)
-
-        # TODO
-        out = llm_fc.invoke("testing")
-
         return llm_fc, JsonOutputKeyToolsParser(key_name=schema_name)
     
 
