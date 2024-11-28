@@ -68,8 +68,7 @@ def app_init() -> None:
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
         target_func=partial(
-            compute_embeddings_for_aiod_assets_wrapper,
-            first_invocation=False,  # TODO test recurrent
+            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
         )
     )
 
