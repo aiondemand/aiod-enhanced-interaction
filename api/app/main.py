@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from functools import partial
 from threading import Thread
+from time import sleep
 
 from app.routers import query as query_router
 from app.services.database import Database
@@ -39,6 +40,8 @@ app.add_middleware(
 
 
 def app_init() -> None:
+    sleep(10)  # Headstart for Milvus to fully initialize
+
     # Instantiate singletons before utilizing them in other threads
     Database()
 
@@ -54,6 +57,9 @@ def app_init() -> None:
                 compute_embeddings_for_aiod_assets_wrapper, first_invocation=False
             ),
         ),
+        # Warning: We should not set the interval of recurring updates to a smaller
+        # timespan than one day, otherwise some assets may be missed
+        # Default is to perform the recurring update once a day
         CronTrigger(hour=0, minute=0),
     )
     SCHEDULER.start()
@@ -62,7 +68,8 @@ def app_init() -> None:
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
         target_func=partial(
-            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
+            compute_embeddings_for_aiod_assets_wrapper,
+            first_invocation=False,  # TODO test recurrent
         )
     )
 

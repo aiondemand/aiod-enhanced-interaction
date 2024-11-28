@@ -91,6 +91,8 @@ Perform the following steps to deploy the service:
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `DEPLOY_FASTAPI_ONLY`: Boolean value that denotes whether we wish to deploy only the FastAPI service or also other services related to the Milvus database.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
+    - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`": An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform. 
+    - `INITIAL_TINYDB_JSON_FILEPATH`: An optional variable representing a filepath to a JSON file containing metadata regarding past performed updates on AIoD and associated executed operations on vector DB. If you wish to utilize already precomputed embeddings and you have set a value for the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` variable, this variable is mandatory to be set as well.
 
     - Milvus credentials to use/initiate services with (Only necessary to define when deploying Milvus services -> `DEPLOY_FASTAPI_ONLY` is set to `False`):
         - `MILVUS_NEW_ROOT_PASS`: New root password used to replace a default one. The password change is only performed during the first initialization of the Milvus service.
@@ -111,11 +113,13 @@ Perform the following steps to deploy the service:
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
     1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
-
+1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `INITIAL_TINYDB_JSON_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `sudo ./populate-db.sh`. This script is blocking, so once it finishes, it prints out whether the migration has been successful or not
+    - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
+    - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `DEPLOY_FASTAPI_ONLY` ENV variables: `./deploy.sh`
 
-### Stop the application
-If you wish to stop the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop`
+### Stop/Delete the application
+If you wish to stop or remove the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop` or `./deploy.sh --remove` respectively.
         
 ### VM preparations
 

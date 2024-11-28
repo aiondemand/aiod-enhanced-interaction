@@ -31,6 +31,8 @@ fi
 # What operation we wish to perform
 COMPOSE_COMMAND="up -d --build"
 if [ "$1" == "--stop" ]; then  
+  COMPOSE_COMMAND="stop"
+elif [ "$1" == "--remove" ]; then  
   COMPOSE_COMMAND="down"
 fi
 

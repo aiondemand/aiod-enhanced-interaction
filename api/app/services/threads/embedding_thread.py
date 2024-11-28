@@ -1,7 +1,7 @@
 import gc
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
 from time import sleep
 from typing import Callable
@@ -10,9 +10,10 @@ import numpy as np
 import requests
 import torch
 from app.config import settings
-from app.helper import parse_asset_date
+from app.helper import translate_datetime_to_aiod_params
 from app.models.asset_collections import AssetCollection
 from app.schemas.enums import AssetType
+from app.schemas.request_params import RequestParams
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
 from app.services.inference.model import AiModel
@@ -45,7 +46,7 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
 
 async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
-    model = AiModel(device=AiModel.get_device(first_invocation))
+    model = AiModel(device=AiModel.get_device())
     database = Database()
     embedding_store = await Milvus_EmbeddingStore.init()
 
@@ -98,30 +99,35 @@ def process_aiod_assets_wrapper(
     asset_type: AssetType,
 ) -> None:
     is_setup_stage = asset_collection.setup_done is False
-    asset_url = settings.AIOD.get_asset_url(asset_type, is_setup_stage)
-    count_url = settings.AIOD.get_asset_count_url(asset_type, is_setup_stage)
+    asset_url = settings.AIOD.get_asset_url(asset_type)
     collection_name = settings.MILVUS.get_collection_name(asset_type)
     existing_doc_ids = embedding_store.get_all_document_ids(collection_name)
 
     last_update = asset_collection.last_update
-    offset = last_update.aiod_asset_offset
-    if offset > 0:
-        logger.info(f"\tContinue asset embedding process from asset offset={offset}")
+    url_params = RequestParams(
+        offset=last_update.aiod_asset_offset,
+        limit=settings.AIOD.WINDOW_SIZE,
+        from_time=getattr(
+            last_update, "from_time", datetime.fromtimestamp(0, tz=timezone.utc)
+        ),
+        to_time=last_update.to_time,
+    )
+    if url_params.offset > 0:
+        logger.info(
+            f"\tContinue asset embedding process from asset offset={url_params.offset}"
+        )
 
     while True:
         assets_to_add, asset_ids_to_remove = get_assets_to_add_and_delete(
             asset_url,
-            offset,
+            url_params,
             existing_doc_ids=existing_doc_ids,
-            count_url=count_url,
             setup_stage=is_setup_stage,
-            from_time=getattr(last_update, "from_time", None),
-            to_time=last_update.to_time,
         )
         if assets_to_add is None:
             break
 
-        # Remove embeddings
+        # Remove embeddings associated with old versions of assets
         num_emb_removed = 0
         if len(asset_ids_to_remove) > 0:
             num_emb_removed = embedding_store.remove_embeddings(
@@ -131,7 +137,8 @@ def process_aiod_assets_wrapper(
                 ~np.isin(existing_doc_ids, asset_ids_to_remove)
             ].tolist()
 
-        # Add embeddings
+        # Add embeddings of new assets or of new iteration of assets
+        # we have just deleted
         num_emb_added = 0
         if len(assets_to_add) > 0:
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
@@ -153,7 +160,7 @@ def process_aiod_assets_wrapper(
             embeddings_added=num_emb_added, embeddings_removed=num_emb_removed
         )
         database.asset_collections.upsert(asset_collection)
-        offset += settings.AIOD.WINDOW_SIZE
+        url_params.offset += settings.AIOD.WINDOW_SIZE
 
     asset_collection.finish()
     database.asset_collections.upsert(asset_collection)
@@ -161,72 +168,79 @@ def process_aiod_assets_wrapper(
 
 def get_assets_to_add_and_delete(
     url: str,
-    offset: int,
+    url_params: RequestParams,
     existing_doc_ids: list[str],
-    count_url: str | None = None,
     setup_stage: bool = False,
-    from_time: datetime | None = None,
-    to_time: datetime | None = None,
 ) -> tuple[list[dict] | None, list[str] | None]:
-    assets = recursive_fetch(url, offset, settings.AIOD.WINDOW_SIZE)
+    mark_recursions = []
+    assets = recursive_fetch(url, url_params, mark_recursions)
 
+    if len(assets) == 0 and len(mark_recursions) == 0:
+        # We have reached the end of the AIoD database
+        return None, None
     if len(assets) == 0:
-        if count_url is None:
-            return None, None
-        total_number_of_assets = _perform_request(count_url).json()
-        if offset >= total_number_of_assets:
-            return None, None
+        # The last page contained all but valid data
+        # We need to jump to a next page
         return [], []
-    elif settings.AIOD.TESTING and offset >= 500:
+    if settings.AIOD.TESTING and url_params.offset >= 500:
         return None, None
 
-    # TODO this function will be changed once we have a new AIoD endpoints
-    # that work with different schemas etc...
-
-    # Only assets updated till the start of this job
-    assets = [
-        obj for obj in assets if (parse_asset_date(obj, none_value="zero") < to_time)
-    ]
     asset_ids = [str(obj["identifier"]) for obj in assets]
-    new_indices = np.where(~np.isin(asset_ids, existing_doc_ids))[0]
-    assets_to_add = [assets[idx] for idx in new_indices]
+    new_asset_idx = np.where(~np.isin(asset_ids, existing_doc_ids))[0]
+    existing_asset_idx = np.where(np.isin(asset_ids, existing_doc_ids))[0]
 
+    assets_to_add = [assets[idx] for idx in new_asset_idx]
     if setup_stage:
+        # In setup stage, we dont delete any assets despite potentionally already
+        # being in the vector db
         asset_ids_to_del = []
         return assets_to_add, asset_ids_to_del
     else:
-        modified_dates = np.array(
-            [parse_asset_date(obj, none_value="now") for obj in assets]
-        )
-        update_indices = np.where(
-            (np.isin(asset_ids, existing_doc_ids)) & (modified_dates > from_time)
-        )[0]
-
-        assets_to_add.extend([assets[idx] for idx in update_indices])
-        asset_ids_to_del = [asset_ids[idx] for idx in update_indices]
+        # When performing recurring updates, we do delete existing assets as these
+        # ones will be their new iteration
+        assets_to_add.extend([assets[idx] for idx in existing_asset_idx])
+        asset_ids_to_del = [asset_ids[idx] for idx in existing_asset_idx]
         return assets_to_add, asset_ids_to_del
 
 
-def recursive_fetch(url: str, offset: int, limit: int) -> list:
+def recursive_fetch(
+    url: str, url_params: RequestParams, mark_recursions: list[int]
+) -> list:
     try:
         sleep(settings.AIOD.TIMEOUT_REQUEST_INTERVAL_SEC)
-        queries = {"schema": "aiod", "offset": offset, "limit": limit}
+        queries = _build_real_url_queries(url_params)
         response = _perform_request(url, queries)
         data = response.json()
     except HTTPError as e:
         if e.response.status_code != 500:
             raise e
-        if limit == 1:
+        if url_params.limit == 1:
             return []
 
-        first_half_limit = limit // 2
-        second_half_limit = limit - first_half_limit
+        mark_recursions.append(1)
+        first_half_limit = url_params.limit // 2
+        second_half_limit = url_params.limit - first_half_limit
 
-        first_half = recursive_fetch(url, offset, first_half_limit)
-        second_half = recursive_fetch(url, offset + first_half_limit, second_half_limit)
+        first_half = recursive_fetch(url, url_params.new_page(limit=first_half_limit))
+        second_half = recursive_fetch(
+            url,
+            url_params.new_page(
+                offset=url_params.offset + first_half_limit, limit=second_half_limit
+            ),
+        )
         return first_half + second_half
 
     return data
+
+
+def _build_real_url_queries(url_params: RequestParams) -> dict:
+    return {
+        "schema": "aiod",
+        "offset": url_params.offset,
+        "limit": url_params.limit,
+        "date_modified_after": translate_datetime_to_aiod_params(url_params.from_time),
+        "date_modified_before": translate_datetime_to_aiod_params(url_params.to_time),
+    }
 
 
 def _perform_request(

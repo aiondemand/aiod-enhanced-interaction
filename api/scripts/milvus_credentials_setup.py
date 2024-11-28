@@ -1,10 +1,13 @@
 import os
+from time import sleep
 
 from pymilvus import MilvusClient
 
 if __name__ == "__main__":
     start_msg = "============ Milvus credentials setup INITIALIZED ============"
     fin_msg = "============ Milvus credentials setup COMPLETED ============"
+
+    sleep(10)  # Headstart for Milvus to fully initialize
 
     print(start_msg)
     uri = os.getenv("MILVUS__URI")
