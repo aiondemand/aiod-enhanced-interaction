@@ -28,7 +28,6 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
-echo "lets go"
 docker compose -f docker-compose.yml -f docker-compose.populate.yml up populate-db --build
 EXIT_CODE=$?
 docker compose -f docker-compose.yml -f docker-compose.populate.yml down
