@@ -1,8 +1,8 @@
 # Semantic search module
 
-This API service expands the AIoD platform by providing a separatelly managed 
+This API service expands the AIoD platform by providing a separately managed 
 semantic search module that can be applied to AIoD assets, 
-i.e, Datasets, Models, ublications, etc.
+i.e, Datasets, Models, Publications, etc.
 
 This API service contains the following key functionalities:
 - API endpoints for retrieving the most similar assets to a user query
@@ -41,12 +41,12 @@ is processed, the results are saved in a local nosql file-based database and are
 
 # Repo Setup
 
-In this section, we describe the necessary steps to take to setup this repository for either development or deployment purposes. 
+In this section, we describe the necessary steps to take to set up this repository for either development or deployment purposes. 
 
 **Moving forward, we assume your working directory is pointed to the `api/` directory.**
 
-## Enviroment variables and configs
-Regardless whether you want to further develop this codespace or deploy the service, you need to create `env.app` file that can be created from the `env.app.sample` template. 
+## Environment variables and configs
+Regardless whether you want to further develop this codespace or deploy the service, you need to create `.env.app` file that can be created from the `.env.app.sample` template. 
 In this file you find the following ENV variables:
 - `TINYDB_FILEPATH`: A filepath where to store a file-based noSQL database, specifically a JSON file, e.g., `./data/db.json` *(Is overwritten in docker-compose.yml)*
 - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not. *(Is overwritten in docker-compose.yml)*
@@ -84,7 +84,7 @@ To start the application you can either:
 ## Deployment
 
 For deploying purposes, we use a Docker compose config enabling us to deploy not only FastAPI service, but also Milvus vector database. If you wish to deploy the Milvus vector database
-and the FastAPI service separatelly, you may do so by setting the `DEPLOY_FASTAPI_ONLY` to `True` allowing you to deploy the FastAPI service on its own, assuming you have the Milvus database set up on a different machine.
+and the FastAPI service separately, you may do so by setting the `DEPLOY_FASTAPI_ONLY` to `True` allowing you to deploy the FastAPI service on its own, assuming you have the Milvus database set up on a different machine.
 
 Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:
@@ -112,8 +112,8 @@ Perform the following steps to deploy the service:
 
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
-    1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
-1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `INITIAL_TINYDB_JSON_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `sudo ./populate-db.sh`. This script is blocking, so you can have a direct feedbacck whether it finishes successfuly or not. It will print out its status on stdout.
+    1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
+1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `INITIAL_TINYDB_JSON_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `./populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `DEPLOY_FASTAPI_ONLY` ENV variables: `./deploy.sh`
@@ -123,7 +123,7 @@ If you wish to stop or remove the application, assuming all the previous ENV var
         
 ### VM preparations
 
-In order for our application to work properly on a host machine, we need to check whether the following software dependencdies are met:
+In order for our application to work properly on a host machine, we need to check whether the following software dependencies are met:
 - Docker (test command: `docker ps`)
 - CUDA (test command: `nvidia-smi`)
     - CUDA is only necessary for the instances you wish to use a GPU inside the Docker container (`USE_GPU` set to `True`)
