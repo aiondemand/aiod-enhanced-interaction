@@ -3,9 +3,11 @@ from functools import partial
 from threading import Thread
 from time import sleep
 
+from app.config import settings
 from app.routers import query as query_router
 from app.services.database import Database
 from app.services.threads import threads
+from app.services.threads.delete_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.embedding_thread import (
     compute_embeddings_for_aiod_assets_wrapper,
 )
@@ -50,6 +52,8 @@ def app_init() -> None:
 
     global SCHEDULER
     SCHEDULER = BackgroundScheduler()
+
+    # Recurring AIoD updates
     SCHEDULER.add_job(
         partial(
             threads.run_async_in_thread,
@@ -59,12 +63,20 @@ def app_init() -> None:
         ),
         # Warning: We should not set the interval of recurring updates to a smaller
         # timespan than one day, otherwise some assets may be missed
-        # Default is to perform the recurring update once a day
+        # Default is to perform the recurring update once per day
         CronTrigger(hour=0, minute=0),
+    )
+    # Recurring Milvus embedding cleanup
+    SCHEDULER.add_job(
+        partial(
+            threads.run_async_in_thread,
+            target_func=delete_embeddings_of_aiod_assets_wrapper,
+        ),
+        CronTrigger(day=settings.AIOD.DAY_IN_MONTH_FOR_EMB_CLEANING, hour=0, minute=0),
     )
     SCHEDULER.start()
 
-    # Immediate computation of asset embeddings
+    # Immediate computation of AIoD asset embeddings
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
         target_func=partial(
