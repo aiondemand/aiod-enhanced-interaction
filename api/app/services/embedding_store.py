@@ -44,6 +44,7 @@ class EmbeddingStore(ABC):
         query_text: str,
         collection_name: str,
         topk: int = 10,
+        filter: str = "",
     ) -> SearchResults:
         pass
 
@@ -65,7 +66,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         for _ in range(5):
             try:
                 self.client = MilvusClient(
-                    uri=settings.MILVUS.URI, token=settings.MILVUS.MILVUS_TOKEN
+                    uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN
                 )
                 return True
             except Exception:
@@ -164,6 +165,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         query_text: str,
         collection_name: str,
         topk: int = 10,
+        filter: str = "",
     ) -> SearchResults:
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
@@ -178,6 +180,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
             limit=topk * 10 if self.chunk_embedding_store else topk + 1,
             output_fields=["doc_id"],
             search_params={"metric_type": "COSINE"},
+            filter=filter,
         )[0]
         doc_ids = [match["entity"]["doc_id"] for match in query_results]
         distances = [1 - match["distance"] for match in query_results]

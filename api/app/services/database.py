@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import threading
 from typing import Any, Generic, TypeVar
 
@@ -63,10 +62,7 @@ class Database:
         serialization.register_serializer(QueryStatusSerializer(), "TinyQueryStatus")
         serialization.register_serializer(AssetTypeSerializer(), "TinyAssetType")
 
-        dirpath = os.path.dirname(settings.TINYDB_FILEPATH)
-        if os.path.exists(dirpath) is False:
-            os.makedirs(dirpath)
-
+        settings.TINYDB_FILEPATH.parent.mkdir(parents=True, exist_ok=True)
         self.db = TinyDB(settings.TINYDB_FILEPATH, storage=serialization)
         self.db_lock = threading.Lock()
 
