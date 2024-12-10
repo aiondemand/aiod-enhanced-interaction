@@ -25,7 +25,6 @@ from requests.exceptions import HTTPError
 from torch.utils.data import DataLoader
 
 job_lock = threading.Lock()
-logger = logging.getLogger("uvicorn")
 
 
 async def compute_embeddings_for_aiod_assets_wrapper(
@@ -38,13 +37,13 @@ async def compute_embeddings_for_aiod_assets_wrapper(
                 if first_invocation
                 else "[RECURRING UPDATE] Scheduled task for computing asset embeddings has started"
             )
-            logger.info(log_msg)
+            logging.info(log_msg)
             await compute_embeddings_for_aiod_assets(first_invocation)
-            logger.info("Scheduled task for computing asset embeddings has ended.")
+            logging.info("Scheduled task for computing asset embeddings has ended.")
         finally:
             job_lock.release()
     else:
-        logger.info(
+        logging.info(
             "Scheduled task for updating skipped (previous task is still running)"
         )
 
@@ -57,7 +56,7 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
     try:
         asset_types = settings.AIOD.ASSET_TYPES
         for asset_type in asset_types:
-            logger.info(f"\tComputing embeddings for asset type: {asset_type.value}")
+            logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
             asset_collection = database.get_asset_collection_by_type(asset_type)
             if asset_collection is None:
@@ -108,15 +107,21 @@ def process_aiod_assets_wrapper(
     newly_added_doc_ids = []
 
     last_update = asset_collection.last_update
-    last_db_sync_datetime = getattr(last_update, "from_time", None)
+    last_db_sync_datetime: datetime = getattr(last_update, "from_time", None)
     query_from_time = last_db_sync_datetime
+
+    last_db_sync_datetime = (
+        last_db_sync_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+        if last_db_sync_datetime is not None
+        else None
+    )
 
     # if it's Nth day of the month, we wish to iterate over all the data just in case
     # we have missed some assets due to large number of assets having been deleted in the past
     all_assets_day = settings.AIOD.DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS
     if last_update.to_time.day == all_assets_day:
         query_from_time = None
-        logger.info("\t\tIterating over entire database (recurring update)")
+        logging.info("\t\tIterating over entire database (recurring update)")
 
     url_params = RequestParams(
         offset=last_update.aiod_asset_offset,
@@ -125,7 +130,7 @@ def process_aiod_assets_wrapper(
         to_time=last_update.to_time,
     )
     if url_params.offset > 0:
-        logger.info(
+        logging.info(
             f"\t\tContinue asset embedding process from asset offset={url_params.offset}"
         )
 
@@ -227,7 +232,7 @@ def get_assets_to_add_and_delete(
     # Old assets need to be deleted first, then they're stored in DB yet again
     updated_asset_idx = np.where(
         (np.isin(asset_ids, existing_doc_ids_from_past))
-        & (modified_dates > last_db_sync_datetime)
+        & (modified_dates >= last_db_sync_datetime)
     )[0]
     asset_ids_to_del = [asset_ids[idx] for idx in updated_asset_idx]
     assets_to_add += [assets[idx] for idx in updated_asset_idx]
@@ -239,7 +244,7 @@ def recursive_fetch(
     url: str, url_params: RequestParams, mark_recursions: list[int]
 ) -> list:
     try:
-        sleep(settings.AIOD.TIMEOUT_REQUEST_INTERVAL_SEC)
+        sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
         queries = _build_real_url_queries(url_params)
         response = _perform_request(url, queries)
         data = response.json()
@@ -253,12 +258,15 @@ def recursive_fetch(
         first_half_limit = url_params.limit // 2
         second_half_limit = url_params.limit - first_half_limit
 
-        first_half = recursive_fetch(url, url_params.new_page(limit=first_half_limit))
+        first_half = recursive_fetch(
+            url, url_params.new_page(limit=first_half_limit), mark_recursions
+        )
         second_half = recursive_fetch(
             url,
             url_params.new_page(
                 offset=url_params.offset + first_half_limit, limit=second_half_limit
             ),
+            mark_recursions,
         )
         return first_half + second_half
 

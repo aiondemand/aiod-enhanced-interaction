@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from functools import partial
 from threading import Thread
@@ -41,8 +42,20 @@ app.add_middleware(
 )
 
 
+def setup_logger():
+    format_string = (
+        "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
+    )
+    logging.basicConfig(
+        level=logging.INFO,
+        format=format_string,
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+    )
+
+
 def app_init() -> None:
     sleep(10)  # Headstart for Milvus to fully initialize
+    setup_logger()
 
     # Instantiate singletons before utilizing them in other threads
     Database()

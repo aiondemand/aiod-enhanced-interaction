@@ -16,7 +16,6 @@ from app.services.threads.delete_thread import check_document_existence
 from tinydb import Query
 
 QUERY_QUEUE = Queue()
-logger = logging.getLogger("uvicorn")
 
 
 def fill_query_queue(database: Database) -> None:
@@ -33,7 +32,7 @@ def fill_query_queue(database: Database) -> None:
     for query in queries_to_process:
         QUERY_QUEUE.put(query.id)
 
-    logger.info(
+    logging.info(
         f"Query queue has been populated with {len(queries_to_process)} "
         + "queries to process."
     )
@@ -52,14 +51,14 @@ async def search_thread() -> None:
             query_id = QUERY_QUEUE.get()
             if query_id is None:
                 return
-            logger.info(f"Searching relevant assets for query ID: {query_id}")
+            logging.info(f"Searching relevant assets for query ID: {query_id}")
 
             user_query = database.queries.find_by_id(query_id)
             if user_query is None:
                 err_msg = (
                     f"UserQuery id={query_id} doesn't exist even though it should."
                 )
-                logger.error(err_msg)
+                logging.error(err_msg)
                 continue
 
             user_query.update_status(QueryStatus.IN_PROGESS)
@@ -72,7 +71,7 @@ async def search_thread() -> None:
             user_query.update_status(QueryStatus.COMPLETED)
             database.queries.upsert(user_query)
     except Exception:
-        logger.error(
+        logging.error(
             "An error has been encountered in the query processing thread. "
             + "Entire Application is being terminated now"
         )
@@ -111,7 +110,11 @@ def retrieve_topk_documents_wrapper(
         # check what documents are still valid
         exists_mask = np.array(
             [
-                check_document_existence(doc_id, user_query.asset_type)
+                check_document_existence(
+                    doc_id,
+                    user_query.asset_type,
+                    sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
+                )
                 for doc_id in results.doc_ids
             ]
         )
@@ -128,4 +131,7 @@ def retrieve_topk_documents_wrapper(
     # delete invalid documents from Milvus => lazy delete
     if len(doc_ids_to_remove_from_db) > 0:
         embedding_store.remove_embeddings(doc_ids_to_remove_from_db, collection_name)
+        logging.info(
+            f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({user_query.asset_type.value}) have been deleted"
+        )
     return documents_to_return

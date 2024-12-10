@@ -15,8 +15,6 @@ from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-logger = logging.getLogger("uvicorn")
-
 
 class EmbeddingStore(ABC):
     @abstractmethod
@@ -70,13 +68,13 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                 )
                 return True
             except Exception:
-                logger.warning(
+                logging.warning(
                     "Failed to connect to Milvus vector database. Retrying..."
                 )
                 await asyncio.sleep(5)
         else:
             err_msg = "Connection to Milvus vector database has not been established"
-            logger.error(err_msg)
+            logging.error(err_msg)
             raise ValueError(err_msg)
 
     def _create_collection(self, collection_name: str) -> None:

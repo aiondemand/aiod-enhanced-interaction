@@ -13,7 +13,6 @@ from app.services.threads.embedding_thread import get_assets_to_add_and_delete
 from requests.exceptions import HTTPError
 
 job_lock = threading.Lock()
-logger = logging.getLogger("uvicorn")
 
 
 async def delete_embeddings_of_aiod_assets_wrapper() -> None:
@@ -26,7 +25,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
     # with using the lazy deletion approach instead
     if job_lock.acquire(blocking=False):
         try:
-            logger.info(
+            logging.info(
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
             )
 
@@ -34,16 +33,16 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
             to_time = datetime.now(tz=timezone.utc)
 
             for asset_type in settings.AIOD.ASSET_TYPES:
-                logger.info(f"\tDeleting embeddings of asset type: {asset_type.value}")
+                logging.info(f"\tDeleting embeddings of asset type: {asset_type.value}")
                 delete_asset_embeddings(embedding_store, asset_type, to_time=to_time)
 
-            logger.info(
+            logging.info(
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has ended."
             )
         finally:
             job_lock.release()
     else:
-        logger.info(
+        logging.info(
             "Scheduled task for deleting skipped (previous task is still running)"
         )
 
@@ -85,19 +84,24 @@ def delete_asset_embeddings(
     candidates_idx = np.where(~np.isin(milvus_doc_ids, all_aiod_doc_ids))[0]
     candidates_for_del = [milvus_doc_ids[idx] for idx in candidates_idx]
 
+    if len(candidates_for_del) > 0:
+        logging.info(
+            f"\t{len(candidates_for_del)} assets ({asset_type.value}) have been chosen as candidates for deletion."
+        )
+
     ids_to_really_delete = [
         id
         for id in candidates_for_del
         if check_document_existence(
-            id, asset_type, sleep_time=settings.AIOD.TIMEOUT_REQUEST_INTERVAL_SEC
+            id, asset_type, sleep_time=settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC
         )
         is False
     ]
     if len(ids_to_really_delete) > 0:
         embedding_store.remove_embeddings(ids_to_really_delete, collection_name)
-    logger.info(
-        f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
-    )
+        logging.info(
+            f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
+        )
 
 
 def check_document_existence(

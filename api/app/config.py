@@ -54,7 +54,9 @@ class AIoDConfig(BaseModel):
     COMMA_SEPARETED_ASSET_TYPES: str = Field(...)
     WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
-    TIMEOUT_REQUEST_INTERVAL_SEC: float = Field(0.1, ge=0)
+    JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
+    SEARCH_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(0.1, ge=0)
+
     DAY_IN_MONTH_FOR_EMB_CLEANING: int = Field(1, ge=1, le=31)
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
