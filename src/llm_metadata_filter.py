@@ -340,7 +340,7 @@ class Llama_ManualFunctionCalling:
         match = re.search(function_regex, response)
 
         if match:
-            function_name, args_string = match.groups()
+            _, args_string = match.groups()
             try:
                 return literal_eval(args_string)
             except:
@@ -564,9 +564,18 @@ class LLM_MetadataExtractor:
 
 
 class UserQueryParsing:
+    schema_mapping = {
+        "datasets": DatasetMetadataTemplate,
+        "ml_models": ModelMetadataTemplate
+    }
+    
+    classmethod
+    def get_asset_schema(cls, asset_type: str) -> Type[BaseModel]:
+        return cls.schema_mapping[asset_type]
+    
     def __init__(
         self, 
-        asset_type: Literal["dataset", "ml_model"], 
+        asset_type: Literal["datasets", "ml_models"], 
         db_to_translate: Literal["Milvus"] = "Milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None
@@ -587,7 +596,21 @@ class UserQueryParsing:
             fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath
         )
 
-    def __call__(self, user_query: str) -> dict:
+    def __call__(self, user_query: str) -> dict:        
+        def expand_topic_query(
+            topic_list: list[str], new_objects: list[dict], content_key: str
+        ) -> list[str]:
+            to_add = [
+                item[content_key]
+                for item in new_objects
+                if (
+                    item.get("discard", "false") == "true" and 
+                    item.get(content_key, None) is not None
+                )
+            ]
+            return topic_list + to_add
+        
+        
         out_stage_1 = self.stage_pipe_1({"query": user_query})
         if out_stage_1 is None:
             return {
@@ -596,68 +619,98 @@ class UserQueryParsing:
             }
         
         topic_list = [out_stage_1["topic"]]
-        [
-            topic_list.append(cond["condition"]) 
-            for cond in out_stage_1["conditions"] 
-            if cond.get("discard", False)
-        ] # discarded conditions
+        topic_list = expand_topic_query(
+            topic_list, out_stage_1["conditions"], content_key="condition"
+        )
 
         parsed_conditions = []
-        valid_conditions = [cond for cond in out_stage_1["conditions"] if cond.get("discard", False) is False]
-        for nl_cond in valid_conditions:
-            if nl_cond["field"] not in self.asset_schema.model_fields.keys():
-                topic_list.append(nl_cond["condition"])
-                continue
-            
+        valid_conditions = [
+            cond for cond in out_stage_1["conditions"] 
+            if cond.get("discard", "false") == "false"
+        ]
+        for nl_cond in valid_conditions:    
             input = {    
                 "condition": nl_cond["condition"],
                 "field": nl_cond["field"]
             }
             out_stage_2 = self.pipe_stage_2(input)
             if out_stage_2 is None:
-                topic = self.expand_query(topic, nl_cond["condition"])
+                topic_list.append(nl_cond["condition"])
                 continue
         
-            [
-                topic_list.append(expr["raw_value"])
-                for expr in out_stage_2["expressions"] 
-                if expr.get("discard", False)
-            ] # discarded expressions
+            topic_list = expand_topic_query(
+                topic_list, out_stage_2["expressions"], content_key="raw_value"
+            )
 
-            parsed_conditions.append({
-                "field": nl_cond["field"],
-                "logical_operator": out_stage_2["logical_operator"],
-                "expressions": [
-                    expr 
-                    for expr in out_stage_2["expressions"] 
-                    if expr.get("discard", False) is False
-                ]
-            })
+            valid_expressions = [
+                expr for expr in out_stage_2["expressions"] 
+                if expr.get("discard", "false") == "false"
+            ]
+            if len(valid_expressions) > 0:
+                parsed_conditions.append({
+                    "field": nl_cond["field"],
+                    "logical_operator": out_stage_2["logical_operator"],
+                    "expressions": valid_expressions
+                })
 
-        return (
-            " ".join(topic_list),
-            self.milvus_translate(parsed_conditions)
-        )
+        topic = " ".join(topic_list)
+        filter_string = self.milvus_translate(
+            parsed_conditions, 
+            asset_schema=self.get_asset_schema("datasets")
+        ) #TODO tied to datasets
 
-    def milvus_translate(self, parsed_conditions: list[dict]) -> str:
-        # TODO logic for translating conditions / expressions
-        # There's an AND operation between all the items of the the 'parsed_conditions'
-        # There may be AND/OR operation applied between expressions inside an item of the 'parsed_conditions'
-            # There needs to be 2 or more expressions within one condition in order for it to work
-        # Build filter string
-            # It depends on whether its a list metadata field or a simple one
+        return topic, filter_string
 
-        # Some logic for translating is already found in the 'build_milvus_filter' function
+    def milvus_translate(
+        self, parsed_conditions: list[dict], asset_schema: Type[BaseModel]
+    ) -> str:
+        simple_expression_template = "({field} {op} {val})"
+        list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
+        format_value = lambda x: f"'{x.lower()}'" if isinstance(x, str) else x
+        list_fields = {
+            k: get_origin(strip_optional_type(v)) is list
+            for k, v in asset_schema.__annotations__.items()
+        }
 
-        return parsed_conditions
-        
-        pass
+        condition_strings = []
+        for parsed_condition in parsed_conditions:
+            field = parsed_condition["field"]
+            log_operator = parsed_condition["logical_operator"]
+            
+            str_expressions = []
+            for expr in parsed_condition["expressions"]:
+                comp_operator = expr["comparison_operator"]
+                val = expr["processed_value"]
 
+                if list_fields[field]:
+                    if comp_operator not in ["==", "!="]:
+                        raise ValueError(
+                            "We don't support any other comparison operators but a '==', '!=' for checking whether values exist whithin the metadata field."
+                        )
+                    str_expressions.append(
+                        list_expression_template.format(
+                            field=field,
+                            op="" if comp_operator == "==" else "not ",
+                            val=format_value(val)
+                        )
+                    )
+                else:
+                    str_expressions.append(
+                        simple_expression_template.format(
+                            field=field,
+                            op=comp_operator,
+                            val=format_value(val)
+                        )
+                    )
+            condition_strings.append(
+                "(" + f" {log_operator.lower()} ".join(str_expressions) + ")"
+            )
 
+        return " and ".join(condition_strings)
 
 class UserQueryParsingStages:
     task_instructions_stage1 = """
-        Your task is to process a user query that may contain multiple natural language conditions and a general topic. Each condition corresponds to a specific metadata field and describes one or more values that should be compared against that field.
+        Your task is to process a user query that may contain multiple natural language conditions and a general topic. Each condition may correspond to a specific metadata field and describes one or more values that should be compared against that field.
         These conditions are subsequently used to filter out unsatisfactory data in database. On the other hand, the topic is used in semantic search to find the most relevant documents to the thing user seeks for
         
         A simple schema below briefly describes all the metadata fields we use for filtering purposes:
@@ -667,6 +720,7 @@ class UserQueryParsingStages:
 
         1. **Conditions and Metadata Fields:**
         - Each condition must clearly correspond to exactly one metadata field that we use for filtering purposes.
+        - If a condition is associated with a metadata field not found in the defined schema, disregard that condition.
         - If a condition references multiple metadata fields (e.g., "published after 2020 or in image format"), split it into separate conditions with NONE operators, each tied to its respective metadata field.
 
         2. **Handling Multiple Values:**
@@ -676,7 +730,7 @@ class UserQueryParsingStages:
             - Use **OR** when the query allows any of the values to match.
 
         3. **Natural Language Representation:**
-        - Preserve the natural language form of the conditions. You're also allowed to modify them slightly to maintain their meaning once they're extracted from their context
+        - Preserve the natural language form of the conditions. You're also allowed to modify them slightly to preserve their meaning once they're extracted from their context
 
         4. **Logical Operators for Conditions:**
         - Always include a logical operator (AND/OR) for conditions with multiple values.
@@ -684,20 +738,22 @@ class UserQueryParsingStages:
 
         5. **Extract user query topic**
         - A topic is a concise, high-level description of the main subject of the query. 
-        - It should exclude specific filtering conditions but capture the core concept or intent of the query.
+        - It should exclude specific filtering conditions but still capture the core concept or intent of the query.
         - If the query does not explicitly state a topic, infer it based on the overall context of the query.
     """
 
     task_instructions_stage2 = """
-        Your task is to parse a single condition extracted from a user query and transform it into a structured format for further processing. The condition consists of one or more expressions combined with a logical operator.
+        Your task is to parse a single condition extracted from a user query and transform it into a structured format for further processing. The condition consists of one or more expressions combined with a logical operator.        
+        Validate whether each expression value can be unambiguously transformed into its processed valid counterpart compliant with the restrictions imposed on the metadata field. If transformation of the expression value is not clear and ambiguous, discard the expression instead.
 
         **Key Terminology:**
         1. **Expression**:
         - Represents a single comparison between a value and a metadata field.
         - Includes:
             - `raw_value`: The original value directly retrieved from the natural language condition.
-            - `processed_value`: The transformed value, converted to the appropriate data type and format based on the value restrictions imposed on the metadata field '{field_name}'.
+            - `processed_value`: The transformed `raw_value`, converted to the appropriate data type and format based on the value and type restrictions imposed on the metadata field '{field_name}'. If `raw_value` cannot be unambiguously converted to a its valid counterpart complaint with metadata field constraints, set this field to string value "NONE".
             - `comparison_operator`: The operator used for comparison (e.g., >, <, ==, !=).
+            - `discard`: A boolean value indicating whether the expression should be discarded (True if `raw_value` cannot be unambiguously transformed into a valid `processed_value`).
 
         2. **Condition**:
         - Consists of one or more expressions combined with a logical operator.
@@ -711,7 +767,7 @@ class UserQueryParsingStages:
 
         **Instructions**:
         1. Identify potentionally all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
-        2. Make sure that you transform the value (processed_value) associated with each expression, so that it has the same data type and complies with the same restrictions as the ones applied to metadata field '{field_name}'. The metadata field description and the its value restrictions are the following: {field_description}
+        2. Make sure that you perform an unambiguous transformation of the raw value associated with each expression to its valid counterpart that is compliant with the restrictions imposed on the metadata field '{field_name}'. The metadata field description and the its value restrictions are the following: {field_description}. If the transformation of the raw value is not clear and ambiguous, discard the expression. 
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
@@ -726,8 +782,9 @@ class UserQueryParsingStages:
             {
                 "__annotations__": {
                     "raw_value": str,
-                    "processed_value": strip_list_type(strip_optional_type(original_field.annotation)),
+                    "processed_value": strip_list_type(strip_optional_type(original_field.annotation)) | Literal["NONE"],
                     "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
+                    "discard": Literal["false", "true"]
                 },
 
                 # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble
@@ -735,7 +792,8 @@ class UserQueryParsingStages:
                 # we have actually managed to improve the model performance
                 "raw_value": Field(..., description=f"The value used to compare to metadata field '{field_name}' in its raw state, extracted from the natural language condition"), 
                 "processed_value": Field(..., description=f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."),
-                "comparison_operator": Field(..., description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'.")
+                "comparison_operator": Field(..., description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'."),
+                "discard": Field("false", description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'")
             }
         )
         return type(
@@ -778,8 +836,9 @@ class UserQueryParsingStages:
         cls, 
         chain: RunnableSequence, 
         input: dict,
+        asset_schema: Type[BaseModel]
     ) -> dict | None:
-        return cls._try_invoke_stage_1(chain, input)
+        return cls._try_invoke_stage_1(chain, input, asset_schema)
         
     @classmethod
     def _call_function_stage_2(
@@ -828,92 +887,147 @@ class UserQueryParsingStages:
     
     @classmethod
     def _try_invoke_stage_1(
-        cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
+        cls, chain: RunnableSequence, input: dict, 
+        asset_schema: Type[BaseModel], 
+        num_retry_attempts: int = 5
     ) -> dict | None:
-        best_output = None
-        best_count = 0
+        def exists_conditions_list_in_wrapper_dict(obj: dict) -> bool:
+            return (
+                obj.get("conditions", None) is not None and 
+                isinstance(obj["conditions"], list)
+            )
+            
+        def is_valid_wrapper_class(obj: dict, valid_field_names: list[str]) -> bool:
+            try:
+                SurfaceQueryParsing(**obj)
+
+                invalid_fields = [
+                    cond["field"] for cond in obj["conditions"]
+                    if cond["field"] not in valid_field_names
+                ]
+                if len(invalid_fields) == 0:
+                    return True
+            except:
+                pass
+            return False
+
+        def is_valid_condition_class(obj: Any, valid_field_names: list[str]) -> bool:            
+            if isinstance(obj, dict) is False:
+                return False
+            try:
+                NaturalLanguageCondition(**obj)
+
+                if obj["field"] in valid_field_names:
+                    return True
+            except:
+                pass
+            return False
+            
+        best_llm_response = None
+        max_valid_conditions_count = 0
 
         for _ in range(num_retry_attempts):
             output = chain.invoke(input)
             if output is None:
                 continue
-            try:
-                SurfaceQueryParsing(**output)
+            valid_field_names = list(asset_schema.model_fields.keys())
+            if is_valid_wrapper_class(output, valid_field_names):
                 return output
-            except:
-                # TODO needs to be checked
-                curr_count = 0
-                for i in range(len(output["conditions"])):
-                    try:
-                        NaturalLanguageCondition(**output["conditions"][i])
-                        curr_count += 1
-                    except:
-                        output["conditions"][i]["discard"] = True
-                        continue
-                if curr_count > best_count:
-                    # check whether the entire object is correct once we get
-                    # rid of invalid conditions
+        
+            # The LLM output is invalid, now we will identify 
+            # which conditions are incorrect and how many are valid
+            if exists_conditions_list_in_wrapper_dict(output) == False:
+                continue
+            valid_conditions_count = 0
+            for i in range(len(output["conditions"])):
+                if is_valid_condition_class(output["conditions"][i], valid_field_names):
+                    valid_conditions_count += 1
+                elif isinstance(output["conditions"][i], dict):
+                    output["conditions"][i]["discard"] = "true"
+                else:
+                    output["conditions"][i] = { "discard": "true" }
+                
+            # we compare current LLM output to potentionally previous LLm outputs
+            # and identify the best LLM response (containing the most valid conditions) 
+            if valid_conditions_count > max_valid_conditions_count:
+                # check whether the entire object is correct once we get
+                # rid of invalid conditions
+                helper_object = deepcopy(output)
+                helper_object["conditions"] = [
+                    cond for cond in output["conditions"]
+                    if cond.get("discard", "false") == "false"
+                ]
+                if is_valid_wrapper_class(helper_object, valid_field_names):
+                    best_llm_response = output
+                    max_valid_conditions_count = valid_conditions_count
 
-                    helper_object = deepcopy(output)
-                    helper_object["conditions"] = [
-                        cond 
-                        for cond in output["conditions"]
-                        if cond.get("discard", False) is False
-                    ]
-                    try:
-                        SurfaceQueryParsing(**helper_object)
-                        best_output = output
-                        best_count = curr_count
-                    except:
-                        continue
-
-        return best_output
+        return best_llm_response
 
     @classmethod
     def _try_invoke_stage_2(
         cls, chain: RunnableSequence, input: dict, wrapper_schema: Type[BaseModel], num_retry_attempts: int = 5
     ) -> dict | None:
-        best_output = None
-        best_count = 0
+        def exists_expressions_list_in_wrapper_dict(obj: dict) -> bool:
+            return (
+                obj.get("expressions", None) is not None and 
+                isinstance(obj["expressions"], list)
+            )
 
+        def is_valid_wrapper_class(obj: dict) -> bool:
+            try:
+                wrapper_schema(**obj)
+                return True
+            except:
+                return False
+        
+        def is_valid_expression_class(obj: dict) -> bool:
+            try:
+                expression_schema(**obj)
+                return True
+            except:
+                return False
+        
+        best_llm_response = None
+        max_valid_expressions_count = 0
         expression_schema = strip_list_type(
             wrapper_schema.__annotations__["expressions"]
         )
+
         for _ in range(num_retry_attempts):
             output = chain.invoke(input)
             if output is None:
                 continue
-            try:
-                wrapper_schema(**output)
+            if is_valid_wrapper_class(output):
                 return output
-            except:
-                # TODO needs to be checked
-                curr_count = 0
-                for i in range(len(output["expressions"])):
-                    try:
-                        expression_schema(**output["expressions"][i])
-                        curr_count += 1
-                    except:
-                        output["expressions"][i]["discard"] = True
-                        continue
-                if curr_count > best_count:
-                    # check whether the entire object is correct once we get
-                    # rid of invalid expressions
-
-                    helper_object = deepcopy(output)
-                    helper_object["expressions"] = [
-                        expr 
-                        for expr in output["expressions"]
-                        if expr.get("discard", False) is False
-                    ]
-                    try:
-                        wrapper_schema(**helper_object)
-                        best_output = output
-                        best_count = curr_count
-                    except:
-                        continue
             
-        return best_output
+            # The LLM output is invalid, now we will identify 
+            # which expressions are incorrect and how many are valid
+            if exists_expressions_list_in_wrapper_dict(output) == False:
+                continue
+            valid_expressions_count = 0
+            for i in range(len(output["expressions"])):
+                if is_valid_expression_class(output["expressions"][i]):
+                    valid_expressions_count += 1
+                elif isinstance(output["expressions"][i], dict):
+                    output["expressions"][i]["discard"] = "true"
+                else:
+                    output["expressions"][i] = { "discard": "true" }
+                
+            # we compare current LLM output to potentionally previous LLm outputs
+            # and identify the best LLM response (containing the most valid expressions) 
+            if valid_expressions_count > max_valid_expressions_count:
+                # check whether the entire object is correct once we get
+                # rid of invalid expressions
+                helper_object = deepcopy(output)
+                helper_object["expressions"] = [
+                    expr for expr in output["expressions"]
+                    if expr.get("discard", "false") == "false"
+                ]
+                if is_valid_wrapper_class(helper_object):
+                    best_llm_response = output
+                    max_valid_expressions_count = valid_expressions_count
+            
+        return best_llm_response
         
     @classmethod
     def init_stage_1(
@@ -960,7 +1074,10 @@ class UserQueryParsingStages:
             model, 
             pydantic_model=pydantic_model, 
             chat_prompt_no_system=chat_prompt_no_system,
-            call_function=cls._call_function_stage_1
+            call_function=partial(
+                cls._call_function_stage_1, 
+                asset_schema=asset_schema
+            )
         )
     
     @classmethod
@@ -995,7 +1112,7 @@ if __name__ == "__main__":
     # )
     user_query = (
         "Retrieve all the translation datasets that have more than 10k datapoints and fewer than 100k datapoints " +
-        "and the dataset should contain one or more of the following languages: Chinese, Inidian."
+        "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese."
     )
     # user_query = "I dont want news datasets with any textual or video data."
     # user_query = "I want datasets with Slovak or English. It also needs to have either French or German"
@@ -1021,11 +1138,15 @@ if __name__ == "__main__":
     #     outs.append(out)
         
  
+    # user_query = "Datasets with ketchup or mayonaise condiments"
+    # user_query = "Datasets with food modality"
+    # user_query = "Datasets containing English and French, but no Czech"
+
     user_query_parsing = UserQueryParsing(
         asset_type="dataset",
         stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
     )
-    user_query_parsing(user_query)
+    topic, str_filter = user_query_parsing(user_query)
 
 
 
