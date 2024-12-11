@@ -1,8 +1,9 @@
-import os
 from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urljoin
 
 from app.schemas.enums import AssetType
-from pydantic import BaseModel, field_validator
+from pydantic import AnyUrl, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -15,12 +16,25 @@ class Validators:
 
 
 class MilvusConfig(BaseModel):
-    URI: str
-    USER: str
-    PASS: str
-    COLLECTION_PREFIX: str
-    BATCH_SIZE: int = 500
-    STORE_CHUNKS: bool = True
+    URI: AnyUrl = Field(...)
+    USER: str = Field(...)
+    PASS: str = Field(...)
+    COLLECTION_PREFIX: str = Field(..., max_length=100)
+    BATCH_SIZE: int = Field(500, gt=0)
+    STORE_CHUNKS: bool = Field(True)
+
+    @field_validator("COLLECTION_PREFIX", mode="before")
+    @classmethod
+    def valid_collection_name(cls, value: str):
+        if not value[0].isalpha() and value[0] != "_":
+            raise ValueError(
+                "Collection name must start with a letter or an underscore."
+            )
+        if not all(c.isalnum() or c == "_" for c in value):
+            raise ValueError(
+                "Collection name can only contain letters, numbers, and underscores."
+            )
+        return value
 
     @field_validator("STORE_CHUNKS", mode="before")
     @classmethod
@@ -36,16 +50,16 @@ class MilvusConfig(BaseModel):
 
 
 class AIoDConfig(BaseModel):
-    URL: str
-    COMMA_SEPARETED_ASSET_TYPES: str
-    WINDOW_SIZE: int = 1000
-    TIMEOUT_REQUEST_INTERVAL_SEC: float = 0.1
-    TESTING: bool = False
+    URL: AnyUrl = Field(...)
+    COMMA_SEPARETED_ASSET_TYPES: str = Field(...)
+    WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
+    WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
+    JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
+    SEARCH_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(0.1, ge=0)
 
-    @field_validator("URL", mode="before")
-    @classmethod
-    def remove_trailing_slash(cls, value: str) -> str:
-        return value.strip("/")
+    DAY_IN_MONTH_FOR_EMB_CLEANING: int = Field(1, ge=1, le=31)
+    DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
+    TESTING: bool = Field(False)
 
     @field_validator("COMMA_SEPARETED_ASSET_TYPES", mode="before")
     @classmethod
@@ -67,17 +81,20 @@ class AIoDConfig(BaseModel):
         types = self.COMMA_SEPARETED_ASSET_TYPES.lower().split(",")
         return [AssetType(typ) for typ in types]
 
-    def get_asset_url(self, asset_type: AssetType) -> str:
-        return f"{self.URL}/{asset_type.value}/v1"
+    def get_assets_url(self, asset_type: AssetType) -> str:
+        return urljoin(str(self.URL), f"{asset_type.value}/v1")
+
+    def get_asset_by_id_url(self, doc_id: str, asset_type: AssetType) -> str:
+        return urljoin(str(self.URL), f"{asset_type.value}/v1/{doc_id}")
 
 
 class Settings(BaseSettings):
-    MILVUS: MilvusConfig
-    AIOD: AIoDConfig
-    USE_GPU: bool = False
-    TINYDB_FILEPATH: str
-    MODEL_LOADPATH: str
-    MODEL_BATCH_SIZE: int
+    MILVUS: MilvusConfig = Field(...)
+    AIOD: AIoDConfig = Field(...)
+    USE_GPU: bool = Field(False)
+    TINYDB_FILEPATH: Path = Field(...)
+    MODEL_LOADPATH: str = Field(...)
+    MODEL_BATCH_SIZE: int = Field(..., gt=0)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
@@ -87,9 +104,9 @@ class Settings(BaseSettings):
     @field_validator("MODEL_LOADPATH", mode="before")
     @classmethod
     def validate_model_loadpath(cls, value: str) -> str:
-        if value == "Alibaba-NLP/gte-large-en-v1.5" or os.path.exists(
-            os.path.abspath(value)
-        ):
+        path = Path(value)
+
+        if value == "Alibaba-NLP/gte-large-en-v1.5" or path.exists():
             return value
         raise ValueError("Invalid loadpath for the model.")
 

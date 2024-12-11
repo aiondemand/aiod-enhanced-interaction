@@ -6,10 +6,10 @@ from pydantic import BaseModel
 
 
 class RequestParams(BaseModel):
-    offset: int
+    offset: int = 0
     limit: int
-    from_time: datetime
-    to_time: datetime
+    from_time: datetime | None = None
+    to_time: datetime | None = None
 
     def new_page(self, offset: int | None, limit: int | None) -> RequestParams:
         new_obj = RequestParams(**self.model_dump())

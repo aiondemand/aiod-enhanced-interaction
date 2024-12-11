@@ -25,10 +25,10 @@ class UserQuery(BaseModel):
         self.updated_at = datetime.now(tz=timezone.utc)
 
     def map_to_response(self) -> UserQueryResponse:
-        doc_ids = None
-        if self.result_set is not None:
-            doc_ids = self.result_set.doc_ids
+        if self.result_set is None:
+            return UserQueryResponse(status=self.status)
 
+        doc_ids = self.result_set.doc_ids
         return UserQueryResponse(
             status=self.status, num_doc_ids=len(doc_ids), result_doc_ids=doc_ids
         )
