@@ -77,6 +77,10 @@ class AIoDConfig(BaseModel):
         return Validators.str_to_bool(value)
 
     @property
+    def OFFSET_INCREMENT(self) -> int:
+        return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
+
+    @property
     def ASSET_TYPES(self) -> list[str]:
         types = self.COMMA_SEPARETED_ASSET_TYPES.lower().split(",")
         return [AssetType(typ) for typ in types]

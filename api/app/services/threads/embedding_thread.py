@@ -182,9 +182,7 @@ def process_aiod_assets_wrapper(
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
         # pagination without any overlap, hence the need for an overlap
-        url_params.offset += int(
-            settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP)
-        )
+        url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     asset_collection.finish()
     database.asset_collections.upsert(asset_collection)

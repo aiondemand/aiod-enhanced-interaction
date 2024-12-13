@@ -21,7 +21,7 @@ class CollectionUpdate(BaseModel):
 
     def update(self, embeddings_added: int, embeddings_removed: int = 0) -> None:
         self.embeddings_added += embeddings_added
-        self.aiod_asset_offset += settings.AIOD.WINDOW_SIZE
+        self.aiod_asset_offset += settings.AIOD.OFFSET_INCREMENT
         self.updated_at = datetime.now(tz=timezone.utc)
 
     def finish(self) -> None:

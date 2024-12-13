@@ -75,9 +75,7 @@ def delete_asset_embeddings(
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
         # pagination without any overlap, hence the need for an overlap
-        url_params.offset += int(
-            settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP)
-        )
+        url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     # Compare AIoD assets to Milvus assets, the set diff assets
     # are candidates for deletion; each candidate is explicitly checked against AIoD
