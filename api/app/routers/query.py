@@ -32,7 +32,7 @@ async def submit_query(
     database.queries.insert(userQuery)
     QUERY_QUEUE.put(userQuery.id)
 
-    return RedirectResponse(f"/query/{userQuery.id}/result/", status_code=202)
+    return RedirectResponse(f"/query/{userQuery.id}/result", status_code=202)
 
 
 @router.get("/{query_id}/result")
