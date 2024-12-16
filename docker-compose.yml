@@ -1,3 +1,5 @@
+# I pushed this accidentally; for now I shall keep it in repo, it's only for me to easily locally deploy milvus
+
 services:
 # Milvus services
   milvus-etcd:

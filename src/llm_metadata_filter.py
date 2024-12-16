@@ -1,29 +1,19 @@
 from copy import deepcopy
 from functools import partial
 from ast import literal_eval
-from operator import itemgetter
 import os
 import json
 import re
-from typing import Any, Callable, Self, Literal, Union, Optional, Type, TypeVar, get_origin, get_args, TypeAlias
+from typing import Any, Callable, ClassVar, Literal, Union, Optional, Type, get_origin, get_args
 from enum import Enum
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field
-from langchain_community.callbacks import get_openai_callback
-from langchain_core.output_parsers import (
-    JsonOutputParser, StrOutputParser, BaseOutputParser
-)
-from langchain_core.prompts import FewShotChatMessagePromptTemplate, ChatPromptTemplate, SystemMessagePromptTemplate, PromptTemplate, HumanMessagePromptTemplate
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_openai.chat_models.base import BaseChatOpenAI
+from pydantic import BaseModel, Field, field_validator
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import FewShotChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain_core.language_models.llms import BaseLLM
 from langchain_core.runnables import RunnableLambda, RunnableSequence
-from torch.utils.data import DataLoader
 
-from dataset import Queries
-from lang_chains import ChainOutputOpts, LLM_Chain, SimpleChain, load_llm
-from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
-
+from lang_chains import LLM_Chain, SimpleChain, load_llm
 
 
 # Classes pertaining to the first stage of user query parsing
@@ -49,8 +39,102 @@ class SurfaceQueryParsing(BaseModel):
     conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
             
 
+class HuggingFaceDatasetMetadataTemplate(BaseModel):
+    """
+    Extraction of relevant metadata we wish to retrieve from ML assets
+    """
+
+    _ALL_VALID_VALUES: ClassVar[list[list[str]] | None] = None
+
+    date_published: str = Field(
+        ..., 
+        description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'."
+    )
+    size_in_mb: Optional[int] = Field(
+        None, 
+        description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
+        ge=0,
+    )
+    licenses: Optional[list[str]] = Field(
+        None, 
+        description="The licenses associated with this dataset, e.g., 'mit', 'apache-2.0'"
+    )
+    task_types: Optional[list[str]] = Field(
+        None, 
+        description="The machine learning tasks suitable for this dataset. Acceptable values may include task categories or task ids found on HuggingFace platform (e.g., 'token-classification', 'question-answering', ...)"
+    )
+    languages: Optional[list[str]] = Field(
+        None, 
+        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...)."
+    )
+    datapoints_upper_bound: Optional[int] = Field(
+        None,
+        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset."
+    )
+    datapoints_lower_bound: Optional[int] = Field(
+        None,
+        description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset."
+    )
+
+    @classmethod
+    def _load_all_valid_values(cls) -> None:
+        # TODO get rid of ugly path
+        path = "src/preprocess/hf_dataset_metadata_values.json"
+        with open(path) as f:
+            cls._ALL_VALID_VALUES = json.load(f)
+    
+    @classmethod
+    def get_field_valid_values(cls, field: str) -> list[str]:
+        if cls._ALL_VALID_VALUES is None:
+            cls._load_all_valid_values()
+        return cls._ALL_VALID_VALUES.get(field, None)
+        
+    @classmethod
+    def exists_field_valid_values(cls, field: str) -> bool:
+        if cls._ALL_VALID_VALUES is None:
+            cls._load_all_valid_values()
+        return field in cls._ALL_VALID_VALUES.keys()
+
+    @classmethod
+    def validate_value_against_list(cls, val: str, field: str) -> bool:
+        if cls.exists_field_valid_values(field) is False:
+            return True
+        return val in cls.get_field_valid_values(field)
+
+    @classmethod
+    def _check_field_against_list_wrapper(cls, values: list[str], field: str) -> list[str]:
+        valid_values = [
+            val.lower() for val in values
+            if cls.validate_value_against_list(val, field)
+        ]
+        if len(valid_values) == 0:
+            return None
+        return valid_values
+    
+    @field_validator("date_published", mode="before")
+    @classmethod
+    def check_date_published(cls, value: str) -> str | None:
+        pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+        return bool(re.match(pattern, value))
+    
+    @field_validator("licenses", mode="before")
+    @classmethod
+    def check_licenses(cls, values: list[str]) -> list[str] | None:
+        return cls._check_field_against_list_wrapper(values, "licenses")
+    
+    @field_validator("task_types", mode="before")
+    @classmethod
+    def check_task_types(cls, values: list[str]) -> list[str] | None:
+        return cls._check_field_against_list_wrapper(values, "task_types")
+    
+    @field_validator("languages", mode="before")
+    @classmethod
+    def check_languages(cls, values: list[str]) -> list[str] | None:
+        return [val.lower() for val in values if len(val) == 2]
+                
+
 # Classes representing specific asset metadata 
-class DatasetMetadataTemplate(BaseModel):
+class OldDatasetMetadataTemplate(BaseModel):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
     """
@@ -61,7 +145,7 @@ class DatasetMetadataTemplate(BaseModel):
     )
     date_published: str = Field(
         ..., 
-        description="The original publication date of the asset in the format 'YYYY-MM-DDTHH-MM-SS'."
+        description="The original publication date of the asset in the format 'YYYY-MM-DDTHH-MM-SSZ'."
     )
     year: int = Field(
         ..., 
@@ -72,7 +156,6 @@ class DatasetMetadataTemplate(BaseModel):
         description="The month extracted from the publication date in integer data type."
     )
 
-    # TODO this can only be infered
     domains: Optional[list[Literal["NLP", "Computer Vision", "Audio Processing"]]] = Field(
         None, 
         description="The AI technical domains of the asset, describing the type of data and AI task involved. Only permitted values: ['NLP', 'Computer Vision', 'Audio Processing']"
@@ -101,7 +184,6 @@ class DatasetMetadataTemplate(BaseModel):
         description="The general size category of the dataset, typically specified in ranges such as '1k<n<10k', '10k<n<100k', etc... found on HuggingFace."
     )
 
-    # TODO this can only be infered
     modalities: Optional[list[Literal["text", "tabular", "audio", "video", "image"]]] = Field(
         None, 
         description="The modalities present in the dataset. Only permitted values: ['text', 'tabular', 'audio', 'video', 'image']"
@@ -117,16 +199,6 @@ class DatasetMetadataTemplate(BaseModel):
     )
 
 
-class ModelMetadataTemplate(BaseModel):
-    pass
-
-
-ASSET_METADATA_SCHEMAS = {
-    "dataset": DatasetMetadataTemplate,
-    "model": ModelMetadataTemplate
-}
-
-
 def is_optional_type(annotation: Type) -> bool:
     if get_origin(annotation) is Union:
         return type(None) in get_args(annotation)
@@ -135,6 +207,7 @@ def is_optional_type(annotation: Type) -> bool:
 
 def is_list_type(annotation: Type) -> bool:
     return get_origin(annotation) is list
+
 
 def strip_optional_type(annotation: Type) -> Type:
     if is_optional_type(annotation):
@@ -309,6 +382,7 @@ class Llama_ManualFunctionCalling:
                     pass
         
         return None
+    
     @classmethod
     def populate_tool_prompt(cls, pydantic_model: Type[BaseModel]) -> str:
         tool_schema = cls.transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
@@ -336,6 +410,7 @@ class Llama_ManualFunctionCalling:
         return pydantic_schema
 
 
+# Old implementation of asset metadata extraction
 class LLM_MetadataExtractor:
     system_prompt_from_asset = """
         ### Task Overview:
@@ -473,10 +548,10 @@ class LLM_MetadataExtractor:
         if pydantic_model is None:
             pydantic_model = (
                 user_query_metadata_extraction_schema_factory(
-                     template_type=DatasetMetadataTemplate
+                     template_type=OldDatasetMetadataTemplate
                 ) 
                 if parsing_user_query
-                else DatasetMetadataTemplate
+                else OldDatasetMetadataTemplate
             )
         
         system_prompt = (
@@ -525,30 +600,29 @@ class LLM_MetadataExtractor:
 
 
 class UserQueryParsing:
-    schema_mapping = {
-        "datasets": DatasetMetadataTemplate,
-        "ml_models": ModelMetadataTemplate
+    SCHEMA_MAPPING = {
+        "datasets": HuggingFaceDatasetMetadataTemplate
     }
     
-    classmethod
+    @classmethod
     def get_asset_schema(cls, asset_type: str) -> Type[BaseModel]:
-        return cls.schema_mapping[asset_type]
+        return cls.SCHEMA_MAPPING[asset_type]
     
     def __init__(
         self, 
         llm: BaseLLM,
-        asset_type: Literal["datasets", "ml_models"], 
+        asset_type: Literal["datasets"],
         db_to_translate: Literal["Milvus"] = "Milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None
     ) -> None:
-        assert asset_type in ASSET_METADATA_SCHEMAS.keys(), f"Invalid asset_type argument '{asset_type}'"
+        assert asset_type in self.SCHEMA_MAPPING.keys(), f"Invalid asset_type argument '{asset_type}'"
         assert db_to_translate in ["Milvus"], f"Invalid db_to_translate argument '{db_to_translate}'"
 
         self.asset_type = asset_type
         self.db_to_translate = db_to_translate
 
-        self.asset_schema = ASSET_METADATA_SCHEMAS[asset_type]
+        self.asset_schema = self.get_asset_schema(asset_type)
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
             llm=llm,
             asset_schema=self.asset_schema,
@@ -618,22 +692,17 @@ class UserQueryParsing:
                 })
 
         topic = " ".join(topic_list)
-        filter_string = self.milvus_translate(
-            parsed_conditions, 
-            asset_schema=self.get_asset_schema("datasets")
-        ) #TODO tied to datasets
+        filter_string = self.milvus_translate(parsed_conditions)
 
         return topic, filter_string
 
-    def milvus_translate(
-        self, parsed_conditions: list[dict], asset_schema: Type[BaseModel]
-    ) -> str:
+    def milvus_translate(self, parsed_conditions: list[dict]) -> str:
         simple_expression_template = "({field} {op} {val})"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
         format_value = lambda x: f"'{x.lower()}'" if isinstance(x, str) else x
         list_fields = {
             k: get_origin(strip_optional_type(v)) is list
-            for k, v in asset_schema.__annotations__.items()
+            for k, v in self.asset_schema.__annotations__.items()
         }
 
         condition_strings = []
@@ -732,34 +801,67 @@ class UserQueryParsingStages:
 
         **Instructions**:
         1. Identify potentionally all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
-        2. Make sure that you perform an unambiguous transformation of the raw value associated with each expression to its valid counterpart that is compliant with the restrictions imposed on the metadata field '{field_name}'. The metadata field description and the its value restrictions are the following: {field_description}. If the transformation of the raw value is not clear and ambiguous, discard the expression. 
+        2. Make sure that you perform an unambiguous transformation of the raw value associated with each expression to its valid counterpart that is compliant with the restrictions imposed on the metadata field '{field_name}'. The metadata field description and the its value restrictions are the following: 
+            a) Description: {field_description}
+            {field_valid_values}
+            
+            If the transformation of the raw value is not clear and ambiguous, discard the expression.
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
     @classmethod
     def _create_dynamic_stage2_schema(cls, field_name: str, asset_schema: Type[BaseModel]) -> Type[BaseModel]:
-        # TODO tied to datasets
-        original_field = asset_schema.model_fields[field_name]
+        def validate_func(cls, value: Any, func: Callable) -> Any:
+            if value == "NONE" or func(value):
+                return value        
+            raise ValueError(
+                f"Invalid processed value"
+            )
         
+        original_field = asset_schema.model_fields[field_name]    
+        inner_class_dict = {
+            "__annotations__": {
+                "raw_value": str,
+                "processed_value": strip_list_type(strip_optional_type(original_field.annotation)) | Literal["NONE"],
+                "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
+                "discard": Literal["false", "true"]
+            },
+
+            # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble
+            # properly processing the values immediately. By defining an explicit intermediate step, to write down the raw value before transforming it,
+            # we have actually managed to improve the model performance
+            "raw_value": Field(..., description=f"The value used to compare to metadata field '{field_name}' in its raw state, extracted from the natural language condition"), 
+            "processed_value": Field(..., description=f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."),
+            "comparison_operator": Field(..., description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'."),
+            "discard": Field("false", description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'"),
+        }
+        
+        validators = [
+            (func_name, decor)
+            for func_name, decor in asset_schema.__pydantic_decorators__.field_validators.items()
+            if field_name in decor.info.fields
+        ]
+        if len(validators) > 0:
+            # we will accept only one decorator/validator for a field
+            validator_func_name, decor = validators[0]
+
+            inner_class_dict.update({
+                # Validator for 'processed_value' attribute against all valid values
+                "validate_processed_value": field_validator(
+                    "processed_value", 
+                    mode=decor.info.mode
+                )(
+                    partial(
+                        validate_func, 
+                        func=getattr(asset_schema, validator_func_name)
+                    )
+                )
+            })
+            
         expression_class = type(
             f"Expression_{field_name}",
             (BaseModel, ),
-            {
-                "__annotations__": {
-                    "raw_value": str,
-                    "processed_value": strip_list_type(strip_optional_type(original_field.annotation)) | Literal["NONE"],
-                    "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
-                    "discard": Literal["false", "true"]
-                },
-
-                # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble
-                # properly processing the values immediately. By defining an explicit intermediate step, to write down the raw value before transforming it,
-                # we have actually managed to improve the model performance
-                "raw_value": Field(..., description=f"The value used to compare to metadata field '{field_name}' in its raw state, extracted from the natural language condition"), 
-                "processed_value": Field(..., description=f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."),
-                "comparison_operator": Field(..., description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'."),
-                "discard": Field("false", description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'")
-            }
+            inner_class_dict
         )
         return type(
             f"Condition_{field_name}",
@@ -841,11 +943,16 @@ class UserQueryParsingStages:
                     ])
                     chain_to_use = RunnableSequence(new_prompt, *chain.steps[1:])
                     
-
+        field_valid_values = (
+            f"b) List of the only permitted values: {asset_schema.get_field_valid_values(metadata_field)}"
+            if asset_schema.exists_field_valid_values(metadata_field)
+            else ""
+        )
         input_variables = {
             "query": input["condition"],
             "field_name": metadata_field,
-            "field_description": DatasetMetadataTemplate.model_fields[metadata_field].description,
+            "field_description": asset_schema.model_fields[metadata_field].description,
+            "field_valid_values": field_valid_values,
             "system_prompt": Llama_ManualFunctionCalling.populate_tool_prompt(dynamic_type)
         }
         return cls._try_invoke_stage_2(chain_to_use, input_variables, dynamic_type)
@@ -897,7 +1004,7 @@ class UserQueryParsingStages:
                 continue
             valid_field_names = list(asset_schema.model_fields.keys())
             if is_valid_wrapper_class(output, valid_field_names):
-                return output
+                return SurfaceQueryParsing(**output).model_dump()
         
             # The LLM output is invalid, now we will identify 
             # which conditions are incorrect and how many are valid
@@ -923,7 +1030,7 @@ class UserQueryParsingStages:
                     if cond.get("discard", "false") == "false"
                 ]
                 if is_valid_wrapper_class(helper_object, valid_field_names):
-                    best_llm_response = output
+                    best_llm_response = SurfaceQueryParsing(**output).model_dump()
                     max_valid_conditions_count = valid_conditions_count
 
         return best_llm_response
@@ -963,7 +1070,7 @@ class UserQueryParsingStages:
             if output is None:
                 continue
             if is_valid_wrapper_class(output):
-                return output
+                return wrapper_schema(**output).model_dump()
             
             # The LLM output is invalid, now we will identify 
             # which expressions are incorrect and how many are valid
@@ -989,7 +1096,7 @@ class UserQueryParsingStages:
                     if expr.get("discard", "false") == "false"
                 ]
                 if is_valid_wrapper_class(helper_object):
-                    best_llm_response = output
+                    best_llm_response = wrapper_schema(**output).model_dump()
                     max_valid_expressions_count = valid_expressions_count
             
         return best_llm_response
@@ -1071,61 +1178,29 @@ class UserQueryParsingStages:
 
 if __name__ == "__main__":
     MODEL_NAME = "llama3.1:8b"
-    model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
+    model = ChatOllama(model=MODEL_NAME, num_predict=1_024, num_ctx=4_096)
     
     # user_query = (
-    #     "Retrieve all the translation datasets that have more than 10k datapoints and fewer than 100k datapoints " +
-    #     "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese."
+    #     "Retrieve all the translation datasets that have more than 20k datapoints and fewer than 80k datapoints " +
+    #     "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese. The data is stored in CSV files"
     # )
-    # user_query_parsing = UserQueryParsing(
-    #     model,
-    #     asset_type="dataset",
-    #     stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
+    # user_query = (
+    #     "Retrieve all the summarization datasets from years 2022 and 2023 in CSV format that have more than 20k datapoints, but fewer than 480 000."
     # )
-    # topic, str_filter = user_query_parsing(user_query)
 
-    # exit()
-
-    #######################
-
-    from preprocess.text_operations import ConvertJsonToString
-    with open("temp/data_examples/huggingface.json") as f:
-        data = json.load(f)[:10]
-    formatted_docs = [ConvertJsonToString().extract_relevant_info(d) for d in data]
-
-    system_content = LLM_MetadataExtractor.system_prompt_from_asset.format(asset_type="dataset")
-    user_content = LLM_MetadataExtractor.user_prompt_from_asset
-    prompt_template = ChatPromptTemplate.from_messages([
-        ("user", system_content + "\n\n" + user_content)
-    ])
-
-    extract = Llama_ManualFunctionCalling(
-        llm=model,
-        pydantic_model=DatasetMetadataTemplate,
-        chat_prompt_no_system=prompt_template,
-        call_function=None
+    user_query = (
+        "Retrieve all the claim-matching datasets that are older than March of 2022 and that have more than 20k datapoints, but fewer than 5 million."
     )
-    
-    
 
-    from time import time
+    # user_query = (
+    #     "Retrieve all datasets that tackle the problem of machine translation, with English, French and German data"
+    # )
 
-    # start = time()
-    # outs = []
-    # for doc in formatted_docs:
-    #     outs.append(extract(input={ "document": doc, "asset_type": "dataset" }))
-    # end = time()
-        
+    user_query_parsing = UserQueryParsing(
+        model,
+        asset_type="datasets",
+        stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
+    )
+    topic, str_filter = user_query_parsing(user_query)
 
-    start = time()
-    batch_size = 4
-    outs = []
-    for i in range(0, len(formatted_docs), batch_size):
-        outs.extend(
-            extract(input=[{ "document": doc, "asset_type": "dataset" } for doc in formatted_docs[i: i+batch_size]], as_batch=True)
-        )
-        print(i)
-    end = time()
-
-    print(end-start, "seconds")
     exit()

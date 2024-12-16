@@ -16,7 +16,7 @@ from sentence_transformers.util import semantic_search
 from langchain_community.callbacks import get_openai_callback
 
 from lang_chains import SimpleChain
-from llm_metadata_filter import DatasetMetadataTemplate, LLM_MetadataExtractor, build_milvus_filter, apply_lowercase
+from llm_metadata_filter import OldDatasetMetadataTemplate, LLM_MetadataExtractor, build_milvus_filter, apply_lowercase
 from model.base import EmbeddingModel
 import utils
 from data_types import RetrievedDocuments, SemanticSearchResult

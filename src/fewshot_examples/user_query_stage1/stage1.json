@@ -1,12 +1,12 @@
 [
     {
-        "input": "Retrieve HuggingFace datasets about stocks",
+        "input": "Retrieve time-series datasets about stocks",
         "output": {
-            "topic": "datasets about stocks",
+            "topic": "time-series datasets about stocks",
             "conditions": [
                 {
-                    "condition": "HuggingFace datasets", 
-                    "field": "platform",
+                    "condition": "time-series datasets", 
+                    "field": "task_types",
                     "operator": "NONE"
                 }
             ]
@@ -36,23 +36,28 @@
         }
     },
     {
-        "input": "Find all chocolate datasets created after January 1, 2022, that are represented in textual or image format with its dataset size smaller than 500 000KB.",
+        "input": "Find all text-to-image datasets about chocolate created after January 1, 2022, that are represented in textual or image modality with its dataset size smaller than 500 000KB, but has over 1 million datapoints.",
         "output": {
             "topic": "chocolate datasets in textual or image modality",
             "conditions": [
+                {
+                    "condition": "text-to-image datasets", 
+                    "field": "task_types",
+                    "operator": "NONE"
+                },
                 {
                     "condition": "datasets created after January 1, 2022", 
                     "field": "date_published",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "represented in textual or image format", 
-                    "field": "modalities",
-                    "operator": "OR"
-                },
-                {
                     "condition": "dataset size smaller than 500 000KB", 
                     "field": "size_in_mb",
+                    "operator": "NONE"
+                },
+                {
+                    "condition": "dataset has over 1 million datapoints", 
+                    "field": "datapoints_lower_bounds",
                     "operator": "NONE"
                 }
             ]
@@ -64,36 +69,45 @@
             "topic": "datasets with licenses for unrestricted use",
             "conditions": [
                 {
-                    "condition": "have over 50k datapoints and fewer than 100k", 
-                    "field": "num_datapoints",
-                    "operator": "AND"
-
+                    "condition": "have over 50k datapoints", 
+                    "field": "datapoints_lower_bound",
+                    "operator": "NONE"
+                },
+                {
+                    "condition": "have fewer than 100k datapoints", 
+                    "field": "datapoints_upper_bound",
+                    "operator": "NONE"
                 },
                 {
                     "condition": "have MIT or apache-2.0 license", 
-                    "field": "license",
+                    "field": "licenses",
                     "operator": "OR"
                 }
             ]
         }
     },
     {
-        "input": "Retrieve textual or video datasets",
+        "input": "Retrieve Japanese or Chinese translation datasets",
         "output": {
-            "topic": "datasets in textual or video format",
+            "topic": "Multilingual asian datasets",
             "conditions": [
                 {
-                    "condition": "textual or video datasets", 
-                    "field": "modalities",
+                    "condition": "translation datasets", 
+                    "field": "task_types",
+                    "operator": "NONE"
+                },
+                {
+                    "condition": "Japanese or Chinese datasets", 
+                    "field": "languages",
                     "operator": "OR"
                 }
             ]
         }
     },
     {
-        "input": "Search for COVID-19 datasets",
+        "input": "Search for news datasets regarding COVID-19",
         "output": {
-            "topic": "COVID-19 datasets",
+            "topic": "news COVID-19 datasets",
             "conditions": []
         }
     }
