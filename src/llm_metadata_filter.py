@@ -25,18 +25,6 @@ from lang_chains import ChainOutputOpts, LLM_Chain, SimpleChain, load_llm
 from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
 
 
-def apply_lowercase(obj: Any) -> Any:
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            obj[k] = apply_lowercase(v)
-    elif isinstance(obj, list):
-        for i in range(len(obj)):
-            obj[i] = apply_lowercase(obj[i])
-    elif isinstance(obj, str):
-        obj = obj.lower()
-
-    return obj
-
 
 # Classes pertaining to the first stage of user query parsing
 class NaturalLanguageCondition(BaseModel):
@@ -83,10 +71,13 @@ class DatasetMetadataTemplate(BaseModel):
         ..., 
         description="The month extracted from the publication date in integer data type."
     )
+
+    # TODO this can only be infered
     domains: Optional[list[Literal["NLP", "Computer Vision", "Audio Processing"]]] = Field(
         None, 
         description="The AI technical domains of the asset, describing the type of data and AI task involved. Only permitted values: ['NLP', 'Computer Vision', 'Audio Processing']"
     )
+
     task_types: Optional[list[str]] = Field(
         None, 
         description="The machine learning tasks supported by this asset. Acceptable values include task types found on HuggingFace (e.g., 'token-classification', 'question-answering', ...)"
@@ -109,10 +100,13 @@ class DatasetMetadataTemplate(BaseModel):
         None, 
         description="The general size category of the dataset, typically specified in ranges such as '1k<n<10k', '10k<n<100k', etc... found on HuggingFace."
     )
+
+    # TODO this can only be infered
     modalities: Optional[list[Literal["text", "tabular", "audio", "video", "image"]]] = Field(
         None, 
         description="The modalities present in the dataset. Only permitted values: ['text', 'tabular', 'audio', 'video', 'image']"
     )
+
     data_formats: Optional[list[str]] = Field(
         None, 
         description="The file formats of the dataset (e.g., 'CSV', 'JSON', 'Parquet')."
@@ -211,50 +205,6 @@ def user_query_field_factory(
             'logical_operator': Field(..., description="The logical operator that performs logical operations (AND/OR) in between multiple expressions corresponding to each extracted value. If there's only one extracted value pertaining to this metadata field, set this attribute to AND."),
         }
     )]]
-
-
-def build_milvus_filter(data: dict, asset_schema: Type[BaseModel]) -> str:    
-    simple_expression_template = "({field} {op} {val})"
-    list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
-    format_value = lambda x: f"'{x.lower()}'" if isinstance(x, str) else x
-    list_fields = {
-        k: get_origin(strip_optional_type(v)) is list
-        for k, v in asset_schema.__annotations__.items()
-    }
-
-    condition_strings = []
-    for field_name, conditions in data.items():
-        for condition in conditions:    
-            comp_operator = condition["comparison_operator"]
-            log_operator = condition["logical_operator"]
-            expressions = []
-            for value in condition["values"]:
-                if list_fields[field_name]:
-                    if comp_operator not in ["==", "!="]:
-                        raise ValueError("We don't support any other operators but a check whether values exist whithin the list in the asset.")
-                    expressions.append(
-                        list_expression_template.format(
-                            field=field_name,
-                            op="" if comp_operator == "==" else "not ",
-                            val=format_value(value)
-                        )
-                    )
-                else:
-                    expressions.append(
-                        simple_expression_template.format(
-                            field=field_name,
-                            op=comp_operator,
-                            val=format_value(value)
-                        )
-                    )
-
-            condition_strings.append(
-                " ".join(expressions)
-                if len(expressions) < 2
-                else "(" + f" {log_operator.lower()} ".join(expressions) + ")"
-            )
-
-    return " and ".join(condition_strings)
             
 
 class Llama_ManualFunctionCalling:
@@ -303,15 +253,24 @@ class Llama_ManualFunctionCalling:
             )
         )
 
-    def __call__(self, input: dict) -> dict | None:
+    def __call__(
+        self, input: dict | list[dict], as_batch: bool = False
+    ) -> dict | None | list[dict | None]:
         if self.call_function is not None:
             return self.call_function(self.chain, input)
 
-        out = self.chain.invoke(input)
-        if self.validate_output(out, self.pydantic_model) is False:
+        if as_batch is False:
+            out = self.chain.invoke(input)
+            if self.validate_output(out, self.pydantic_model):
+                return out
             return None
-        return out
-    
+        else:
+            out = self.chain.batch(input)
+            validated_out = [
+                o if self.validate_output(o, self.pydantic_model) else None
+                for o in out
+            ]
+            return validated_out
 
     @classmethod
     def validate_output(
@@ -344,10 +303,12 @@ class Llama_ManualFunctionCalling:
             try:
                 return literal_eval(args_string)
             except:
-                print(f"Error parsing function arguments")
-                return None
+                try:
+                    return json.loads(args_string)
+                except:
+                    pass
+        
         return None
-
     @classmethod
     def populate_tool_prompt(cls, pydantic_model: Type[BaseModel]) -> str:
         tool_schema = cls.transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
@@ -575,6 +536,7 @@ class UserQueryParsing:
     
     def __init__(
         self, 
+        llm: BaseLLM,
         asset_type: Literal["datasets", "ml_models"], 
         db_to_translate: Literal["Milvus"] = "Milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
@@ -588,10 +550,12 @@ class UserQueryParsing:
 
         self.asset_schema = ASSET_METADATA_SCHEMAS[asset_type]
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
+            llm=llm,
             asset_schema=self.asset_schema,
             fewshot_examples_path=stage_1_fewshot_examples_filepath
         )
         self.pipe_stage_2 = UserQueryParsingStages.init_stage_2(
+            llm=llm,
             asset_schema=self.asset_schema,
             fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath
         )
@@ -707,6 +671,7 @@ class UserQueryParsing:
             )
 
         return " and ".join(condition_strings)
+
 
 class UserQueryParsingStages:
     task_instructions_stage1 = """
@@ -1032,6 +997,7 @@ class UserQueryParsingStages:
     @classmethod
     def init_stage_1(
         cls, 
+        llm: BaseLLM,
         asset_schema: Type[BaseModel],
         fewshot_examples_path: str | None = None, 
     ) -> Llama_ManualFunctionCalling:
@@ -1071,7 +1037,7 @@ class UserQueryParsingStages:
             ("user", "User Query: {query}"),
         ])
         return Llama_ManualFunctionCalling(
-            model, 
+            llm, 
             pydantic_model=pydantic_model, 
             chat_prompt_no_system=chat_prompt_no_system,
             call_function=partial(
@@ -1083,6 +1049,7 @@ class UserQueryParsingStages:
     @classmethod
     def init_stage_2(
         cls, 
+        llm: BaseLLM,
         asset_schema: Type[BaseModel],
         fewshot_examples_dirpath: str | None = None
     ) -> Llama_ManualFunctionCalling:
@@ -1091,7 +1058,7 @@ class UserQueryParsingStages:
             ("user", "Condition: {query}"),
         ])
         return Llama_ManualFunctionCalling(
-            model, 
+            llm, 
             pydantic_model=None, 
             chat_prompt_no_system=chat_prompt_no_system,
             call_function=partial(
@@ -1107,86 +1074,58 @@ if __name__ == "__main__":
     model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
     
     # user_query = (
-    #     "Retrieve all the translation Stanford datasets that have more than 10k datapoints and fewer than 100k datapoints. The dataset has over 100k KB in size " +
-    #     "and the dataset should contain one or more of the following languages: Slovak, Polish, French, German. However we don't wish the dataset to contain any English nor Spanish"
+    #     "Retrieve all the translation datasets that have more than 10k datapoints and fewer than 100k datapoints " +
+    #     "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese."
     # )
-    user_query = (
-        "Retrieve all the translation datasets that have more than 10k datapoints and fewer than 100k datapoints " +
-        "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese."
-    )
-    # user_query = "I dont want news datasets with any textual or video data."
-    # user_query = "I want datasets with Slovak or English. It also needs to have either French or German"
-
-
-    # output_1stage = {
-    #     "topic": 'translation Stanford datasets',
-    #     "conditions": [{'condition': 'datasets with more than 10k datapoints and fewer than 100k datapoints', 'field': 'num_datapoints', 'operator': 'AND'}, {'condition': 'contain one or more of the following languages: Chinese, Inidian', 'field': 'languages', 'operator': 'OR'}]
-    # }
-    # input_2stage = [
-    #     {    
-    #         "condition": condition["condition"],
-    #         "field": condition["field"],
-    #     }
-    #     for condition in output_1stage["conditions"]
-    # ]
-
-    # extraction_stage2 = UserQueryParsingStages.init_stage_2(asset_schema=DatasetMetadataTemplate)
-
-    # outs = []
-    # for inp in input_2stage:
-    #     out = extraction_stage2(inp)
-    #     outs.append(out)
-        
- 
-    # user_query = "Datasets with ketchup or mayonaise condiments"
-    # user_query = "Datasets with food modality"
-    # user_query = "Datasets containing English and French, but no Czech"
-
-    user_query_parsing = UserQueryParsing(
-        asset_type="dataset",
-        stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
-    )
-    topic, str_filter = user_query_parsing(user_query)
-
-
-
-    exit()
-
-    #######################
-
-    # from preprocess.text_operations import ConvertJsonToString
-    # with open("temp/data_examples/huggingface.json") as f:
-    #     data = json.load(f)[0]3
-    # text_format = ConvertJsonToString().extract_relevant_info(data)
-    
-    # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=False)
-    # extract = LLM_MetadataExtractor(
-    #     chain=llm_chain,
-    #     asset_type="dataset", 
-    #     parsing_user_query=False,
+    # user_query_parsing = UserQueryParsing(
+    #     model,
+    #     asset_type="dataset",
+    #     stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
     # )
-
-    # out = extract(text_format)
+    # topic, str_filter = user_query_parsing(user_query)
 
     # exit()
 
-    # user_query = (
-    #     "Retrieve all the summarization datasets with at least 10k datapoints, yet no more than 100k datapoints, " +
-    #     "and the dataset should have contain Slovak language, Polish language, but no Czech language."
-    # )
-    # user_query_2 = (
-    #     "Retrieve all translation datasets that either have at least 10k datapoints and has over 100k KB in size" +
-    #     "or they contain Slovak language and Polish language, but no Czech language."
-    # )
+    #######################
+
+    from preprocess.text_operations import ConvertJsonToString
+    with open("temp/data_examples/huggingface.json") as f:
+        data = json.load(f)[:10]
+    formatted_docs = [ConvertJsonToString().extract_relevant_info(d) for d in data]
+
+    system_content = LLM_MetadataExtractor.system_prompt_from_asset.format(asset_type="dataset")
+    user_content = LLM_MetadataExtractor.user_prompt_from_asset
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("user", system_content + "\n\n" + user_content)
+    ])
+
+    extract = Llama_ManualFunctionCalling(
+        llm=model,
+        pydantic_model=DatasetMetadataTemplate,
+        chat_prompt_no_system=prompt_template,
+        call_function=None
+    )
     
-    # llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(ollama_name=MODEL_NAME), parsing_user_query=True)
-    # extract_query = LLM_MetadataExtractor(
-    #     chain=llm_chain, 
-    #     asset_type="dataset", 
-    #     parsing_user_query=True
-    # )
+    
 
-    # output = extract_query(user_query_2)
-    # build_milvus_filter(output)
+    from time import time
 
+    # start = time()
+    # outs = []
+    # for doc in formatted_docs:
+    #     outs.append(extract(input={ "document": doc, "asset_type": "dataset" }))
+    # end = time()
+        
 
+    start = time()
+    batch_size = 4
+    outs = []
+    for i in range(0, len(formatted_docs), batch_size):
+        outs.extend(
+            extract(input=[{ "document": doc, "asset_type": "dataset" } for doc in formatted_docs[i: i+batch_size]], as_batch=True)
+        )
+        print(i)
+    end = time()
+
+    print(end-start, "seconds")
+    exit()

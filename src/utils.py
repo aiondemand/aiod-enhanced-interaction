@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Any
 import torch
 import numpy as np
 import os
@@ -100,4 +100,14 @@ def no_randomness(seed: int = 0) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-        
+def apply_lowercase(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = apply_lowercase(v)
+    elif isinstance(obj, list):
+        for i in range(len(obj)):
+            obj[i] = apply_lowercase(obj[i])
+    elif isinstance(obj, str):
+        obj = obj.lower()
+
+    return obj

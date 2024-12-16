@@ -13,10 +13,31 @@ import re
 import json
 
 
+def populate_tool_prompt(tool_schema):
+    tool_prompt_template = """
+        You have access to the following functions:
 
+        Use the function '{function_name}' to '{function_description}':
+        {function_schema}
 
+        If you choose to call a function ONLY reply in the following format with no prefix or suffix:
 
-    
+        <function=example_function_name>{{\"example_name\": \"example_value\"}}</function>
+
+        Reminder:
+        - Function calls MUST follow the specified format, start with <function= and end with </function>
+        - Required parameters MUST be specified
+        - Only call one function at a time
+        - Put the entire function call reply on one line
+        - If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls
+    """
+
+    return tool_prompt_template.format(
+        function_name=tool_schema["name"],
+        function_description=tool_schema["description"],
+        function_schema=json.dumps(tool_schema)
+    )
+
 
 def transform_simple_pydantic_schema_to_tool_schema(pydantic_model: Type[BaseModel]) -> dict:
     pydantic_schema = pydantic_model.model_json_schema()
@@ -45,13 +66,13 @@ def transform_nested_pydantic_schema_to_tool_schema(pydantic_model: Type[BaseMod
 
     return pydantic_schema
 
-
 def test_asset_extraction():
     with open("temp/data_examples/huggingface.json") as f:
         data = json.load(f)[0]
     text_format = ConvertJsonToString().extract_relevant_info(data)
 
     pydantic_model = DatasetMetadataTemplate
+    
     tool_schema = transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
     tool_prompt = populate_tool_prompt(tool_schema)
     
@@ -61,30 +82,27 @@ def test_asset_extraction():
         document=text_format
     )
     messages = [
-        {
-            "role": "system",
-            "content": tool_prompt
-        },
-        {
-            "role": "user",
-            "content": system_content + "\n\n" + user_content
-        }
+        ("system", tool_prompt),
+        ("user", system_content + "\n\n" + user_content)
     ]
-    import ollama
-    response = ollama.chat(
-        model=MODEL_NAME,
-        options={
-            "num_ctx": 16_384,
-        },
-        messages=messages
-    )
+
+    from langchain_ollama import ChatOllama
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
     
-    tool_call = convert_llm_string_output_to_tool(response["message"]["content"])
+    chat_prompt = ChatPromptTemplate.from_messages(messages)
+    model = ChatOllama(model=MODEL_NAME, num_predict=4096, num_ctx=8192)
+
+    chain = chat_prompt | model | StrOutputParser()
+    
+    llm_response = chain.invoke()
+    tool_call = convert_llm_string_output_to_tool(llm_response)
+
     try:
-        pydantic_model(**tool_call["arguments"])
+        pydantic_model(**tool_call)
     except:
         return None
-    return tool_call["arguments"]
+    return tool_call
 
 
 def test_query_extraction():
@@ -123,6 +141,7 @@ def test_query_extraction():
     response = ollama.chat(
         model=MODEL_NAME,
         options={
+            "num_predict": 4_096,
             "num_ctx": 16_384,
         },
         messages=messages
@@ -141,8 +160,15 @@ MODEL_NAME = "llama3.1:8b"
 
 if __name__ == "__main__":
     outputs = []
+
+    from time import time 
+
+    start = time()
     for _ in tqdm(range(10)):
         outputs.append(
             test_asset_extraction()
         )
+    end = time()
+
+    print(end - start, "seconds")
     exit()
