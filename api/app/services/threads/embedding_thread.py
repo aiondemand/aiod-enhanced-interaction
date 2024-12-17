@@ -14,13 +14,16 @@ from app.helper import (
     parse_asset_date,
     translate_datetime_to_aiod_params,
 )
-from app.models.asset_collections import AssetCollection
+from app.models.asset_collection import AssetCollection
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
 from app.services.inference.model import AiModel
-from app.services.inference.text_operations import ConvertJsonToString
+from app.services.inference.text_operations import (
+    ConvertJsonToString,
+    HuggingFaceDatasetExtractMedatada,
+)
 from requests.exceptions import HTTPError
 from torch.utils.data import DataLoader
 
@@ -76,11 +79,20 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 # that one...
                 pass
 
+            extract_metadata_func = None
+            em_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+            if asset_type in em_types:
+                extract_metadata_func = partial(
+                    HuggingFaceDatasetExtractMedatada.extract_huggingface_dataset_metadata,
+                    asset_type=asset_type,
+                )
+
             process_aiod_assets_wrapper(
                 model=model,
                 stringify_function=partial(
                     ConvertJsonToString.extract_relevant_info, asset_type=asset_type
                 ),
+                extract_medatadata_function=extract_metadata_func,
                 embedding_store=embedding_store,
                 database=database,
                 asset_collection=asset_collection,
@@ -96,14 +108,14 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
 def process_aiod_assets_wrapper(
     model: AiModel,
     stringify_function: Callable[[dict], str],
+    extract_medatadata_function: Callable[[dict], dict] | None,
     embedding_store: EmbeddingStore,
     database: Database,
     asset_collection: AssetCollection,
     asset_type: AssetType,
 ) -> None:
     asset_url = settings.AIOD.get_assets_url(asset_type)
-    collection_name = settings.MILVUS.get_collection_name(asset_type)
-    existing_doc_ids_from_past = embedding_store.get_all_document_ids(collection_name)
+    existing_doc_ids_from_past = embedding_store.get_all_document_ids(asset_type)
     newly_added_doc_ids = []
 
     last_update = asset_collection.last_update
@@ -149,7 +161,7 @@ def process_aiod_assets_wrapper(
         num_emb_removed = 0
         if len(asset_ids_to_remove) > 0:
             num_emb_removed = embedding_store.remove_embeddings(
-                asset_ids_to_remove, collection_name
+                asset_ids_to_remove, asset_type
             )
             existing_doc_ids_from_past = np.array(existing_doc_ids_from_past)[
                 ~np.isin(existing_doc_ids_from_past, asset_ids_to_remove)
@@ -162,14 +174,24 @@ def process_aiod_assets_wrapper(
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
             asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
 
-            data = [(obj, id) for obj, id in zip(stringified_assets, asset_ids)]
+            metadata = [{} for _ in assets_to_add]
+            if extract_medatadata_function is not None:
+                metadata = [extract_medatadata_function(obj) for obj in assets_to_add]
+
+            data = [
+                (obj, id, meta)
+                for obj, id, meta in zip(stringified_assets, asset_ids, metadata)
+            ]
             loader = DataLoader(
-                data, batch_size=settings.MODEL_BATCH_SIZE, num_workers=0
+                data,
+                collate_fn=lambda batch: list(zip(*batch)),
+                batch_size=settings.MODEL_BATCH_SIZE,
+                num_workers=0,
             )
             num_emb_added = embedding_store.store_embeddings(
                 model,
                 loader,
-                collection_name=collection_name,
+                asset_type=asset_type,
                 milvus_batch_size=settings.MILVUS.BATCH_SIZE,
             )
             newly_added_doc_ids += asset_ids

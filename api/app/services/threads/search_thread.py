@@ -84,8 +84,6 @@ def retrieve_topk_documents_wrapper(
     user_query: UserQuery,
     num_search_retries: int = 5,
 ) -> SearchResults:
-    collection_name = settings.MILVUS.get_collection_name(user_query.asset_type)
-
     doc_ids_to_exclude_from_search = []
     doc_ids_to_remove_from_db = []
     documents_to_return = SearchResults()
@@ -100,8 +98,8 @@ def retrieve_topk_documents_wrapper(
 
         results = embedding_store.retrieve_topk_document_ids(
             model,
-            user_query.query,
-            collection_name=collection_name,
+            user_query.orig_query,
+            asset_type=user_query.asset_type,
             topk=num_docs_to_retrieve,
             filter=filter_str,
         )
@@ -130,7 +128,9 @@ def retrieve_topk_documents_wrapper(
 
     # delete invalid documents from Milvus => lazy delete
     if len(doc_ids_to_remove_from_db) > 0:
-        embedding_store.remove_embeddings(doc_ids_to_remove_from_db, collection_name)
+        embedding_store.remove_embeddings(
+            doc_ids_to_remove_from_db, user_query.asset_type
+        )
         logging.info(
             f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({user_query.asset_type.value}) have been deleted"
         )

@@ -22,6 +22,7 @@ class MilvusConfig(BaseModel):
     COLLECTION_PREFIX: str = Field(..., max_length=100)
     BATCH_SIZE: int = Field(500, gt=0)
     STORE_CHUNKS: bool = Field(True)
+    EXTRACT_METADATA: bool = Field(True)
 
     @field_validator("COLLECTION_PREFIX", mode="before")
     @classmethod
@@ -36,7 +37,7 @@ class MilvusConfig(BaseModel):
             )
         return value
 
-    @field_validator("STORE_CHUNKS", mode="before")
+    @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
         return Validators.str_to_bool(value)
@@ -45,13 +46,11 @@ class MilvusConfig(BaseModel):
     def MILVUS_TOKEN(self):
         return f"{self.USER}:{self.PASS}"
 
-    def get_collection_name(self, asset_type: AssetType):
-        return f"{self.COLLECTION_PREFIX}_{asset_type.value}"
-
 
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARETED_ASSET_TYPES: str = Field(...)
+    COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON: str = Field(...)
     WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
@@ -61,7 +60,11 @@ class AIoDConfig(BaseModel):
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
 
-    @field_validator("COMMA_SEPARETED_ASSET_TYPES", mode="before")
+    @field_validator(
+        "COMMA_SEPARETED_ASSET_TYPES",
+        "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON",
+        mode="before",
+    )
     @classmethod
     def validate_asset_types(cls, value: str) -> str:
         try:
@@ -84,6 +87,18 @@ class AIoDConfig(BaseModel):
     def ASSET_TYPES(self) -> list[str]:
         types = self.COMMA_SEPARETED_ASSET_TYPES.lower().split(",")
         return [AssetType(typ) for typ in types]
+
+    @property
+    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[str]:
+        types = self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON.lower().split(
+            ","
+        )
+        types = [AssetType(typ) for typ in types]
+
+        assert set(types).issubset(
+            set(self.ASSET_TYPES)
+        ), "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+        return types
 
     def get_assets_url(self, asset_type: AssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/v1")

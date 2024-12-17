@@ -56,8 +56,7 @@ def delete_asset_embeddings(
         limit=settings.AIOD.WINDOW_SIZE,
         to_time=to_time,
     )
-    collection_name = settings.MILVUS.get_collection_name(asset_type)
-    milvus_doc_ids = embedding_store.get_all_document_ids(collection_name)
+    milvus_doc_ids = embedding_store.get_all_document_ids(asset_type)
 
     # iterate over entirety of AIoD database, store all the doc IDs
     while True:
@@ -96,7 +95,7 @@ def delete_asset_embeddings(
         is False
     ]
     if len(ids_to_really_delete) > 0:
-        embedding_store.remove_embeddings(ids_to_really_delete, collection_name)
+        embedding_store.remove_embeddings(ids_to_really_delete, asset_type)
         logging.info(
             f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
         )

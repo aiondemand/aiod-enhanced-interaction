@@ -55,9 +55,9 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
         ge=0,
     )
-    licenses: Optional[list[str]] = Field(
+    license: Optional[str] = Field(
         None, 
-        description="The licenses associated with this dataset, e.g., 'mit', 'apache-2.0'"
+        description="The license associated with this dataset, e.g., 'mit', 'apache-2.0'"
     )
     task_types: Optional[list[str]] = Field(
         None, 
@@ -67,13 +67,13 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         None, 
         description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...)."
     )
-    datapoints_upper_bound: Optional[int] = Field(
-        None,
-        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset."
-    )
     datapoints_lower_bound: Optional[int] = Field(
         None,
         description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset."
+    )
+    datapoints_upper_bound: Optional[int] = Field(
+        None,
+        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset."
     )
 
     @classmethod
@@ -117,10 +117,10 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
         return bool(re.match(pattern, value))
     
-    @field_validator("licenses", mode="before")
+    @field_validator("license", mode="before")
     @classmethod
-    def check_licenses(cls, values: list[str]) -> list[str] | None:
-        return cls._check_field_against_list_wrapper(values, "licenses")
+    def check_license(cls, values: list[str]) -> list[str] | None:
+        return cls._check_field_against_list_wrapper(values, "license")
     
     @field_validator("task_types", mode="before")
     @classmethod
