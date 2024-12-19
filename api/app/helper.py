@@ -4,10 +4,6 @@ from time import sleep
 from typing import Literal
 
 import requests
-from app.config import settings
-from app.schemas.enums import AssetType
-from app.services.database import Database
-from fastapi import HTTPException
 from requests import Response
 from requests.exceptions import Timeout
 
@@ -60,24 +56,3 @@ def _perform_request(
     err_msg = "We couldn't connect to AIoD API"
     logging.error(err_msg)
     raise ValueError(err_msg)
-
-
-def check_asset_collection_validity_or_raise(
-    database: Database, asset_type: AssetType, apply_filtering: bool
-) -> None:
-    valid_asset_types = (
-        settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-        if apply_filtering
-        else settings.AIOD.ASSET_TYPES
-    )
-    if asset_type not in valid_asset_types:
-        raise HTTPException(
-            status_code=404,
-            detail=f"We currently do not support asset type '{asset_type.value}'",
-        )
-    asset_col = database.get_asset_collection_by_type(asset_type)
-    if asset_col is None:
-        raise HTTPException(
-            status_code=501,
-            detail=f"The database for the asset type '{asset_type.value}' has yet to be built. Try again later...",
-        )

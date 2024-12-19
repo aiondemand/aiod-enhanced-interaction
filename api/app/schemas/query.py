@@ -5,7 +5,7 @@ from app.schemas.enums import QueryStatus
 from pydantic import BaseModel
 
 
-class SimpleUserQueryResponse(BaseModel):
+class BaseUserQueryResponse(BaseModel):
     orig_query: str
     asset_type: str
     topk: int
@@ -15,6 +15,10 @@ class SimpleUserQueryResponse(BaseModel):
     result_doc_ids: list[str] | None = None
 
 
-class FilteredUserQueryResponse(SimpleUserQueryResponse):
+class SimpleUserQueryResponse(BaseUserQueryResponse):
+    pass
+
+
+class FilteredUserQueryResponse(BaseUserQueryResponse):
     topic: str = ""
     filters: list[Condition] | None = None

@@ -220,8 +220,6 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 
-        # TODO perform LLM filter extraction
-
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)

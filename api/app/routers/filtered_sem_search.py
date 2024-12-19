@@ -1,14 +1,13 @@
 from typing import Annotated
 from uuid import UUID
 
-from app.helper import check_asset_collection_validity_or_raise
-from app.models.condition import Condition
-from app.models.query import UserQuery
+from app.models.query import FilteredUserQuery
+from app.routers.sem_search import validate_query_endpoint_arguments_or_raise
 from app.schemas.enums import AssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 
 router = APIRouter()
@@ -24,37 +23,36 @@ async def submit_filtered_query(
     topk: int = Query(
         default=10, gt=0, le=100, description="Number of results to search for"
     ),
-    filters: list[Condition] | None = Body(
-        None, description="Manually user-defined filters to apply"
-    ),
+    # TODO later on we wish to support user-defined condtions
+    # but this requires checking types and values of these conditions...
+    # filters: list[Condition] | None = Body(
+    #     None, description="Manually user-defined filters to apply"
+    # ),
 ) -> RedirectResponse:
-    check_asset_collection_validity_or_raise(database, asset_type, apply_filtering=True)
-    query = query.strip()
-    if len(query) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid/empty user query",
-        )
-
-    userQuery = UserQuery(
-        orig_query=query,
+    validate_query_endpoint_arguments_or_raise(
+        query, asset_type, database, apply_filtering=False
+    )
+    # TODO For now we set filters to None => no user-defined filters
+    filters = None
+    userQuery = FilteredUserQuery(
+        orig_query=query.strip(),
         asset_type=asset_type,
         topk=topk,
-        apply_filtering=True,
+        topic=query.strip() if filters is not None else "",
         filters=filters,
     )
-    database.queries.insert(userQuery)
-    QUERY_QUEUE.put(userQuery.id)
+    database.insert(userQuery)
+    QUERY_QUEUE.put((userQuery.id, FilteredUserQuery))
 
     return RedirectResponse(f"/filtered_query/{userQuery.id}/result", status_code=202)
 
 
 @router.get("/{query_id}/result")
-async def get_query_result(
+async def get_filtered_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
 ) -> FilteredUserQueryResponse:
-    userQuery = database.queries.find_by_id(str(query_id))
+    userQuery = database.find_by_id(FilteredUserQuery, id=str(query_id))
     if userQuery is None:
         raise HTTPException(status_code=404, detail="Requested query doesn't exist.")
     return userQuery.map_to_response()

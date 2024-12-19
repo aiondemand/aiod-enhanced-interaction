@@ -61,15 +61,15 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
         for asset_type in asset_types:
             logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
-            asset_collection = database.get_asset_collection_by_type(asset_type)
+            asset_collection = database.get_first_asset_collection_by_type(asset_type)
             if asset_collection is None:
                 # DB setup
                 asset_collection = AssetCollection(aiod_asset_type=asset_type)
-                database.asset_collections.insert(asset_collection)
+                database.insert(asset_collection)
             elif asset_collection.last_update.finished and first_invocation is False:
                 # Create a new recurring DB update
                 asset_collection.add_recurring_update()
-                database.asset_collections.upsert(asset_collection)
+                database.upsert(asset_collection)
             elif asset_collection.last_update.finished:
                 # The last DB update was sucessful, we skip this asset in the
                 # first invocation
@@ -81,7 +81,7 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
 
             extract_metadata_func = None
             em_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-            if asset_type in em_types:
+            if settings.MILVUS.EXTRACT_METADATA and asset_type in em_types:
                 extract_metadata_func = partial(
                     HuggingFaceDatasetExtractMedatada.extract_huggingface_dataset_metadata,
                     asset_type=asset_type,
@@ -199,7 +199,7 @@ def process_aiod_assets_wrapper(
         asset_collection.update(
             embeddings_added=num_emb_added, embeddings_removed=num_emb_removed
         )
-        database.asset_collections.upsert(asset_collection)
+        database.upsert(asset_collection)
 
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
@@ -207,7 +207,7 @@ def process_aiod_assets_wrapper(
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     asset_collection.finish()
-    database.asset_collections.upsert(asset_collection)
+    database.upsert(asset_collection)
 
 
 def get_assets_to_add_and_delete(

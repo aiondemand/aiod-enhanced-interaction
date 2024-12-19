@@ -129,6 +129,13 @@ class Settings(BaseSettings):
             return value
         raise ValueError("Invalid loadpath for the model.")
 
+    @property
+    def PERFORM_LLM_QUERY_PARSING(self) -> bool:
+        return (
+            self.MILVUS.EXTRACT_METADATA
+            and len(self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION) > 0
+        )
+
     class Config:
         env_file = ".env.app"
         env_nested_delimiter = "__"

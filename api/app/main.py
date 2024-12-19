@@ -5,6 +5,7 @@ from threading import Thread
 from time import sleep
 
 from app.config import settings
+from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import simple_sem_search as query_router
 from app.services.database import Database
 from app.services.threads import threads
@@ -33,9 +34,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="[AIoD] Semantic Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
-app.include_router(
-    query_router.router, prefix="/filtered_query", tags=["filtered_query"]
-)
+if settings.PERFORM_LLM_QUERY_PARSING:
+    app.include_router(
+        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
+    )
 
 
 app.add_middleware(
@@ -103,7 +105,7 @@ def app_init() -> None:
 
 
 def app_shutdown() -> None:
-    QUERY_QUEUE.put(None)
+    QUERY_QUEUE.put((None, None))
     QUERY_THREAD.join(timeout=5)
     IMMEDIATE_EMB_THREAD.join(timeout=5)
     SCHEDULER.shutdown(wait=False)
