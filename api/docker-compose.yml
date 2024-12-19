@@ -13,6 +13,7 @@ services:
       - MILVUS__URI=http://milvus-standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
+      - MILVUS__EXTRACT_METADATA=false
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
     ports:
       - "${APP_HOST_PORT}:80"

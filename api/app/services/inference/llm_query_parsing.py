@@ -965,8 +965,3 @@ class UserQueryParsingStages:
                 fewshot_examples_dirpath=fewshot_examples_dirpath,
             ),
         )
-
-
-if __name__ == "__main__":
-    MODEL_NAME = "llama3.1:8b"
-    model = ChatOllama(model=MODEL_NAME, num_predict=1_024, num_ctx=4_096)

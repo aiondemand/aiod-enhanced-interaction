@@ -1,11 +1,5 @@
 services:
-  # FastAPI service with GPU support
-  app:
-    build: 
-      context: .
-      dockerfile: Dockerfile.gpu
-    environment:
-      - USE_GPU=true
+  ollama:
     deploy:
       resources:
         reservations:

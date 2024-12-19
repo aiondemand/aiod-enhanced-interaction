@@ -95,6 +95,7 @@ Perform the following steps to deploy the service:
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `DEPLOY_FASTAPI_ONLY`: Boolean value that denotes whether we wish to deploy only the FastAPI service or also other services related to the Milvus database.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
+    - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
     - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`": An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform. 
     - `INITIAL_TINYDB_JSON_FILEPATH`: An optional variable representing a filepath to a JSON file containing metadata regarding past performed updates on AIoD and associated executed operations on vector DB. If you wish to utilize already precomputed embeddings and you have set a value for the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` variable, this variable is mandatory to be set as well.
 
@@ -113,6 +114,7 @@ Perform the following steps to deploy the service:
         - `MINIO_HOST_PORT_9000`: Host port we wish the Minio service to be mapped to (Minio container port: 9000)
         - `MILVUS_HOST_PORT_19530`: Host port we wish the Milvus service to be mapped to (Milvus container port: 19530)
         - `MILVUS_HOST_PORT_9091`: Host port we wish the Milvus service to be mapped to (Milvus container port: 9091)
+        - `OLLAMA_HOST_PORT`: Host port we wish the Ollama service to be mapped to (Ollama container port: 11434)
 
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
