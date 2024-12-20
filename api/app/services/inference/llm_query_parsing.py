@@ -5,6 +5,7 @@ from ast import literal_eval
 from copy import deepcopy
 from functools import partial
 from json.decoder import JSONDecodeError
+from pathlib import Path
 from typing import Any, Callable, Literal, Type, get_args, get_origin
 
 from app.models.filter import Filter
@@ -204,8 +205,14 @@ class Llama_ManualFunctionCalling:
 
 
 class UserQueryParsing:
-    SCHEMA_MAPPING = {AssetType.DATASETS: HuggingFaceDatasetMetadataTemplate}
     DB_TRANSLATOR_FUNCS = {"milvus": "milvus_translator"}
+
+    # TODO this current implementation can only work with one asset_type
+    # few shot examples... We would need to dynamically assign them on LLM invocation
+    # once we know which asset type a specific input is associated with
+    _DEFAULT_PATH_TO_STAGE_1_ = Path(
+        "api/data/fewshot_examples/user_query_stage1/datasets.json"
+    )
 
     @classmethod
     def get_db_translator_func(
@@ -225,11 +232,8 @@ class UserQueryParsing:
         ], f"Invalid db_to_translate argument '{db_to_translate}'"
         self.translator_func = self.get_db_translator_func(db_to_translate)
 
-        # TODO for now we hardcoded this like this
         if stage_1_fewshot_examples_filepath is None:
-            stage_1_fewshot_examples_filepath = (
-                "api/data/fewshot_examples/user_query_stage1/datasets.json"
-            )
+            stage_1_fewshot_examples_filepath = self._DEFAULT_PATH_TO_STAGE_1_
 
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
             llm=llm, fewshot_examples_path=stage_1_fewshot_examples_filepath
@@ -253,7 +257,7 @@ class UserQueryParsing:
             return topic_list + to_add
 
         assert (
-            asset_type in self.SCHEMA_MAPPING.keys()
+            asset_type in SchemaOperations.SCHEMA_MAPPING.keys()
         ), f"Invalid asset_type argument '{asset_type}'"
         asset_schema = SchemaOperations.get_asset_schema(asset_type)
 

@@ -100,9 +100,9 @@ class Milvus_EmbeddingStore(EmbeddingStore):
 
             if self.extract_metadata:
                 if asset_type == AssetType.DATASETS:
-                    # TODO we wish to generalize this later on
-                    # Schema specifically tailored for HuggingFace datasets...
-
+                    # TODO
+                    # Currently this schema reflects some what easily accessible and constant
+                    # metadata we can retrieve from HuggingFace
                     schema.add_field("date_published", DataType.VARCHAR, max_length=22)
                     schema.add_field("size_in_mb", DataType.FLOAT, default=None)
                     schema.add_field(

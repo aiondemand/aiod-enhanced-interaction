@@ -69,6 +69,12 @@ async def search_thread() -> None:
             query_id, query_type = QUERY_QUEUE.get()
             if query_id is None:
                 return
+            if (
+                query_type == FilteredUserQuery
+                and settings.PERFORM_LLM_QUERY_PARSING is False
+            ):
+                continue
+
             logging.info(f"Searching relevant assets for query ID: {query_id}")
 
             user_query: BaseUserQuery = database.find_by_id(
@@ -116,10 +122,6 @@ def retrieve_topk_documents_wrapper(
 
     topic = user_query.orig_query
     meta_filter_str = ""
-
-    if llm_query_parser is None and isinstance(user_query, FilteredUserQuery):
-        # TODO deal with this properly
-        raise ValueError("We currently do not support filtered queries")
 
     # apply metadata filtering
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):

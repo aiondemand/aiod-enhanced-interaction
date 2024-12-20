@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -17,6 +18,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     """
 
     _ALL_VALID_VALUES: ClassVar[list[list[str]] | None] = None
+    _PATH_TO_VALID_VALUES = ClassVar[Path] = Path("data/valid_metadata_values.json")
 
     date_published: str = Field(
         ...,
@@ -49,9 +51,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
 
     @classmethod
     def _load_all_valid_values(cls) -> None:
-        # TODO get rid of ugly path
-        path = "data/valid_metadata_values.json"
-        with open(path) as f:
+        with open(cls._PATH_TO_VALID_VALUES) as f:
             cls._ALL_VALID_VALUES = json.load(f)
 
     @classmethod

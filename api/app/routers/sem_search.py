@@ -10,8 +10,6 @@ from app.services.threads.search_thread import QUERY_QUEUE
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
-# TODO later extract common code from query endpoints here
-
 
 async def submit_query(
     user_query: BaseUserQuery, database: Database, router: APIRouter
