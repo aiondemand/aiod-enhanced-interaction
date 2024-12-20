@@ -28,9 +28,9 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
-docker compose -f docker-compose.yml -f docker-compose.populate.yml up populate-db --build
+docker compose -f docker-compose.populate.yml up populate-db --build
 EXIT_CODE=$?
-docker compose -f docker-compose.yml -f docker-compose.populate.yml down
+docker compose -f docker-compose.populate.yml down
 
 if [ $EXIT_CODE -eq 0 ]; then
   echo "Population of vector DB has run successfully."

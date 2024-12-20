@@ -13,12 +13,14 @@ services:
       - MILVUS__URI=http://milvus-standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
-      - MILVUS__EXTRACT_METADATA=false
+      - MILVUS__EXTRACT_METADATA=true
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
+      - OLLAMA__URI=http://ollama:11434
     ports:
       - "${APP_HOST_PORT}:80"
     depends_on:
       - milvus-standalone
+      - ollama
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
@@ -90,3 +92,17 @@ services:
       - milvus-etcd
       - milvus-minio
 
+  #Ollama service
+  ollama:
+    image: ollama/ollama:0.5.4
+    volumes:
+      - ${DATA_DIRPATH}/ollama:/root/.ollama/
+    ports:
+      - "${OLLAMA_HOST_PORT}:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

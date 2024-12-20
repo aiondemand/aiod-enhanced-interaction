@@ -3,8 +3,10 @@ import re
 from datetime import datetime
 from typing import Any
 
+from app.schemas.asset_metadata.dataset_metadata import (
+    HuggingFaceDatasetMetadataTemplate,
+)
 from app.schemas.enums import AssetType
-from app.services.inference.llm_query_parsing import HuggingFaceDatasetMetadataTemplate
 
 
 class HuggingFaceDatasetExtractMedatada:

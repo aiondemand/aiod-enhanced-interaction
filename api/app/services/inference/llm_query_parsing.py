@@ -10,9 +10,6 @@ from typing import Any, Callable, Literal, Type, get_args, get_origin
 
 from app.models.filter import Filter
 from app.schemas.asset_metadata.base import SchemaOperations
-from app.schemas.asset_metadata.dataset_metadata import (
-    HuggingFaceDatasetMetadataTemplate,
-)
 from app.schemas.enums import AssetType
 from langchain_core.language_models.llms import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
@@ -434,8 +431,6 @@ class UserQueryParsingStages:
             If the transformation of the raw value is not clear and ambiguous, discard the expression.
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
-
-    HuggingFaceDatasetMetadataTemplate.__pydantic_decorators__.field_validators
 
     @classmethod
     def _create_dynamic_stage2_schema(

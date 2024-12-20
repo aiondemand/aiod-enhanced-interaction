@@ -12,5 +12,5 @@ if __name__ == "__main__":
         USE_GPU=os.environ.get("USE_GPU", "false"),
         USE_LLM=os.environ.get("USE_LLM", "false"),
     )
-    with open("./docker-compose.yml", "w") as f:
+    with open("./docker-compose.final.yml", "w") as f:
         f.write(output)

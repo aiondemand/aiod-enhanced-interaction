@@ -18,10 +18,10 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     """
 
     _ALL_VALID_VALUES: ClassVar[list[list[str]] | None] = None
-    _PATH_TO_VALID_VALUES = ClassVar[Path] = Path("data/valid_metadata_values.json")
+    _PATH_TO_VALID_VALUES: ClassVar[Path] = Path("data/valid_metadata_values.json")
 
-    date_published: str = Field(
-        ...,
+    date_published: Optional[str] = Field(
+        None,
         description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'.",
     )
     size_in_mb: Optional[int] = Field(
@@ -70,7 +70,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     @classmethod
     def check_date_published(cls, value: str) -> str | None:
         pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
-        return bool(re.match(pattern, value))
+        return value if bool(re.match(pattern, value)) else None
 
     @field_validator("license", mode="before")
     @classmethod
