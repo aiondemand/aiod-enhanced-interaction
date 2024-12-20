@@ -2,6 +2,7 @@ services:
   app:
     environment:
       - MILVUS__EXTRACT_METADATA=true
+      - OLLAMA__URI=http://ollama:11434
     depends_on:
       - ollama
   ollama:

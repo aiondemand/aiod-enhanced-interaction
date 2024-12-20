@@ -63,6 +63,10 @@ def app_init() -> None:
     sleep(10)  # Headstart for Milvus to fully initialize
     setup_logger()
 
+    import os
+
+    logging.info(os.getcwd())
+
     # Instantiate singletons before utilizing them in other threads
     Database()
 

@@ -27,6 +27,7 @@ from langchain_core.prompts import (
 )
 from langchain_core.runnables import RunnableLambda, RunnableSequence
 from langchain_ollama import ChatOllama
+from ollama import Client as OllamaClient
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 
@@ -174,6 +175,19 @@ def strip_list_type(annotation: Type) -> Type:
     if is_list_type(annotation):
         return get_args(annotation)[0]
     return annotation
+
+
+class Prep_LLM:
+    @classmethod
+    def setup_ollama_llm(
+        cls, ollama_uri: str, model_name: str = "llama3.1:8b"
+    ) -> ChatOllama:
+        client = OllamaClient(host=ollama_uri)
+        client.pull(model_name)
+
+        return ChatOllama(
+            model=model_name, num_predict=1_024, num_ctx=4_096, base_url=ollama_uri
+        )
 
 
 class Llama_ManualFunctionCalling:
@@ -327,7 +341,7 @@ class UserQueryParsing:
 
     def __init__(
         self,
-        llm: BaseLLM | None = None,
+        llm: BaseLLM,
         db_to_translate: Literal["milvus"] = "milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None,
@@ -336,9 +350,6 @@ class UserQueryParsing:
             "milvus"
         ], f"Invalid db_to_translate argument '{db_to_translate}'"
         self.translator_func = self.get_db_translator_func(db_to_translate)
-
-        if llm is None:
-            llm = ChatOllama(model="llama3.1:8b", num_predict=1_024, num_ctx=4_096)
 
         # TODO for now we hardcoded this like this
         if stage_1_fewshot_examples_filepath is None:

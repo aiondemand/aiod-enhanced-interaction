@@ -60,8 +60,11 @@ In this file you find the following ENV variables:
 - `MILVUS__COLLECTION_PREFIX`: Prefix to use for naming our Milvus collections
 - `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database 
 - `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings ofo the individual chunks of each document or to have only one embedding representing the entire asset.
+- `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
+- `OLLAMA__URI`: URI of the Ollama server. You can omit this variable if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False)
 - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
 - `AIOD__COMMA_SEPARETED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
+- `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
 - `AIOD__WINDOW_SIZE`: Asset window size (limit of pagination) we use for retrieving assets from AIoD API during the initial setup, by iterating over all the AIoD assets.
 - `AIOD__WINDOW_OVERLAP`: Asset window overlap representing relative size of an overlap we maintain between the pages in pagination. The overlap is necessary so that we wouldn't potentionally skip on some new assets to process if any particular assets were to be deleted in parallel with our update logic, making the whole data returned by AIoD platform slightly shifted.
 - `AIOD__JOB_WAIT_INBETWEEN_REQUESTS_SEC`: Number of seconds we wait when performing JOBs (for updating/deleting assets) in between AIoD requests in order not to overload their API.

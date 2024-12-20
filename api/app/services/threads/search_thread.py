@@ -11,7 +11,7 @@ from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
-from app.services.inference.llm_query_parsing import UserQueryParsing
+from app.services.inference.llm_query_parsing import Prep_LLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.threads.delete_thread import check_document_existence
 from tinydb import Query
@@ -56,7 +56,9 @@ async def search_thread() -> None:
 
         llm_query_parser = None
         if settings.PERFORM_LLM_QUERY_PARSING:
-            llm_query_parser = UserQueryParsing()
+            llm_query_parser = UserQueryParsing(
+                llm=Prep_LLM.setup_ollama_llm(ollama_uri=str(settings.OLLAMA.URI))
+            )
 
         # Singleton - already instantialized
         database = Database()
@@ -90,9 +92,10 @@ async def search_thread() -> None:
             user_query.result_set = results
             user_query.update_status(QueryStatus.COMPLETED)
             database.upsert(user_query)
-    except Exception:
+    except Exception as e:
+        logging.error(e)
         logging.error(
-            "An error has been encountered in the query processing thread. "
+            "The above error has been encountered in the query processing thread. "
             + "Entire Application is being terminated now"
         )
         os._exit(1)

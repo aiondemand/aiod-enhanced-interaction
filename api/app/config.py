@@ -47,6 +47,10 @@ class MilvusConfig(BaseModel):
         return f"{self.USER}:{self.PASS}"
 
 
+class OllamaConfig(BaseModel):
+    URI: AnyUrl | None = Field(None)
+
+
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARETED_ASSET_TYPES: str = Field(...)
@@ -110,6 +114,8 @@ class AIoDConfig(BaseModel):
 class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
+    OLLAMA: OllamaConfig = Field(...)
+
     USE_GPU: bool = Field(False)
     TINYDB_FILEPATH: Path = Field(...)
     MODEL_LOADPATH: str = Field(...)
@@ -133,6 +139,7 @@ class Settings(BaseSettings):
     def PERFORM_LLM_QUERY_PARSING(self) -> bool:
         return (
             self.MILVUS.EXTRACT_METADATA
+            and self.OLLAMA.URI is not None
             and len(self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION) > 0
         )
 
