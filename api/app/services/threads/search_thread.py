@@ -7,6 +7,7 @@ from queue import Queue
 import numpy as np
 from app.config import settings
 from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
+from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
 from app.services.database import Database
@@ -51,6 +52,10 @@ def fill_query_queue(database: Database) -> None:
 
 async def search_thread() -> None:
     try:
+        # Singleton - already instantialized
+        database = Database()
+        fill_query_queue(database)
+
         model = AiModel("cpu")
         embedding_store = await Milvus_EmbeddingStore.init()
 
@@ -59,10 +64,6 @@ async def search_thread() -> None:
             llm_query_parser = UserQueryParsing(
                 llm=Prep_LLM.setup_ollama_llm(ollama_uri=str(settings.OLLAMA.URI))
             )
-
-        # Singleton - already instantialized
-        database = Database()
-        fill_query_queue(database)
 
         while True:
             query_id, query_type = QUERY_QUEUE.get()
@@ -128,12 +129,12 @@ def retrieve_topk_documents_wrapper(
                 user_query.orig_query, user_query.asset_type
             )
             topic, meta_filter_str = parsed_query["topic"], parsed_query["filter_str"]
-            user_query.update_query_metadata(topic, parsed_query["conditions"])
+            user_query.update_query_metadata(topic, parsed_query["filters"])
         else:
             # user manually defined filters
             meta_filter_str = llm_query_parser.translator_func(
-                conditions=[f.model_dump() for f in user_query.filters],
-                asset_schema=llm_query_parser.get_asset_schema(user_query.asset_type),
+                filters=user_query.filters,
+                asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
 
     for _ in range(num_search_retries):

@@ -1,27 +1,34 @@
+from typing import Type
+from uuid import UUID
+
 from app.config import settings
+from app.models.query import BaseUserQuery
 from app.schemas.enums import AssetType
+from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
-from fastapi import HTTPException
+from app.services.threads.search_thread import QUERY_QUEUE
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
 
 # TODO later extract common code from query endpoints here
 
-# async def submit_query(
-#     user_query: BaseUserQuery,
-#     database: Database
-# ) -> RedirectResponse:
-#     userQuery = SimpleUserQuery(
-#         orig_query=query.strip(), asset_type=asset_type, topk=topk
-#     )
-#     database.insert(userQuery)
-#     QUERY_QUEUE.put((userQuery.id, SimpleUserQuery))
 
-#     # TODO make this router dependent
-#     return RedirectResponse(f"/query/{userQuery.id}/result", status_code=202)
-#     pass
+async def submit_query(
+    user_query: BaseUserQuery, database: Database, router: APIRouter
+) -> RedirectResponse:
+    database.insert(user_query)
+    QUERY_QUEUE.put((user_query.id, type(user_query)))
+
+    return RedirectResponse(f"{router.prefix}/{user_query.id}/result", status_code=202)
 
 
-async def get_query_results():
-    pass
+async def get_query_results(
+    query_id: UUID, database: Database, query_type: Type[BaseUserQuery]
+) -> BaseUserQueryResponse:
+    userQuery = database.find_by_id(query_type, id=str(query_id))
+    if userQuery is None:
+        raise HTTPException(status_code=404, detail="Requested query doesn't exist.")
+    return userQuery.map_to_response()
 
 
 def validate_query_endpoint_arguments_or_raise(

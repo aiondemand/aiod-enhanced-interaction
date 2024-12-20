@@ -5,18 +5,13 @@ from ast import literal_eval
 from copy import deepcopy
 from functools import partial
 from json.decoder import JSONDecodeError
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Literal,
-    Optional,
-    Type,
-    Union,
-    get_args,
-    get_origin,
-)
+from typing import Any, Callable, Literal, Type, get_args, get_origin
 
+from app.models.filter import Filter
+from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.dataset_metadata import (
+    HuggingFaceDatasetMetadataTemplate,
+)
 from app.schemas.enums import AssetType
 from langchain_core.language_models.llms import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
@@ -48,7 +43,7 @@ class NaturalLanguageCondition(BaseModel):
     )
 
 
-class SurfaceQueryParsing(BaseModel):
+class UserQuery_Stage1_OutputSchema(BaseModel):
     """Extraction and parsing of conditions and a topic found within a user query"""
 
     topic: str = Field(
@@ -58,123 +53,6 @@ class SurfaceQueryParsing(BaseModel):
     conditions: list[NaturalLanguageCondition] = Field(
         ..., description="Natural language conditions"
     )
-
-
-class HuggingFaceDatasetMetadataTemplate(BaseModel):
-    """
-    Extraction of relevant metadata we wish to retrieve from ML assets
-    """
-
-    _ALL_VALID_VALUES: ClassVar[list[list[str]] | None] = None
-
-    date_published: str = Field(
-        ...,
-        description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'.",
-    )
-    size_in_mb: Optional[int] = Field(
-        None,
-        description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
-        ge=0,
-    )
-    license: Optional[str] = Field(
-        None,
-        description="The license associated with this dataset, e.g., 'mit', 'apache-2.0'",
-    )
-    task_types: Optional[list[str]] = Field(
-        None,
-        description="The machine learning tasks suitable for this dataset. Acceptable values may include task categories or task ids found on HuggingFace platform (e.g., 'token-classification', 'question-answering', ...)",
-    )
-    languages: Optional[list[str]] = Field(
-        None,
-        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...).",
-    )
-    datapoints_lower_bound: Optional[int] = Field(
-        None,
-        description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset.",
-    )
-    datapoints_upper_bound: Optional[int] = Field(
-        None,
-        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
-    )
-
-    @classmethod
-    def _load_all_valid_values(cls) -> None:
-        # TODO get rid of ugly path
-        path = "data/valid_metadata_values.json"
-        with open(path) as f:
-            cls._ALL_VALID_VALUES = json.load(f)
-
-    @classmethod
-    def get_field_valid_values(cls, field: str) -> list[str]:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
-        return cls._ALL_VALID_VALUES.get(field, None)
-
-    @classmethod
-    def exists_field_valid_values(cls, field: str) -> bool:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
-        return field in cls._ALL_VALID_VALUES.keys()
-
-    @classmethod
-    def validate_value_against_list(cls, val: str, field: str) -> bool:
-        if cls.exists_field_valid_values(field) is False:
-            return True
-        return val in cls.get_field_valid_values(field)
-
-    @classmethod
-    def _check_field_against_list_wrapper(
-        cls, values: list[str], field: str
-    ) -> list[str]:
-        valid_values = [
-            val.lower() for val in values if cls.validate_value_against_list(val, field)
-        ]
-        if len(valid_values) == 0:
-            return None
-        return valid_values
-
-    @field_validator("date_published", mode="before")
-    @classmethod
-    def check_date_published(cls, value: str) -> str | None:
-        pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
-        return bool(re.match(pattern, value))
-
-    @field_validator("license", mode="before")
-    @classmethod
-    def check_license(cls, values: list[str]) -> list[str] | None:
-        return cls._check_field_against_list_wrapper(values, "license")
-
-    @field_validator("task_types", mode="before")
-    @classmethod
-    def check_task_types(cls, values: list[str]) -> list[str] | None:
-        return cls._check_field_against_list_wrapper(values, "task_types")
-
-    @field_validator("languages", mode="before")
-    @classmethod
-    def check_languages(cls, values: list[str]) -> list[str] | None:
-        return [val.lower() for val in values if len(val) == 2]
-
-
-def is_optional_type(annotation: Type) -> bool:
-    if get_origin(annotation) is Union:
-        return type(None) in get_args(annotation)
-    return False
-
-
-def is_list_type(annotation: Type) -> bool:
-    return get_origin(annotation) is list
-
-
-def strip_optional_type(annotation: Type) -> Type:
-    if is_optional_type(annotation):
-        return next(arg for arg in get_args(annotation) if arg is not type(None))
-    return annotation
-
-
-def strip_list_type(annotation: Type) -> Type:
-    if is_list_type(annotation):
-        return get_args(annotation)[0]
-    return annotation
 
 
 class Prep_LLM:
@@ -330,10 +208,6 @@ class UserQueryParsing:
     DB_TRANSLATOR_FUNCS = {"milvus": "milvus_translator"}
 
     @classmethod
-    def get_asset_schema(cls, asset_type: AssetType) -> Type[BaseModel]:
-        return cls.SCHEMA_MAPPING[asset_type]
-
-    @classmethod
     def get_db_translator_func(
         cls, technology: str
     ) -> Callable[[list[dict], Type[BaseModel]], str]:
@@ -381,7 +255,7 @@ class UserQueryParsing:
         assert (
             asset_type in self.SCHEMA_MAPPING.keys()
         ), f"Invalid asset_type argument '{asset_type}'"
-        asset_schema = self.get_asset_schema(asset_type)
+        asset_schema = SchemaOperations.get_asset_schema(asset_type)
 
         stage_1_input = {"query": user_query, "asset_schema": asset_schema}
         out_stage_1 = self.stage_pipe_1(stage_1_input)
@@ -435,39 +309,37 @@ class UserQueryParsing:
                 )
 
         topic = " ".join(topic_list)
+        parsed_conditions = [Filter(**cond) for cond in parsed_conditions]
         filter_string = self.milvus_translator(parsed_conditions, asset_schema)
 
         return {
             "topic": topic,
             "filter_str": filter_string,
-            "conditions": parsed_conditions,
+            "filters": parsed_conditions,
         }
 
     @classmethod
     def milvus_translator(
-        cls, conditions: list[dict], asset_schema: Type[BaseModel]
+        cls, filters: list[Filter], asset_schema: Type[BaseModel]
     ) -> str:
         def format_value(val: str | int | float) -> str:
             return f"'{val.lower()}'" if isinstance(val, str) else val
 
         simple_expression_template = "({field} {op} {val})"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
-        list_fields = {
-            k: get_origin(strip_optional_type(v)) is list
-            for k, v in asset_schema.__annotations__.items()
-        }
+        list_fields_mask = SchemaOperations.get_list_fields_mask(asset_schema)
 
         condition_strings = []
-        for cond in conditions:
-            field = cond["field"]
-            log_operator = cond["logical_operator"]
+        for cond in filters:
+            field = cond.field
+            log_operator = cond.logical_operator
 
             str_expressions = []
-            for expr in cond["expressions"]:
-                comp_operator = expr["comparison_operator"]
-                val = expr["value"]
+            for expr in cond.expressions:
+                comp_operator = expr.comparison_operator
+                val = expr.value
 
-                if list_fields[field]:
+                if list_fields_mask[field]:
                     if comp_operator not in ["==", "!="]:
                         raise ValueError(
                             "We don't support any other comparison operators but a '==', '!=' for checking whether values exist whithin the metadata field."
@@ -559,12 +431,16 @@ class UserQueryParsingStages:
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
+    HuggingFaceDatasetMetadataTemplate.__pydantic_decorators__.field_validators
+
     @classmethod
     def _create_dynamic_stage2_schema(
         cls, field_name: str, asset_schema: Type[BaseModel]
     ) -> Type[BaseModel]:
         def validate_func(cls, value: Any, func: Callable) -> Any:
-            is_list_field = is_list_type(strip_optional_type(original_field.annotation))
+            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[
+                field_name
+            ]
 
             if value == "NONE":
                 return value
@@ -575,14 +451,18 @@ class UserQueryParsingStages:
                 if len(out) > 0:
                     return out[0]
 
-            raise ValueError("Invalid processed value")
+            raise ValueError(
+                f"Value '{str(value)}' didn't comply with '{field_name}' validator demands"
+            )
 
         original_field = asset_schema.model_fields[field_name]
+        validators = SchemaOperations.get_field_validators(asset_schema, field_name)
+
         inner_class_dict = {
             "__annotations__": {
                 "raw_value": str,
-                "processed_value": strip_list_type(
-                    strip_optional_type(original_field.annotation)
+                "processed_value": SchemaOperations.dynamically_create_type_for_a_field_value(
+                    asset_schema, field_name
                 )
                 | Literal["NONE"],
                 "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
@@ -608,35 +488,25 @@ class UserQueryParsingStages:
                 description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'",
             ),
         }
-
-        validators = [
-            (func_name, decor)
-            for func_name, decor in asset_schema.__pydantic_decorators__.field_validators.items()
-            if field_name in decor.info.fields
-        ]
-        if len(validators) > 0:
-            # we will accept only one decorator/validator for a field
-            validator_func_name, decor = validators[0]
-
-            inner_class_dict.update(
-                {
-                    # Validator for 'processed_value' attribute against all valid values
-                    "validate_processed_value": field_validator(
-                        "processed_value", mode=decor.info.mode
-                    )(
-                        partial(
-                            validate_func,
-                            func=getattr(asset_schema, validator_func_name),
-                        )
+        inner_class_dict.update(
+            {
+                f"validate_processed_value_{func_name}": field_validator(
+                    "processed_value", mode=decor.info.mode
+                )(
+                    partial(
+                        validate_func,
+                        func=getattr(asset_schema, func_name),
                     )
-                }
-            )
+                )
+                for func_name, decor in validators
+            }
+        )
 
         expression_class = type(
             f"Expression_{field_name}", (BaseModel,), inner_class_dict
         )
         return type(
-            f"Condition_{field_name}",
+            f"UserQuery_Stage2_OutputSchema_{field_name}",
             (BaseModel,),
             {
                 "__annotations__": {
@@ -759,7 +629,7 @@ class UserQueryParsingStages:
 
         def is_valid_wrapper_class(obj: dict, valid_field_names: list[str]) -> bool:
             try:
-                SurfaceQueryParsing(**obj)
+                UserQuery_Stage1_OutputSchema(**obj)
 
                 invalid_fields = [
                     cond["field"]
@@ -798,7 +668,7 @@ class UserQueryParsingStages:
                 continue
             valid_field_names = list(asset_schema.model_fields.keys())
             if is_valid_wrapper_class(output, valid_field_names):
-                return SurfaceQueryParsing(**output).model_dump()
+                return UserQuery_Stage1_OutputSchema(**output).model_dump()
 
             # The LLM output is invalid, now we will identify
             # which conditions are incorrect and how many are valid
@@ -825,7 +695,7 @@ class UserQueryParsingStages:
                     if cond.get("discard", "false") == "false"
                 ]
                 if is_valid_wrapper_class(helper_object, valid_field_names):
-                    best_llm_response = SurfaceQueryParsing(
+                    best_llm_response = UserQuery_Stage1_OutputSchema(
                         **helper_object
                     ).model_dump()
                     max_valid_conditions_count = valid_conditions_count
@@ -861,7 +731,7 @@ class UserQueryParsingStages:
 
         best_llm_response = None
         max_valid_expressions_count = 0
-        expression_schema = strip_list_type(
+        expression_schema = SchemaOperations.strip_list_type(
             wrapper_schema.__annotations__["expressions"]
         )
 
@@ -908,7 +778,7 @@ class UserQueryParsingStages:
         llm: BaseLLM,
         fewshot_examples_path: str | None = None,
     ) -> Llama_ManualFunctionCalling:
-        pydantic_model = SurfaceQueryParsing
+        pydantic_model = UserQuery_Stage1_OutputSchema
 
         # metadata_field_info = [
         #     {

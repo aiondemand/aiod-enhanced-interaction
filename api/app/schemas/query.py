@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models.condition import Condition
+from app.models.filter import Filter
 from app.schemas.enums import QueryStatus
 from pydantic import BaseModel
 
@@ -21,4 +21,4 @@ class SimpleUserQueryResponse(BaseUserQueryResponse):
 
 class FilteredUserQueryResponse(BaseUserQueryResponse):
     topic: str = ""
-    filters: list[Condition] | None = None
+    filters: list[Filter] | None = None

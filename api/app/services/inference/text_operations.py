@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from app.schemas.enums import AssetType
+from app.services.inference.llm_query_parsing import HuggingFaceDatasetMetadataTemplate
 
 
 class HuggingFaceDatasetExtractMedatada:
@@ -166,7 +167,9 @@ class HuggingFaceDatasetExtractMedatada:
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound,
         }
-        return cls.filter_out_empty_fields(obj_to_return)
+        return cls.filter_out_empty_fields(
+            HuggingFaceDatasetMetadataTemplate(**obj_to_return).model_dump()
+        )
 
 
 class ConvertJsonToString:

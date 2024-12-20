@@ -5,7 +5,7 @@ from functools import partial
 from typing import Type
 from uuid import uuid4
 
-from app.models.condition import Condition
+from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import FilteredUserQueryResponse, SimpleUserQueryResponse
 from app.schemas.search_results import SearchResults
@@ -49,15 +49,15 @@ class SimpleUserQuery(BaseUserQuery):
 
 class FilteredUserQuery(BaseUserQuery):
     topic: str = ""
-    filters: list[Condition] | None = None
+    filters: list[Filter] | None = None
 
     @property
     def invoke_llm_for_parsing(self) -> bool:
         return self.filters is None
 
-    def update_query_metadata(self, topic: str, conditions: list[dict]) -> None:
+    def update_query_metadata(self, topic: str, filters: list[Filter]) -> None:
         self.topic = topic
-        self.filters = [Condition(**cond) for cond in conditions]
+        self.filters = filters
 
     def map_to_response(self) -> FilteredUserQueryResponse:
         return super().map_to_response(FilteredUserQueryResponse)
