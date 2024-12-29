@@ -5,6 +5,7 @@ class QueryStatus(Enum):
     QUEUED = "Queued"
     IN_PROGESS = "In_progress"
     COMPLETED = "Completed"
+    FAILED = "Failed"
 
 
 class AssetType(Enum):

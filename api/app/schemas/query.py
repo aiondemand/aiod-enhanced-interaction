@@ -6,13 +6,17 @@ from pydantic import BaseModel
 
 
 class BaseUserQueryResponse(BaseModel):
-    orig_query: str
+    search_query: str
+
     asset_type: str
-    topk: int
     status: QueryStatus = QueryStatus.QUEUED
+    offset: int
+    limit: int
+    num_hits: int = -1
 
     returned_doc_count: int = -1
     result_doc_ids: list[str] | None = None
+    result_docs: list[dict] | None = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):

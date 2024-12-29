@@ -14,11 +14,18 @@ from pydantic import BaseModel, Field
 
 class BaseUserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    orig_query: str
+    search_query: str
 
     asset_type: AssetType
-    topk: int
     status: QueryStatus = QueryStatus.QUEUED
+
+    # Offset is only approximate since it is applied on Milvus embeddings rather
+    # than on the actual documents returned by our service, and since one document may
+    # have multiple embeddings, the resulting offset may not be accurate and there
+    # may be some overlap between pages.
+    offset: int
+    limit: int
+    return_assets: bool = False
 
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
@@ -33,8 +40,13 @@ class BaseUserQuery(BaseModel):
             return response_model(**self.model_dump())
 
         doc_ids = self.result_set.doc_ids
+        docs = self.result_set.documents if self.return_assets else None
         return response_model(
-            returned_doc_count=len(doc_ids), result_doc_ids=doc_ids, **self.model_dump()
+            returned_doc_count=len(doc_ids),
+            result_doc_ids=doc_ids,
+            result_docs=docs,
+            num_hits=self.result_set.num_hits,
+            **self.model_dump(),
         )
 
     @staticmethod

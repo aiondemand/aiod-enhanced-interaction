@@ -7,17 +7,13 @@ from app.schemas.enums import AssetType
 from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import HTTPException
 
 
-async def submit_query(
-    user_query: BaseUserQuery, database: Database, router: APIRouter
-) -> RedirectResponse:
+async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
     database.insert(user_query)
     QUERY_QUEUE.put((user_query.id, type(user_query)))
-
-    return RedirectResponse(f"{router.prefix}/{user_query.id}/result", status_code=202)
+    return user_query.id
 
 
 async def get_query_results(

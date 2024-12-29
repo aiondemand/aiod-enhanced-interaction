@@ -1,16 +1,14 @@
 import logging
 import threading
 from datetime import datetime, timezone
-from time import sleep
 
 import numpy as np
 from app.config import settings
-from app.helper import _perform_request
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
-from requests.exceptions import HTTPError
+from app.services.threads.search_thread import check_aiod_document
 
 job_lock = threading.Lock()
 
@@ -89,7 +87,7 @@ def delete_asset_embeddings(
     ids_to_really_delete = [
         id
         for id in candidates_for_del
-        if check_document_existence(
+        if check_aiod_document(
             id, asset_type, sleep_time=settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC
         )
         is False
@@ -101,14 +99,4 @@ def delete_asset_embeddings(
         )
 
 
-def check_document_existence(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> bool:
-    try:
-        sleep(sleep_time)
-        _perform_request(settings.AIOD.get_asset_by_id_url(doc_id, asset_type))
-        return True
-    except HTTPError as e:
-        if e.response.status_code == 404:
-            return False
-        raise
+# TODO place this somewhere else...

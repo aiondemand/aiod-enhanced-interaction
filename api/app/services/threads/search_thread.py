@@ -2,22 +2,27 @@ from __future__ import annotations
 
 import logging
 import os
+from asyncio import Condition
 from queue import Queue
+from time import sleep
 
 import numpy as np
 from app.config import settings
 from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
 from app.schemas.asset_metadata.base import SchemaOperations
-from app.schemas.enums import QueryStatus
+from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.search_results import SearchResults
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
 from app.services.inference.llm_query_parsing import Prep_LLM, UserQueryParsing
 from app.services.inference.model import AiModel
-from app.services.threads.delete_thread import check_document_existence
+from requests.exceptions import HTTPError
 from tinydb import Query
 
+from preprocess.acquire_aiod import _perform_request
+
 QUERY_QUEUE = Queue()
+QUERY_CONDITIONS: dict[str, Condition] = {}
 
 
 def fill_query_queue(database: Database) -> None:
@@ -66,39 +71,52 @@ async def search_thread() -> None:
             )
 
         while True:
-            query_id, query_type = QUERY_QUEUE.get()
-            if query_id is None:
-                return
-            if (
-                query_type == FilteredUserQuery
-                and settings.PERFORM_LLM_QUERY_PARSING is False
-            ):
-                continue
+            try:
+                query_id, query_type = QUERY_QUEUE.get()
+                if query_id is None:
+                    return
+                if (
+                    query_type == FilteredUserQuery
+                    and settings.PERFORM_LLM_QUERY_PARSING is False
+                ):
+                    continue
 
-            logging.info(f"Searching relevant assets for query ID: {query_id}")
+                logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query: BaseUserQuery = database.find_by_id(
-                type=query_type, id=query_id
-            )
-            if user_query is None:
-                err_msg = (
-                    f"UserQuery id={query_id} doesn't exist even though it should."
+                user_query: BaseUserQuery = database.find_by_id(
+                    type=query_type, id=query_id
                 )
-                logging.error(err_msg)
-                continue
+                if user_query is None:
+                    err_msg = (
+                        f"UserQuery id={query_id} doesn't exist even though it should."
+                    )
+                    logging.error(err_msg)
+                    continue
 
-            user_query.update_status(QueryStatus.IN_PROGESS)
-            database.upsert(user_query)
+                user_query.update_status(QueryStatus.IN_PROGESS)
+                database.upsert(user_query)
 
-            results = retrieve_topk_documents_wrapper(
-                model,
-                llm_query_parser,
-                embedding_store,
-                user_query,
-            )
-            user_query.result_set = results
-            user_query.update_status(QueryStatus.COMPLETED)
-            database.upsert(user_query)
+                results = retrieve_topk_documents_wrapper(
+                    model,
+                    llm_query_parser,
+                    embedding_store,
+                    user_query,
+                )
+                user_query.result_set = results
+                user_query.update_status(QueryStatus.COMPLETED)
+                database.upsert(user_query)
+            except Exception as e:
+                user_query.update_status(QueryStatus.FAILED)
+                database.upsert(user_query)
+                logging.error(e)
+                logging.error(
+                    f"Error encountered while processing query ID: {query_id}"
+                )
+            finally:
+                if QUERY_CONDITIONS.get(user_query.id, None) is not None:
+                    async with QUERY_CONDITIONS[user_query.id]:
+                        QUERY_CONDITIONS[user_query.id].notify_all()
+
     except Exception as e:
         logging.error(e)
         logging.error(
@@ -118,9 +136,9 @@ def retrieve_topk_documents_wrapper(
     doc_ids_to_exclude_from_search = []
     doc_ids_to_remove_from_db = []
     documents_to_return = SearchResults()
-    num_docs_to_retrieve = user_query.topk
+    num_docs_to_retrieve = user_query.limit
 
-    topic = user_query.orig_query
+    topic = user_query.search_query
     meta_filter_str = ""
 
     # apply metadata filtering
@@ -128,7 +146,7 @@ def retrieve_topk_documents_wrapper(
         if user_query.invoke_llm_for_parsing:
             # utilize LLM to automatically extract filters from the user query
             parsed_query = llm_query_parser(
-                user_query.orig_query, user_query.asset_type
+                user_query.search_query, user_query.asset_type
             )
             topic, meta_filter_str = parsed_query["topic"], parsed_query["filter_str"]
             user_query.update_query_metadata(topic, parsed_query["filters"])
@@ -148,18 +166,17 @@ def retrieve_topk_documents_wrapper(
             model,
             topic,
             asset_type=user_query.asset_type,
-            topk=num_docs_to_retrieve,
+            offset=user_query.offset,
+            limit=num_docs_to_retrieve,
             filter=filter_str,
         )
         if len(results) == 0:
             return documents_to_return
-
         doc_ids_to_exclude_from_search.extend(results.doc_ids)
 
-        # check what documents are still valid
-        exists_mask = np.array(
+        results.documents = np.array(
             [
-                check_document_existence(
+                get_aiod_document(
                     doc_id,
                     user_query.asset_type,
                     sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
@@ -167,13 +184,14 @@ def retrieve_topk_documents_wrapper(
                 for doc_id in results.doc_ids
             ]
         )
-        doc_ids_to_del = [results.doc_ids[idx] for idx in np.where(~exists_mask)[0]]
+        # check what documents are still valid
+        doc_ids_to_del = results.filter_out_docs()
         doc_ids_to_remove_from_db.extend(doc_ids_to_del)
 
         # perform another Milvus extraction if we dont have sufficient amount of
         # documents as a response
-        documents_to_return += results.filter_out_docs(doc_ids_to_del)
-        num_docs_to_retrieve = user_query.topk - len(documents_to_return.doc_ids)
+        documents_to_return += results
+        num_docs_to_retrieve = user_query.limit - len(documents_to_return.doc_ids)
         if num_docs_to_retrieve == 0:
             break
 
@@ -185,4 +203,30 @@ def retrieve_topk_documents_wrapper(
         logging.info(
             f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({user_query.asset_type.value}) have been deleted"
         )
+
+    # Compute num_hits in the database that match the query/filters
+    documents_to_return.num_hits = embedding_store.get_number_of_hits(
+        asset_type=user_query.asset_type, filter=filter_str
+    )
     return documents_to_return
+
+
+def get_aiod_document(
+    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
+) -> dict | None:
+    try:
+        sleep(sleep_time)
+        response = _perform_request(
+            settings.AIOD.get_asset_by_id_url(doc_id, asset_type)
+        )
+        return response.json()
+    except HTTPError as e:
+        if e.response.status_code == 404:
+            return None
+        raise
+
+
+def check_aiod_document(
+    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
+) -> bool:
+    return get_aiod_document(doc_id, asset_type, sleep_time) is not None
