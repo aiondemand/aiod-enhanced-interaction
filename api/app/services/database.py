@@ -10,6 +10,7 @@ from app.schemas.enums import AssetType, QueryStatus
 from pydantic import BaseModel
 from tinydb import Query, TinyDB
 from tinydb.storages import JSONStorage
+from tinydb.table import Table
 from tinydb_serialization import SerializationMiddleware, Serializer
 from tinydb_serialization.serializers import DateTimeSerializer
 
@@ -70,13 +71,13 @@ class Database:
         self.db_lock = threading.Lock()
 
         self.collections = {
-            SimpleUserQuery: Collection[SimpleUserQuery](
+            SimpleUserQuery: MyCollection[SimpleUserQuery](
                 self.db.table("simple_queries"), self.db_lock
             ),
-            FilteredUserQuery: Collection[FilteredUserQuery](
+            FilteredUserQuery: MyCollection[FilteredUserQuery](
                 self.db.table("filtered_queries"), self.db_lock
             ),
-            AssetCollection: Collection[AssetCollection](
+            AssetCollection: MyCollection[AssetCollection](
                 self.db.table("asset_collections"), self.db_lock
             ),
         }
@@ -90,6 +91,9 @@ class Database:
     def find_by_id(self, type: Type[T], id: str) -> T | None:
         return self.collections[type].find_by_id(id)
 
+    def delete(self, type: Type[T], *args, **kwargs) -> Any:
+        return self.collections[type].delete(*args, **kwargs)
+
     def search(self, type: Type[T], *args, **kwargs) -> list[T]:
         return self.collections[type].search(*args, **kwargs)
 
@@ -102,8 +106,8 @@ class Database:
         return rs[0]
 
 
-class Collection(Generic[T]):
-    def __init__(self, table: Collection, db_lock: threading.Lock) -> None:
+class MyCollection(Generic[T]):
+    def __init__(self, table: Table, db_lock: threading.Lock) -> None:
         self.table = table
         self.db_lock = db_lock
 
@@ -121,6 +125,10 @@ class Collection(Generic[T]):
             return None
         T_type = self.__orig_class__.__args__[0]
         return T_type(**obj)
+
+    def delete(self, *args, **kwargs):
+        with self.db_lock:
+            return self.table.remove(*args, **kwargs)
 
     def search(self, *args, **kwargs) -> list[T]:
         results = self.table.search(*args, **kwargs)

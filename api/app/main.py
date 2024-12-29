@@ -9,11 +9,14 @@ from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import simple_sem_search as query_router
 from app.services.database import Database
 from app.services.threads import threads
-from app.services.threads.delete_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.embedding_thread import (
     compute_embeddings_for_aiod_assets_wrapper,
 )
+from app.services.threads.milvus_gc_thread import (
+    delete_embeddings_of_aiod_assets_wrapper,
+)
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
+from app.services.threads.tinydb_gc_thread import delete_expired_queries_wrapper
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
@@ -95,6 +98,14 @@ def app_init() -> None:
         ),
         CronTrigger(day=settings.AIOD.DAY_IN_MONTH_FOR_EMB_CLEANING, hour=0, minute=0),
     )
+    # Recurring TinyDB cleanup
+    SCHEDULER.add_job(
+        partial(
+            threads.run_async_in_thread,
+            target_func=delete_expired_queries_wrapper,
+        ),
+        CronTrigger(hour=0, minute=0),
+    )
     SCHEDULER.start()
 
     # Immediate computation of AIoD asset embeddings
@@ -104,6 +115,8 @@ def app_init() -> None:
             compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
         )
     )
+
+    threads.start_async_thread(target_func=delete_expired_queries_wrapper)
 
 
 def app_shutdown() -> None:

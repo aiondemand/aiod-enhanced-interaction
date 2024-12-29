@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.models.filter import Filter
 from app.schemas.enums import QueryStatus
 from pydantic import BaseModel
@@ -13,6 +15,7 @@ class BaseUserQueryResponse(BaseModel):
     offset: int
     limit: int
     num_hits: int = -1
+    expires_at: datetime | None = None
 
     returned_doc_count: int = -1
     result_doc_ids: list[str] | None = None

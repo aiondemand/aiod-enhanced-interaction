@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Type
 from uuid import uuid4
@@ -29,11 +29,15 @@ class BaseUserQuery(BaseModel):
 
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
+    expires_at: datetime | None = None
     result_set: SearchResults | None = None
 
     def update_status(self, status: QueryStatus) -> None:
         self.status = status
         self.updated_at = datetime.now(tz=timezone.utc)
+
+        if status in (QueryStatus.COMPLETED, QueryStatus.FAILED):
+            self.expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=1)
 
     def map_to_response(self, response_model: Type[BaseModel]) -> BaseModel:
         if self.result_set is None:

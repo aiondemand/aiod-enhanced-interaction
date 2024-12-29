@@ -8,6 +8,7 @@ from time import sleep
 
 import numpy as np
 from app.config import settings
+from app.helper import _perform_request
 from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import AssetType, QueryStatus
@@ -18,8 +19,6 @@ from app.services.inference.llm_query_parsing import Prep_LLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from requests.exceptions import HTTPError
 from tinydb import Query
-
-from preprocess.acquire_aiod import _perform_request
 
 QUERY_QUEUE = Queue()
 QUERY_CONDITIONS: dict[str, Condition] = {}
