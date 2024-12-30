@@ -116,8 +116,6 @@ def app_init() -> None:
         )
     )
 
-    threads.start_async_thread(target_func=delete_expired_queries_wrapper)
-
 
 def app_shutdown() -> None:
     QUERY_QUEUE.put((None, None))

@@ -97,6 +97,3 @@ def delete_asset_embeddings(
         logging.info(
             f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
         )
-
-
-# TODO place this somewhere else...

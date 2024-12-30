@@ -39,6 +39,12 @@ class SurfaceQueryParsing(BaseModel):
     conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
             
 
+class ValidValue(BaseModel):
+    """Validation of a value against a list of permitted values"""
+    validated_value: str = Field(..., description="A value that has been validated against a list of permitted values for a particular field")
+    is_matched: bool = Field(..., description="Whether the value has been matched against the list of permitted values or not")
+
+
 class HuggingFaceDatasetMetadataTemplate(BaseModel):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
@@ -812,6 +818,27 @@ class UserQueryParsingStages:
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
+    task_instructions_stage3 = """
+        Your task is to determine whether a given `value` representing a field of an ML asset can be mapped to one of the values in a provided list of `permitted_values`. Use the following rules:
+
+        1. **Input Details**:
+        - **Field**: The specific field of an ML asset the value pertains to (e.g., "languages", "task_types", "license", ...).
+        - **Value to assess**: The `value` that is subject of analysis and potential transformation.
+        - **Permitted Values**: A list of valid values for this field.
+
+        2. **Validation Rules**:
+        - If the `value` can be unambiguously matched to one of the permitted values, return the matched value.
+        - If the mapping is ambiguous or if the `value` cannot be matched, stick to the `value` as-is and mark it as unmatched.
+
+        3. **Output Schema**:
+        Return a JSON object with the following fields:
+        ```json
+        {{
+            "validated_value": "string",
+            "is_matched": true or false
+        }}
+    """
+
     @classmethod
     def _create_dynamic_stage2_schema(cls, field_name: str, asset_schema: Type[BaseModel]) -> Type[BaseModel]:
         def validate_func(cls, value: Any, func: Callable) -> Any:
@@ -969,7 +996,7 @@ class UserQueryParsingStages:
             } for name, field in asset_schema.model_fields.items()
         ]
         return json.dumps(metadata_field_info)
-
+    
     @classmethod
     def _try_invoke_stage_1(
         cls, chain: RunnableSequence, input: dict,
@@ -1118,6 +1145,26 @@ class UserQueryParsingStages:
                     max_valid_expressions_count = valid_expressions_count
             
         return best_llm_response
+    
+    @classmethod
+    def _try_invoke_stage_3(
+        cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
+    ) -> dict | None:
+        # TODO this function is being developed on api/ folder
+        # TODO we need to create a list of permitted values on the fly based on the field
+        
+        for _ in range(num_retry_attempts):
+            output = chain.invoke(input)
+        
+            if output is None:
+                continue
+            try:
+                ValidValue(**output)
+                break
+            except:
+                pass
+
+        return output
         
     @classmethod
     def init_stage_1(
@@ -1127,18 +1174,6 @@ class UserQueryParsingStages:
     ) -> Llama_ManualFunctionCalling:
         pydantic_model = SurfaceQueryParsing
         
-        # metadata_field_info = [
-        #     {
-        #         "name": name, 
-        #         "description": field.description, 
-        #         "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
-        #     } for name, field in asset_schema.model_fields.items()
-        # ]
-        # task_instructions = HumanMessagePromptTemplate.from_template(
-        #     cls.task_instructions_stage1, 
-        #     partial_variables={"model_schema": json.dumps(metadata_field_info)}
-        # )
-
         task_instructions = HumanMessagePromptTemplate.from_template(
             cls.task_instructions_stage1, 
         )
@@ -1190,30 +1225,44 @@ class UserQueryParsingStages:
             )
         )
 
+    @classmethod
+    def init_stage_3(
+        cls, 
+        llm: BaseLLM
+    ) -> Llama_ManualFunctionCalling:
+        chat_prompt_no_system = ChatPromptTemplate.from_messages([
+            ("user", cls.task_instructions_stage3),
+            ("user", "**Field**: {field}"),
+            ("user", "**Permitted values**: {permitted_values}"),
+            ("user", "**Value to assess**: {value}"),
+        ])
+        return Llama_ManualFunctionCalling(
+            llm, 
+            pydantic_model=ValidValue, 
+            chat_prompt_no_system=chat_prompt_no_system,
+            call_function=partial(
+                cls._try_invoke_stage_3
+            )
+        )
+
 
 if __name__ == "__main__":
     MODEL_NAME = "llama3.1:8b"
     model = ChatOllama(model=MODEL_NAME, num_predict=1_024, num_ctx=4_096)
     
-    # user_query = (
-    #     "Retrieve all the translation datasets that have more than 20k datapoints and fewer than 80k datapoints " +
-    #     "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese. The data is stored in CSV files"
+
+    stage = UserQueryParsingStages.init_stage_3(model)
+    
+    input = {
+        "field": "task_types",
+        "permitted_values": ["summarization", "translation", "classification"],
+        "value": "summarize"
+    }
+    out = stage(input)
+
+    # user_query_parsing = UserQueryParsing(
+    #     model, stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
     # )
-    # user_query = (
-    #     "Retrieve all the summarization datasets from years 2022 and 2023 in CSV format that have more than 20k datapoints, but fewer than 480 000."
-    # )
+    # topic, str_filter = user_query_parsing(user_query, asset_type="datasets")
 
-    # user_query = (
-    #     "Retrieve all the claim-matching datasets that are older than March of 2022 and that have more than 20k datapoints, but fewer than 5 million."
-    # )
-
-    user_query = (
-        "Retrieve all datasets that tackle the problem of summarization, with English, French and German data"
-    )
-
-    user_query_parsing = UserQueryParsing(
-        model, stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
-    )
-    topic, str_filter = user_query_parsing(user_query, asset_type="datasets")
-
-    exit()
+    # exit()

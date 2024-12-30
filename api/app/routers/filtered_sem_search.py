@@ -23,7 +23,7 @@ router = APIRouter(prefix="/filtered_query", tags=["filtered_query"])
 async def submit_simple_query_blocking(
     database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
-        ..., max_length=100, min_length=1, description="User search query with filters"
+        ..., max_length=200, min_length=1, description="User search query with filters"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     filters: list[Filter] | None = Body(
@@ -52,7 +52,7 @@ async def submit_simple_query_blocking(
 async def submit_filtered_query(
     database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
-        ..., max_length=100, min_length=1, description="User search query with filters"
+        ..., max_length=200, min_length=1, description="User search query with filters"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     filters: list[Filter] | None = Body(

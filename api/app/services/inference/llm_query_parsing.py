@@ -53,6 +53,19 @@ class UserQuery_Stage1_OutputSchema(BaseModel):
     )
 
 
+class ValidValue(BaseModel):
+    """Validation of a value against a list of permitted values"""
+
+    validated_value: str = Field(
+        ...,
+        description="A value that has been validated against a list of permitted values for a particular field",
+    )
+    is_matched: bool = Field(
+        ...,
+        description="Whether the value has been matched against the list of permitted values or not",
+    )
+
+
 class Prep_LLM:
     @classmethod
     def setup_ollama_llm(
@@ -235,8 +248,10 @@ class UserQueryParsing:
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
             llm=llm, fewshot_examples_path=stage_1_fewshot_examples_filepath
         )
-        self.pipe_stage_2 = UserQueryParsingStages.init_stage_2(
-            llm=llm, fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath
+        self.stage_pipe_2 = UserQueryParsingStages.init_stage_2(
+            llm=llm,
+            fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath,
+            validation_step=UserQueryParsingStages.init_stage_3(llm=llm),
         )
 
     def __call__(self, user_query: str, asset_type: AssetType) -> dict:
@@ -247,7 +262,7 @@ class UserQueryParsing:
                 item[content_key]
                 for item in new_objects
                 if (
-                    item.get("discard", "false") == "true"
+                    item.get("discard", False)
                     and item.get(content_key, None) is not None
                 )
             ]
@@ -272,7 +287,7 @@ class UserQueryParsing:
         valid_conditions = [
             cond
             for cond in out_stage_1["conditions"]
-            if cond.get("discard", "false") == "false"
+            if cond.get("discard", False) is False
         ]
         for nl_cond in valid_conditions:
             input = {
@@ -280,7 +295,7 @@ class UserQueryParsing:
                 "field": nl_cond["field"],
                 "asset_schema": asset_schema,
             }
-            out_stage_2 = self.pipe_stage_2(input)
+            out_stage_2 = self.stage_pipe_2(input)
             if out_stage_2 is None:
                 topic_list.append(nl_cond["condition"])
                 continue
@@ -292,7 +307,7 @@ class UserQueryParsing:
             valid_expressions = [
                 expr
                 for expr in out_stage_2["expressions"]
-                if expr.get("discard", "false") == "false"
+                if expr.get("discard", False) is False
             ]
             if len(valid_expressions) > 0:
                 parsed_conditions.append(
@@ -432,6 +447,27 @@ class UserQueryParsingStages:
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
+    task_instructions_stage3 = """
+        Your task is to determine whether a given `value` representing a field of an ML asset can be mapped to one of the values in a provided list of `permitted_values`. Use the following rules:
+
+        1. **Input Details**:
+        - **Field**: The specific field of an ML asset the value pertains to (e.g., "languages", "task_types", "license", ...).
+        - **Value to assess**: The `value` that is subject of analysis and potential transformation.
+        - **Permitted Values**: A list of valid values for this field.
+
+        2. **Validation Rules**:
+        - If the `value` can be unambiguously matched to one of the permitted values, return the matched value.
+        - If the mapping is ambiguous or if the `value` cannot be matched, stick to the `value` as-is and mark it as unmatched.
+
+        3. **Output Schema**:
+        Return a JSON object with the following fields:
+        ```json
+        {{
+            "validated_value": "string",
+            "is_matched": true or false
+        }}
+    """
+
     @classmethod
     def _create_dynamic_stage2_schema(
         cls, field_name: str, asset_schema: Type[BaseModel]
@@ -447,7 +483,7 @@ class UserQueryParsingStages:
                 return func(value)
             if is_list_field:
                 out = func([value])
-                if len(out) > 0:
+                if out is not None and len(out) > 0:
                     return out[0]
 
             raise ValueError(
@@ -465,7 +501,7 @@ class UserQueryParsingStages:
                 )
                 | Literal["NONE"],
                 "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
-                "discard": Literal["false", "true"],
+                "discard": bool,
             },
             # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble
             # properly processing the values immediately. By defining an explicit intermediate step, to write down the raw value before transforming it,
@@ -483,7 +519,7 @@ class UserQueryParsingStages:
                 description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'.",
             ),
             "discard": Field(
-                "false",
+                False,
                 description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'",
             ),
         }
@@ -549,6 +585,7 @@ class UserQueryParsingStages:
         chain: RunnableSequence,
         input: dict,
         fewshot_examples_dirpath: str | None = None,
+        validation_step: Llama_ManualFunctionCalling | None = None,
     ) -> dict | None:
         metadata_field = input["field"]
         asset_schema = input["asset_schema"]
@@ -585,11 +622,16 @@ class UserQueryParsingStages:
                     )
                     chain_to_use = RunnableSequence(new_prompt, *chain.steps[1:])
 
-        field_valid_values = (
-            f"b) List of the only permitted values: {asset_schema.get_field_valid_values(metadata_field)}"
-            if asset_schema.exists_field_valid_values(metadata_field)
-            else ""
-        )
+        field_valid_values = ""
+        curr_validation_step = None
+        permitted_values = []
+        if asset_schema.exists_field_valid_values(metadata_field):
+            permitted_values = asset_schema.get_field_valid_values(metadata_field)
+            field_valid_values = (
+                f"b) List of the only permitted values: {permitted_values}"
+            )
+            curr_validation_step = validation_step
+
         input_variables = {
             "query": input["condition"],
             "field_name": metadata_field,
@@ -599,7 +641,13 @@ class UserQueryParsingStages:
                 dynamic_type
             ),
         }
-        return cls._try_invoke_stage_2(chain_to_use, input_variables, dynamic_type)
+        return cls._try_invoke_stage_2(
+            chain_to_use,
+            input_variables,
+            dynamic_type,
+            validation_step=curr_validation_step,
+            validation_step_permitted_values=permitted_values,
+        )
 
     @classmethod
     def prepare_simplified_model_schema_stage_1(
@@ -678,9 +726,9 @@ class UserQueryParsingStages:
                 if is_valid_condition_class(output["conditions"][i], valid_field_names):
                     valid_conditions_count += 1
                 elif isinstance(output["conditions"][i], dict):
-                    output["conditions"][i]["discard"] = "true"
+                    output["conditions"][i]["discard"] = True
                 else:
-                    output["conditions"][i] = {"discard": "true"}
+                    output["conditions"][i] = {"discard": True}
 
             # we compare current LLM output to potentionally previous LLm outputs
             # and identify the best LLM response (containing the most valid conditions)
@@ -691,7 +739,7 @@ class UserQueryParsingStages:
                 helper_object["conditions"] = [
                     cond
                     for cond in output["conditions"]
-                    if cond.get("discard", "false") == "false"
+                    if cond.get("discard", False) is False
                 ]
                 if is_valid_wrapper_class(helper_object, valid_field_names):
                     best_llm_response = UserQuery_Stage1_OutputSchema(
@@ -707,6 +755,8 @@ class UserQueryParsingStages:
         chain: RunnableSequence,
         input: dict,
         wrapper_schema: Type[BaseModel],
+        validation_step: Llama_ManualFunctionCalling | None,
+        validation_step_permitted_values: list[str] = [],
         num_retry_attempts: int = 5,
     ) -> dict | None:
         def exists_expressions_list_in_wrapper_dict(obj: dict) -> bool:
@@ -750,9 +800,26 @@ class UserQueryParsingStages:
                 if is_valid_expression_class(output["expressions"][i]):
                     valid_expressions_count += 1
                 elif isinstance(output["expressions"][i], dict):
-                    output["expressions"][i]["discard"] = "true"
+                    output["expressions"][i]["discard"] = True
+
+                    # Apply validation step to compare extracted value against the list of valid/permitted values
+                    if validation_step is not None:
+                        validated_output = validation_step(
+                            input={
+                                "field": input["field_name"],
+                                "value": output["expressions"][i]["processed_value"],
+                                "permitted_values": validation_step_permitted_values,
+                            }
+                        )
+                        if validated_output is not None:
+                            output["expressions"][i]["processed_value"] = (
+                                validated_output["validated_value"]
+                            )
+                            if is_valid_expression_class(output["expressions"][i]):
+                                valid_expressions_count += 1
+                                output["expressions"][i]["discard"] = False
                 else:
-                    output["expressions"][i] = {"discard": "true"}
+                    output["expressions"][i] = {"discard": True}
 
             # we compare current LLM output to potentionally previous LLm outputs
             # and identify the best LLM response (containing the most valid expressions)
@@ -763,7 +830,7 @@ class UserQueryParsingStages:
                 helper_object["expressions"] = [
                     expr
                     for expr in output["expressions"]
-                    if expr.get("discard", "false") == "false"
+                    if expr.get("discard", False) is False
                 ]
                 if is_valid_wrapper_class(helper_object):
                     best_llm_response = wrapper_schema(**helper_object).model_dump()
@@ -772,24 +839,27 @@ class UserQueryParsingStages:
         return best_llm_response
 
     @classmethod
+    def _try_invoke_stage_3(
+        cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
+    ) -> dict | None:
+        for _ in range(num_retry_attempts):
+            output = chain.invoke(input)
+            if output is None:
+                continue
+            try:
+                return ValidValue(**output).model_dump()
+            except ValidationError:
+                pass
+
+        return None
+
+    @classmethod
     def init_stage_1(
         cls,
         llm: BaseLLM,
         fewshot_examples_path: str | None = None,
     ) -> Llama_ManualFunctionCalling:
         pydantic_model = UserQuery_Stage1_OutputSchema
-
-        # metadata_field_info = [
-        #     {
-        #         "name": name,
-        #         "description": field.description,
-        #         "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
-        #     } for name, field in asset_schema.model_fields.items()
-        # ]
-        # task_instructions = HumanMessagePromptTemplate.from_template(
-        #     cls.task_instructions_stage1,
-        #     partial_variables={"model_schema": json.dumps(metadata_field_info)}
-        # )
 
         task_instructions = HumanMessagePromptTemplate.from_template(
             cls.task_instructions_stage1,
@@ -828,7 +898,10 @@ class UserQueryParsingStages:
 
     @classmethod
     def init_stage_2(
-        cls, llm: BaseLLM, fewshot_examples_dirpath: str | None = None
+        cls,
+        llm: BaseLLM,
+        fewshot_examples_dirpath: str | None = None,
+        validation_step: Llama_ManualFunctionCalling | None = None,
     ) -> Llama_ManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages(
             [
@@ -843,5 +916,23 @@ class UserQueryParsingStages:
             call_function=partial(
                 cls._call_function_stage_2,
                 fewshot_examples_dirpath=fewshot_examples_dirpath,
+                validation_step=validation_step,
             ),
+        )
+
+    @classmethod
+    def init_stage_3(cls, llm: BaseLLM) -> Llama_ManualFunctionCalling:
+        chat_prompt_no_system = ChatPromptTemplate.from_messages(
+            [
+                ("user", cls.task_instructions_stage3),
+                ("user", "**Field**: {field}"),
+                ("user", "**Permitted values**: {permitted_values}"),
+                ("user", "**Value to assess**: {value}"),
+            ]
+        )
+        return Llama_ManualFunctionCalling(
+            llm,
+            pydantic_model=ValidValue,
+            chat_prompt_no_system=chat_prompt_no_system,
+            call_function=partial(cls._try_invoke_stage_3, num_retry_attempts=2),
         )

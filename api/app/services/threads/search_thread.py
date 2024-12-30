@@ -25,17 +25,11 @@ QUERY_CONDITIONS: dict[str, Condition] = {}
 
 
 def fill_query_queue(database: Database) -> None:
-    simple_queries_to_process = database.search(
-        SimpleUserQuery,
-        (Query().status == QueryStatus.IN_PROGESS)
-        | (Query().status == QueryStatus.QUEUED),
+    condition = (Query().status == QueryStatus.IN_PROGESS) | (
+        Query().status == QueryStatus.QUEUED
     )
-    filtered_queries_to_process = database.search(
-        FilteredUserQuery,
-        (Query().status == QueryStatus.IN_PROGESS)
-        | (Query().status == QueryStatus.QUEUED),
-    )
-
+    simple_queries_to_process = database.search(SimpleUserQuery, condition)
+    filtered_queries_to_process = database.search(FilteredUserQuery, condition)
     if len(simple_queries_to_process + filtered_queries_to_process) == 0:
         return
 
@@ -169,9 +163,9 @@ def retrieve_topk_documents_wrapper(
             limit=num_docs_to_retrieve,
             filter=filter_str,
         )
-        if len(results) == 0:
-            return documents_to_return
         doc_ids_to_exclude_from_search.extend(results.doc_ids)
+        if len(results) == 0:
+            break
 
         results.documents = np.array(
             [
@@ -205,7 +199,7 @@ def retrieve_topk_documents_wrapper(
 
     # Compute num_hits in the database that match the query/filters
     documents_to_return.num_hits = embedding_store.get_number_of_hits(
-        asset_type=user_query.asset_type, filter=filter_str
+        asset_type=user_query.asset_type, filter=meta_filter_str
     )
     return documents_to_return
 

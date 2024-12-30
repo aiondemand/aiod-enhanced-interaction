@@ -89,8 +89,6 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
             for val in values
             if val.lower() in cls.get_field_valid_values("task_types")
         ]
-        if len(valid_values) == 0:
-            return None
         return valid_values
 
     @field_validator("languages", mode="before")

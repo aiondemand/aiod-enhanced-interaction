@@ -22,7 +22,7 @@ router = APIRouter(prefix="/query", tags=["query"])
 async def submit_simple_query_blocking(
     database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
-        ..., max_length=100, min_length=1, description="User search query"
+        ..., max_length=200, min_length=1, description="User search query"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
@@ -48,7 +48,7 @@ async def submit_simple_query_blocking(
 async def submit_simple_query(
     database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
-        ..., max_length=100, min_length=1, description="User search query"
+        ..., max_length=200, min_length=1, description="User search query"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
