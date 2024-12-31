@@ -3,11 +3,7 @@ services:
   app:
     build: 
       context: .
-      {% if USE_GPU == "true" %}
-      dockerfile: Dockerfile.gpu
-      {% else %}
-      dockerfile: Dockerfile
-      {% endif %}
+      dockerfile: Dockerfile.final
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     env_file:
       - .env.app

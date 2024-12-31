@@ -4,14 +4,14 @@ import re
 from ast import literal_eval
 from copy import deepcopy
 from functools import partial
-from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable, Literal, Type, get_args, get_origin
 
+from app.config import settings
 from app.models.filter import Filter
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import AssetType
-from langchain_core.language_models.llms import BaseLLM
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import (
     ChatPromptTemplate,
@@ -68,14 +68,18 @@ class ValidValue(BaseModel):
 
 class Prep_LLM:
     @classmethod
-    def setup_ollama_llm(
-        cls, ollama_uri: str, model_name: str = "llama3.1:8b"
-    ) -> ChatOllama:
+    def setup_ollama_llm(cls) -> ChatOllama:
+        ollama_uri = str(settings.OLLAMA.URI)
+        model_name = settings.OLLAMA.MODEL_NAME
+
         client = OllamaClient(host=ollama_uri)
         client.pull(model_name)
 
         return ChatOllama(
-            model=model_name, num_predict=1_024, num_ctx=4_096, base_url=ollama_uri
+            model=model_name,
+            num_predict=settings.OLLAMA.NUM_PREDICT,
+            num_ctx=settings.OLLAMA.NUM_CTX,
+            base_url=ollama_uri,
         )
 
 
@@ -177,10 +181,10 @@ class Llama_ManualFunctionCalling:
             _, args_string = match.groups()
             try:
                 return literal_eval(args_string)
-            except ValueError:
+            except Exception:
                 try:
                     return json.loads(args_string)
-                except JSONDecodeError:
+                except Exception:
                     pass
 
         return None
@@ -232,7 +236,7 @@ class UserQueryParsing:
 
     def __init__(
         self,
-        llm: BaseLLM,
+        llm: BaseChatModel,
         db_to_translate: Literal["milvus"] = "milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None,
@@ -856,7 +860,7 @@ class UserQueryParsingStages:
     @classmethod
     def init_stage_1(
         cls,
-        llm: BaseLLM,
+        llm: BaseChatModel,
         fewshot_examples_path: str | None = None,
     ) -> Llama_ManualFunctionCalling:
         pydantic_model = UserQuery_Stage1_OutputSchema
@@ -899,7 +903,7 @@ class UserQueryParsingStages:
     @classmethod
     def init_stage_2(
         cls,
-        llm: BaseLLM,
+        llm: BaseChatModel,
         fewshot_examples_dirpath: str | None = None,
         validation_step: Llama_ManualFunctionCalling | None = None,
     ) -> Llama_ManualFunctionCalling:
@@ -921,7 +925,7 @@ class UserQueryParsingStages:
         )
 
     @classmethod
-    def init_stage_3(cls, llm: BaseLLM) -> Llama_ManualFunctionCalling:
+    def init_stage_3(cls, llm: BaseChatModel) -> Llama_ManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages(
             [
                 ("user", cls.task_instructions_stage3),

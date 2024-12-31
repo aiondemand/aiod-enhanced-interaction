@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 #   1. Each pydantic.Field only contains a default value and a description.
 #      Other arguments are not copied over when creating dynamic schemas.
 #   2. If you wish to apply some additional value constraints, feel free to do so, but
-#      you're expected to apply these restrictions in a field_validator instead.
+#      you're expected to apply them in a corresponding field_validator instead.
 
 
 class HuggingFaceDatasetMetadataTemplate(BaseModel):

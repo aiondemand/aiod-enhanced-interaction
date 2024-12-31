@@ -61,7 +61,11 @@ In this file you find the following ENV variables:
 - `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database 
 - `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings ofo the individual chunks of each document or to have only one embedding representing the entire asset.
 - `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
-- `OLLAMA__URI`: URI of the Ollama server. You can omit this variable if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False)
+- Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False))
+    - `OLLAMA__URI`: URI of the Ollama server. 
+    - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
+    - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
+    - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
 - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
 - `AIOD__COMMA_SEPARETED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
@@ -124,7 +128,7 @@ Perform the following steps to deploy the service:
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `USE_LLM` ENV variables: `./deploy.sh`
-    - This script creates a docker compose file `docker-compose.final.yml` that is subsequently run.
+    - This script creates a Dockerfile `Dockerfile.final` and a docker compose file `docker-compose.final.yml` that are subsequently utilized to spawn the desired services.
 
 ### Stop/Delete the application
 If you wish to stop or remove the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop` or `./deploy.sh --remove` respectively.

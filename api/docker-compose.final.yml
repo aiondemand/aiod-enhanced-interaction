@@ -3,13 +3,13 @@ services:
   app:
     build: 
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile.final
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     env_file:
       - .env.app
     environment:
       - TINYDB_FILEPATH=/data/tinydb.json
-      - USE_GPU=true
+      - USE_GPU=false
       - MILVUS__URI=http://milvus-standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
@@ -24,13 +24,6 @@ services:
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
   
   # Milvus services
   milvus-etcd:
@@ -99,10 +92,3 @@ services:
       - ${DATA_DIRPATH}/ollama:/root/.ollama/
     ports:
       - "${OLLAMA_HOST_PORT}:11434"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]

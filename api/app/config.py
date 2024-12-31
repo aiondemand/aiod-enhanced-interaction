@@ -22,7 +22,7 @@ class MilvusConfig(BaseModel):
     COLLECTION_PREFIX: str = Field(..., max_length=100)
     BATCH_SIZE: int = Field(500, gt=0)
     STORE_CHUNKS: bool = Field(True)
-    EXTRACT_METADATA: bool = Field(True)
+    EXTRACT_METADATA: bool = Field(False)
 
     @field_validator("COLLECTION_PREFIX", mode="before")
     @classmethod
@@ -49,6 +49,9 @@ class MilvusConfig(BaseModel):
 
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
+    MODEL_NAME: str = Field("llama3.1:8b", max_length=50)
+    NUM_PREDICT: int = Field(1_024, gt=0)
+    NUM_CTX: int = Field(4_096, gt=0)
 
 
 class AIoDConfig(BaseModel):

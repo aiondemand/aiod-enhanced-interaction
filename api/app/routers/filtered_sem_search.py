@@ -16,9 +16,10 @@ from app.services.threads.search_thread import QUERY_CONDITIONS
 from fastapi import APIRouter, Body, Depends, Path, Query
 from fastapi.responses import RedirectResponse
 
-router = APIRouter(prefix="/filtered_query", tags=["filtered_query"])
+router = APIRouter()
 
 
+# TODO we should think of a better name for this endpoint
 @router.post("/blocking")
 async def submit_simple_query_blocking(
     database: Annotated[Database, Depends(Database)],
@@ -39,7 +40,7 @@ async def submit_simple_query_blocking(
         database, search_query, asset_type, filters, offset, limit, return_assets
     )
 
-    # Wait till its turn to process current query
+    # Wait till its turn to process our current query
     QUERY_CONDITIONS[query_id] = Condition()
     async with QUERY_CONDITIONS[query_id]:
         await QUERY_CONDITIONS[query_id].wait()

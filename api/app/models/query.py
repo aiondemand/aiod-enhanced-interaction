@@ -37,6 +37,7 @@ class BaseUserQuery(BaseModel):
         self.updated_at = datetime.now(tz=timezone.utc)
 
         if status in (QueryStatus.COMPLETED, QueryStatus.FAILED):
+            # an arbitrarily chosen expiration date
             self.expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=1)
 
     def map_to_response(self, response_model: Type[BaseModel]) -> BaseModel:

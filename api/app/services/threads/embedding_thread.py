@@ -80,8 +80,8 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 pass
 
             extract_metadata_func = None
-            em_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-            if settings.MILVUS.EXTRACT_METADATA and asset_type in em_types:
+            meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+            if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
                 extract_metadata_func = partial(
                     HuggingFaceDatasetExtractMedatada.extract_huggingface_dataset_metadata,
                     asset_type=asset_type,

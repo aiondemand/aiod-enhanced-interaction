@@ -5,6 +5,7 @@ import os
 from asyncio import Condition
 from queue import Queue
 from time import sleep
+from typing import Type
 
 import numpy as np
 from app.config import settings
@@ -20,7 +21,7 @@ from app.services.inference.model import AiModel
 from requests.exceptions import HTTPError
 from tinydb import Query
 
-QUERY_QUEUE = Queue()
+QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 QUERY_CONDITIONS: dict[str, Condition] = {}
 
 
@@ -59,9 +60,7 @@ async def search_thread() -> None:
 
         llm_query_parser = None
         if settings.PERFORM_LLM_QUERY_PARSING:
-            llm_query_parser = UserQueryParsing(
-                llm=Prep_LLM.setup_ollama_llm(ollama_uri=str(settings.OLLAMA.URI))
-            )
+            llm_query_parser = UserQueryParsing(llm=Prep_LLM.setup_ollama_llm())
 
         while True:
             try:
@@ -106,6 +105,7 @@ async def search_thread() -> None:
                     f"Error encountered while processing query ID: {query_id}"
                 )
             finally:
+                # notify blocking endpoints that the query results have been computed
                 if QUERY_CONDITIONS.get(user_query.id, None) is not None:
                     async with QUERY_CONDITIONS[user_query.id]:
                         QUERY_CONDITIONS[user_query.id].notify_all()

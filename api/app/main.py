@@ -36,9 +36,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="[AIoD] Semantic Search", lifespan=lifespan)
 
-app.include_router(query_router.router)
+app.include_router(query_router.router, prefix="/query", tags=["query"])
 if settings.PERFORM_LLM_QUERY_PARSING:
-    app.include_router(filtered_query_router.router)
+    app.include_router(
+        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
+    )
 
 
 app.add_middleware(
@@ -63,10 +65,6 @@ def setup_logger():
 def app_init() -> None:
     sleep(10)  # Headstart for Milvus to fully initialize
     setup_logger()
-
-    import os
-
-    logging.info(os.getcwd())
 
     # Instantiate singletons before utilizing them in other threads
     Database()
