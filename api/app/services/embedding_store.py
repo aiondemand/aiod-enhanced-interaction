@@ -260,8 +260,10 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         asset_type: AssetType,
         filter: str = "",
     ) -> int:
-        collection_name = self.get_collection_name(asset_type)
+        if filter == "":
+            return len(self.get_all_document_ids(asset_type))
 
+        collection_name = self.get_collection_name(asset_type)
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
@@ -271,6 +273,5 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                 collection_name=collection_name, filter=filter, output_fields=["doc_id"]
             )
         )
-
         all_doc_ids = [str(x["doc_id"]) for x in data]
         return len(np.unique(np.array(all_doc_ids)))
