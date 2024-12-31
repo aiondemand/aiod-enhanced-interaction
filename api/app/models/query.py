@@ -7,7 +7,15 @@ from uuid import uuid4
 
 from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
-from app.schemas.query import FilteredUserQueryResponse, SimpleUserQueryResponse
+from app.schemas.query import (
+    FilteredUserQueryResponse,
+    FilteredUserQueryResponseType,
+    FilteredUserQueryResponseWithResults,
+    ManualFilteredUserQueryResponse,
+    SimpleUserQueryResponse,
+    SimpleUserQueryResponseType,
+    SimpleUserQueryResponseWithResults,
+)
 from app.schemas.search_results import SearchResults
 from pydantic import BaseModel, Field
 
@@ -41,7 +49,7 @@ class BaseUserQuery(BaseModel):
             self.expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=1)
 
     def map_to_response(self, response_model: Type[BaseModel]) -> BaseModel:
-        if self.result_set is None:
+        if self.status != QueryStatus.COMPLETED:
             return response_model(**self.model_dump())
 
         doc_ids = self.result_set.doc_ids
@@ -60,8 +68,12 @@ class BaseUserQuery(BaseModel):
 
 
 class SimpleUserQuery(BaseUserQuery):
-    def map_to_response(self) -> SimpleUserQueryResponse:
-        return super().map_to_response(SimpleUserQueryResponse)
+    def map_to_response(self) -> SimpleUserQueryResponseType:
+        return super().map_to_response(
+            SimpleUserQueryResponseWithResults
+            if self.status == QueryStatus.COMPLETED
+            else SimpleUserQueryResponse
+        )
 
 
 class FilteredUserQuery(BaseUserQuery):
@@ -76,5 +88,12 @@ class FilteredUserQuery(BaseUserQuery):
         self.topic = topic
         self.filters = filters
 
-    def map_to_response(self) -> FilteredUserQueryResponse:
-        return super().map_to_response(FilteredUserQueryResponse)
+    def map_to_response(self) -> FilteredUserQueryResponseType:
+        if self.filters is None and self.status != QueryStatus.COMPLETED:
+            response_model = FilteredUserQueryResponse
+        elif self.status == QueryStatus.COMPLETED:
+            response_model = FilteredUserQueryResponseWithResults
+        else:
+            response_model = ManualFilteredUserQueryResponse
+
+        return super().map_to_response(response_model)

@@ -38,6 +38,9 @@ elif [ "$1" == "--stop" ]; then
   COMPOSE_COMMAND="stop"
 elif [ "$1" == "--remove" ]; then  
   COMPOSE_COMMAND="down"
+else
+  echo "Invalid operation '$1'. Only '--stop' and '--remove' are allowed"
+  exit 1
 fi
 
 docker compose -f docker-compose.final.yml $COMPOSE_COMMAND

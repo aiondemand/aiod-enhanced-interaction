@@ -9,7 +9,7 @@ from app.routers.sem_search import (
     validate_query_endpoint_arguments_or_raise,
 )
 from app.schemas.enums import AssetType
-from app.schemas.query import SimpleUserQueryResponse
+from app.schemas.query import SimpleUserQueryResponseType
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_CONDITIONS
 from fastapi import APIRouter, Depends, Path, Query
@@ -31,7 +31,7 @@ async def submit_simple_query_blocking(
     return_assets: bool = Query(
         default=False, description="Return entire assets instead of their IDs only"
     ),
-) -> SimpleUserQueryResponse:
+) -> SimpleUserQueryResponseType:
     query_id = await _sumbit_simple_query(
         database, search_query, asset_type, offset, limit, return_assets
     )
@@ -68,7 +68,7 @@ async def submit_simple_query(
 async def get_simple_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
-) -> SimpleUserQueryResponse:
+) -> SimpleUserQueryResponseType:
     return await get_query_results(query_id, database, SimpleUserQuery)
 
 
