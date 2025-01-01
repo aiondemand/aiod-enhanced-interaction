@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from abc import ABC, abstractmethod
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -207,6 +209,21 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                 total_inserted += self.client.insert(
                     collection_name=collection_name, data=data
                 )["insert_count"]
+
+                # Store data locally into JSON files as well if we wish to do so
+                if settings.AIOD.STORE_DATA_IN_JSON:
+                    for i in range(len(data)):
+                        data[i]["vector"] = data[i]["vector"].tolist()
+
+                    full_json_filepath = (
+                        settings.TINYDB_FILEPATH.parent
+                        / f"jsons/{collection_name}"
+                        / f"{str(uuid4())}.json"
+                    )
+                    full_json_filepath.parent.mkdir(parents=True, exist_ok=True)
+
+                    with open(full_json_filepath, "w") as f:
+                        json.dump(data, f)
 
                 all_embeddings = []
                 all_doc_ids = []

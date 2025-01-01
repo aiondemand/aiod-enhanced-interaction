@@ -76,6 +76,7 @@ In this file you find the following ENV variables:
 - `AIOD__DAY_IN_MONTH_FOR_EMB_CLEANING`: The day of the month we wish to perform Milvus embedding cleaning. We compare the stored documents to the AIoD platform and delete the embeddings corresponding to old assets that are no longer present on AIoD.
 - `AIOD__DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS`: The day of the month we wish to perform recurrent AIoD update that iterates over all the data on said platform rather than only examining assets updated within a specific timeframe. The objective of this particular database update is to double-check we have not missed any new AIoD assets that might've been overlooked due to large number of assets having been deleted in the past.
 - `AIOD__TESTING`: Boolean value you should keep set to false unless you intentionally wish to retrieve only a fraction of all the AIoD assets. This variable is used for testing purposes only
+- `AIOD__STORE_DATA_IN_JSON`: Boolean value you should keep set to false unless you wish to store AIoD embeddings and metadata in JSON files for subsequent database population process on another machine. This flag is especially useful if you don't have an access to GPU or LLM for embedding computation / metadata extraction on the production machine for instance, but you do possess one on your local setup. This way you can precompute all the information to be stored into the Milvus DB and simply migrate said data onto production to expedite the deployment process.
 
 ## Development
 

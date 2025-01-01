@@ -66,6 +66,7 @@ class AIoDConfig(BaseModel):
     DAY_IN_MONTH_FOR_EMB_CLEANING: int = Field(1, ge=1, le=31)
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
+    STORE_DATA_IN_JSON: bool = Field(False)
 
     @field_validator(
         "COMMA_SEPARETED_ASSET_TYPES",
@@ -81,7 +82,7 @@ class AIoDConfig(BaseModel):
             ValueError("Invalid asset types defined")
         return value
 
-    @field_validator("TESTING", mode="before")
+    @field_validator("TESTING", "STORE_DATA_IN_JSON", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
         return Validators.str_to_bool(value)
