@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     app_shutdown()
 
 
-app = FastAPI(title="[AIoD] Semantic Search", lifespan=lifespan)
+app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 if settings.PERFORM_LLM_QUERY_PARSING:

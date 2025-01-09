@@ -36,3 +36,23 @@ class Filter(BaseModel):
                     status_code=400,
                     detail=f"Invalid value '{str(expr.value)}' for field '{self.field}'",
                 )
+
+    @classmethod
+    def get_body_examples(cls) -> list[Filter]:
+        return [
+            {
+                "field": "languages",
+                "logical_operator": "AND",
+                "expressions": [
+                    {"value": "en", "comparison_operator": "=="},
+                    {"value": "es", "comparison_operator": "=="},
+                ],
+            },
+            {
+                "field": "datapoints_lower_bound",
+                "logical_operator": "AND",
+                "expressions": [
+                    {"value": "10000", "comparison_operator": ">"},
+                ],
+            },
+        ]

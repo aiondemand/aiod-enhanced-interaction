@@ -26,14 +26,22 @@ async def submit_simple_query_blocking(
         ..., max_length=200, min_length=1, description="User search query"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
-    offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    topk: int = Query(
+        default=10, gt=0, le=100, description="Number of assets to return"
+    ),
     return_assets: bool = Query(
         default=False, description="Return entire assets instead of their IDs only"
     ),
 ) -> SimpleUserQueryResponseType:
     query_id = await _sumbit_simple_query(
-        database, search_query, asset_type, offset, limit, return_assets
+        database,
+        search_query,
+        asset_type,
+        offset=0,
+        limit=topk,
+        return_assets=return_assets,
     )
 
     # Wait till its turn to process our current query
@@ -52,14 +60,22 @@ async def submit_simple_query(
         ..., max_length=200, min_length=1, description="User search query"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
-    offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    topk: int = Query(
+        default=10, gt=0, le=100, description="Number of assets to return"
+    ),
     return_assets: bool = Query(
         default=False, description="Return entire assets instead of their IDs only"
     ),
 ) -> RedirectResponse:
     query_id = await _sumbit_simple_query(
-        database, search_query, asset_type, offset, limit, return_assets
+        database,
+        search_query,
+        asset_type,
+        offset=0,
+        limit=topk,
+        return_assets=return_assets,
     )
     return RedirectResponse(f"/query/{query_id}/result", status_code=202)
 

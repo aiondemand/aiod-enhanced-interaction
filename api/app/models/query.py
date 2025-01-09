@@ -49,8 +49,12 @@ class BaseUserQuery(BaseModel):
             self.expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=1)
 
     def map_to_response(self, response_model: Type[BaseModel]) -> BaseModel:
+        # Rename limit to topk for now
+        kwargs = self.model_dump()
+        kwargs["topk"] = kwargs.pop("limit")
+
         if self.status != QueryStatus.COMPLETED:
-            return response_model(**self.model_dump())
+            return response_model(**kwargs)
 
         doc_ids = self.result_set.doc_ids
         docs = self.result_set.documents if self.return_assets else None
@@ -58,8 +62,8 @@ class BaseUserQuery(BaseModel):
             returned_doc_count=len(doc_ids),
             result_doc_ids=doc_ids,
             result_docs=docs,
-            num_hits=self.result_set.num_hits,
-            **self.model_dump(),
+            # num_hits=self.result_set.num_hits,
+            **kwargs,
         )
 
     @staticmethod

@@ -19,25 +19,51 @@ from fastapi.responses import RedirectResponse
 router = APIRouter()
 
 
+def get_body_examples_argument() -> dict:
+    return {
+        "extract_with_llm": {
+            "summary": "No manually defined filters by a user",
+            "description": "If the body is empty, an LLM is used to extract the filters",
+            "value": [],
+        },
+        "manually_defined": {
+            "summary": "Manually defined filters by a user",
+            "description": "If the body contains filters, an LLM is not used for parsing query. Instead these manually user-defined filters are used.",
+            "value": Filter.get_body_examples(),
+        },
+    }
+
+
 # TODO we should think of a better name for this endpoint
 @router.post("/blocking")
-async def submit_simple_query_blocking(
+async def submit_filtered_query_blocking(
     database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
         ..., max_length=200, min_length=1, description="User search query with filters"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     filters: list[Filter] | None = Body(
-        None, description="Manually user-defined filters to apply"
+        None,
+        description="Manually user-defined filters to apply",
+        openapi_examples=get_body_examples_argument(),
     ),
-    offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    topk: int = Query(
+        default=10, gt=0, le=100, description="Number of assets to return"
+    ),
     return_assets: bool = Query(
         default=False, description="Return entire assets instead of their IDs only"
     ),
 ) -> FilteredUserQueryResponseType:
     query_id = await _sumbit_filtered_query(
-        database, search_query, asset_type, filters, offset, limit, return_assets
+        database,
+        search_query,
+        asset_type,
+        filters,
+        offset=0,
+        limit=topk,
+        return_assets=return_assets,
     )
 
     # Wait till its turn to process our current query
@@ -57,16 +83,27 @@ async def submit_filtered_query(
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
     filters: list[Filter] | None = Body(
-        None, description="Manually user-defined filters to apply"
+        None,
+        description="Manually user-defined filters to apply",
+        openapi_examples=get_body_examples_argument(),
     ),
-    offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
+    topk: int = Query(
+        default=10, gt=0, le=100, description="Number of assets to return"
+    ),
     return_assets: bool = Query(
         default=False, description="Return entire assets instead of their IDs only"
     ),
 ) -> RedirectResponse:
     query_id = await _sumbit_filtered_query(
-        database, search_query, asset_type, filters, offset, limit, return_assets
+        database,
+        search_query,
+        asset_type,
+        filters,
+        offset=0,
+        limit=topk,
+        return_assets=return_assets,
     )
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
 
@@ -89,9 +126,9 @@ async def _sumbit_filtered_query(
     return_assets: bool,
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
-        search_query, asset_type, database, apply_filtering=False
+        search_query, asset_type, database, apply_filtering=True
     )
-    if filters is not None:
+    if filters:
         [filter.validate_filter_or_raise(asset_type) for filter in filters]
 
     user_query = FilteredUserQuery(
@@ -99,8 +136,8 @@ async def _sumbit_filtered_query(
         asset_type=asset_type,
         offset=offset,
         limit=limit,
-        topic=search_query.strip() if filters is not None else "",
-        filters=filters,
+        topic=search_query.strip() if filters else "",
+        filters=filters if filters else None,
         return_assets=return_assets,
     )
     return await submit_query(user_query, database)
