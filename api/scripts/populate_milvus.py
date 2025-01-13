@@ -17,7 +17,7 @@ class InputArgs(BaseModel):
     password: str
     metadata: bool
 
-    @field_validator("metadata")
+    @field_validator("metadata", mode="before")
     @classmethod
     def str_to_bool(cls, value: str) -> bool:
         if value.lower() not in ["true", "false"]:
@@ -48,7 +48,7 @@ def populate_collection(
 
     print(f"Populating collection: {collection_name}")
 
-    unique_doc_ids = []
+    unique_doc_ids = set()
     for file in tqdm(os.listdir(json_dirpath)):
         path = os.path.join(json_dirpath, file)
         with open(path) as f:
@@ -59,7 +59,7 @@ def populate_collection(
             data[i]["vector"] = np.array(data[i]["vector"])
 
         client.insert(collection_name=collection_name, data=data)
-        unique_doc_ids += np.unique([d["doc_id"] for d in data]).tolist()
+        unique_doc_ids.update(d["doc_id"] for d in data)
 
 
 def create_new_collection(
@@ -73,7 +73,7 @@ def create_new_collection(
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
     schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
 
-    if extract_metadata:
+    if extract_metadata and collection_name.endswith("_datasets"):
         # TODO so far it only works with datasets
         # (the same goes for the Milvus index in the main application)
         schema.add_field("date_published", DataType.VARCHAR, max_length=22)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--metadata",
-        type="str",
+        type=str,
         choices=["false", "true"],
         help="Whether we wish to create an Milvus indices accounting for metadata to extract",
     )
