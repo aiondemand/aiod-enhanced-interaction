@@ -142,7 +142,7 @@ def retrieve_topk_documents_wrapper(
                 user_query.search_query, user_query.asset_type
             )
             meta_filter_str = parsed_query["filter_str"]
-            user_query.update_query_metadata(topic, meta_filter_str)
+            user_query.update_query_metadata(topic, parsed_query["filters"])
         else:
             # user manually defined filters
             meta_filter_str = llm_query_parser.translator_func(
