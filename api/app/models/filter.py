@@ -38,21 +38,21 @@ class Filter(BaseModel):
                 )
 
     @classmethod
-    def get_body_examples(cls) -> list[Filter]:
+    def get_body_examples(cls) -> list[dict]:
         return [
-            {
-                "field": "languages",
-                "logical_operator": "AND",
-                "expressions": [
-                    {"value": "en", "comparison_operator": "=="},
-                    {"value": "es", "comparison_operator": "=="},
+            Filter(
+                field="languages",
+                logical_operator="AND",
+                expressions=[
+                    Expression(value="en", comparison_operator="=="),
+                    Expression(value="es", comparison_operator="=="),
                 ],
-            },
-            {
-                "field": "datapoints_lower_bound",
-                "logical_operator": "AND",
-                "expressions": [
-                    {"value": "10000", "comparison_operator": ">"},
+            ).model_dump(),
+            Filter(
+                field="datapoints_lower_bound",
+                logical_operator="AND",
+                expressions=[
+                    Expression(value="10000", comparison_operator=">"),
                 ],
-            },
+            ).model_dump(),
         ]

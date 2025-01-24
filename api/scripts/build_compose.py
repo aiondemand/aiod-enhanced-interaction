@@ -1,3 +1,4 @@
+# TODO we may want to replace this script for a jinja-cli command instead
 import os
 
 from jinja2 import Environment, FileSystemLoader

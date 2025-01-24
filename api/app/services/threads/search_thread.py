@@ -26,7 +26,7 @@ QUERY_CONDITIONS: dict[str, Condition] = {}
 
 
 def fill_query_queue(database: Database) -> None:
-    condition = (Query().status == QueryStatus.IN_PROGESS) | (
+    condition = (Query().status == QueryStatus.IN_PROGRESS) | (
         Query().status == QueryStatus.QUEUED
     )
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
@@ -85,7 +85,7 @@ async def search_thread() -> None:
                     logging.error(err_msg)
                     continue
 
-                user_query.update_status(QueryStatus.IN_PROGESS)
+                user_query.update_status(QueryStatus.IN_PROGRESS)
                 database.upsert(user_query)
 
                 results = retrieve_topk_documents_wrapper(

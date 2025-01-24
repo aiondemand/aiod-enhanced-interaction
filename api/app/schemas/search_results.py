@@ -11,6 +11,7 @@ class SearchResults(BaseModel):
     # For the filtered search, this is the number of documents that match all the filters applied
     num_hits: int = -1
 
+    # TODO either make the default None, or Field(default_factory=list)
     doc_ids: list[str] = []
     distances: list[float] = []
     documents: list[dict | None] = []

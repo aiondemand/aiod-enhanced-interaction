@@ -16,7 +16,7 @@ if [ -z "$USE_GPU" ]; then
   exit 1
 fi
 
-# Check if USE_GPU is set
+# Check if USE_LLM is set
 if [ -z "$USE_LLM" ]; then
   echo "USE_LLM is not set"
   exit 1

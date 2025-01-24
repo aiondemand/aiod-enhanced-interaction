@@ -56,7 +56,7 @@ class OllamaConfig(BaseModel):
 
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
-    COMMA_SEPARETED_ASSET_TYPES: str = Field(...)
+    COMMA_SEPARATED_ASSET_TYPES: str = Field(...)
     COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON: str = Field(...)
     WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
@@ -69,7 +69,7 @@ class AIoDConfig(BaseModel):
     STORE_DATA_IN_JSON: bool = Field(False)
 
     @field_validator(
-        "COMMA_SEPARETED_ASSET_TYPES",
+        "COMMA_SEPARATED_ASSET_TYPES",
         "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON",
         mode="before",
     )
@@ -93,7 +93,7 @@ class AIoDConfig(BaseModel):
 
     @property
     def ASSET_TYPES(self) -> list[str]:
-        types = self.COMMA_SEPARETED_ASSET_TYPES.lower().split(",")
+        types = self.COMMA_SEPARATED_ASSET_TYPES.lower().split(",")
         return [AssetType(typ) for typ in types]
 
     @property

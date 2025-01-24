@@ -12,12 +12,15 @@ class BaseUserQueryResponse(BaseModel):
     search_query: str
     asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
+
+    # TODO pagination
     # offset: int
     # limit: int
     topk: int
 
 
 class BaseUserQueryResponseWithResults(BaseUserQueryResponse):
+    # TODO Num hits
     # num_hits: int = -1
     expires_at: datetime | None = None
     returned_doc_count: int = -1

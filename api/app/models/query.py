@@ -68,7 +68,7 @@ class BaseUserQuery(BaseModel):
 
     @staticmethod
     def sort_function_to_populate_queue(query):
-        return (query.status != QueryStatus.IN_PROGESS, query.updated_at.timestamp())
+        return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
 
 class SimpleUserQuery(BaseUserQuery):

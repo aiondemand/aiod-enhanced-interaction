@@ -29,7 +29,7 @@ class SchemaOperations:
         return cls.strip_list_type(cls.strip_optional_type(original_field.annotation))
 
     @classmethod
-    def get_list_fields_mask(cls, asset_schema: Type[BaseModel]) -> dict[bool]:
+    def get_list_fields_mask(cls, asset_schema: Type[BaseModel]) -> dict[str, bool]:
         return {
             k: cls.is_list_type(cls.strip_optional_type(v))
             for k, v in asset_schema.__annotations__.items()
@@ -72,7 +72,7 @@ class SchemaOperations:
         cls, orig_value: Any, asset_schema: Type[BaseModel], field: str
     ) -> bool:
         def validate_func(cls, value: Any, func: Callable) -> Any:
-            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[field]
+            is_list_field = cls.get_list_fields_mask(asset_schema)[field]
 
             if is_list_field is False:
                 return func(value)
@@ -84,9 +84,7 @@ class SchemaOperations:
                 f"Value '{str(value)}' didn't comply with '{field}' validator demands"
             )
 
-        value_type = SchemaOperations.dynamically_create_type_for_a_field_value(
-            asset_schema, field
-        )
+        value_type = cls.dynamically_create_type_for_a_field_value(asset_schema, field)
         validators = cls.get_field_validators(asset_schema, field)
 
         clazz_dict = {"__annotations__": {"value": value_type}, "value": Field(...)}
