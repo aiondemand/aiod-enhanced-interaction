@@ -1,20 +1,30 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import AssetType
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+PrimitiveTypes: TypeAlias = str | int | float
 
 
 class Expression(BaseModel):
-    value: str | int | float
+    value: PrimitiveTypes
     comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="]
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def constrain_length(cls, value: PrimitiveTypes) -> PrimitiveTypes:
+        if isinstance(value, str) and len(value) > 50:
+            raise ValueError("Value length must be less than 50 characters")
+
+        return value
 
 
 class Filter(BaseModel):
-    field: str
+    field: str = Field(..., max_length=30)
     logical_operator: Literal["AND", "OR"]
     expressions: list[Expression]
 
@@ -26,16 +36,15 @@ class Filter(BaseModel):
             )
 
         for expr in self.expressions:
-            if (
-                SchemaOperations.validate_value_against_type(
-                    expr.value, asset_schema, self.field
-                )
-                is False
-            ):
+            validated_value = SchemaOperations.validate_value_against_type(
+                expr.value, asset_schema, self.field
+            )
+            if validated_value is None:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Invalid value '{str(expr.value)}' for field '{self.field}'",
                 )
+            expr.value = validated_value
 
     @classmethod
     def get_body_examples(cls) -> list[dict]:
@@ -52,7 +61,7 @@ class Filter(BaseModel):
                 field="datapoints_lower_bound",
                 logical_operator="AND",
                 expressions=[
-                    Expression(value="10000", comparison_operator=">"),
+                    Expression(value=10000, comparison_operator=">"),
                 ],
             ).model_dump(),
         ]

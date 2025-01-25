@@ -70,9 +70,9 @@ class SchemaOperations:
     @classmethod
     def validate_value_against_type(
         cls, orig_value: Any, asset_schema: Type[BaseModel], field: str
-    ) -> bool:
+    ) -> Any | None:
         def validate_func(cls, value: Any, func: Callable) -> Any:
-            is_list_field = cls.get_list_fields_mask(asset_schema)[field]
+            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[field]
 
             if is_list_field is False:
                 return func(value)
@@ -99,8 +99,6 @@ class SchemaOperations:
 
         clazz = type(f"Validate_Field_{field}", (BaseModel,), clazz_dict)
         try:
-            clazz(value=orig_value)
-            return True
+            return clazz(value=orig_value).value
         except ValidationError:
-            pass
-        return False
+            return None

@@ -1,20 +1,13 @@
-{% if USE_GPU == "true" %}
-FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime
-{% else %}
 FROM python:3.11
-{% endif %}
 
 WORKDIR /code
 
-{% if USE_GPU == "false" %}
 RUN pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 
-{% endif %}
 COPY ./requirements.txt .
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY ./app /code/app
-COPY ./data /code/data
 COPY ./scripts /code/scripts
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]

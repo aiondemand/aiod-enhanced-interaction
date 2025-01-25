@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
-from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -21,7 +19,7 @@ from tqdm import tqdm
 
 class EmbeddingStore(ABC):
     @abstractmethod
-    def get_collection_name(asset_type: AssetType) -> str:
+    def get_collection_name(self, asset_type: AssetType) -> str:
         pass
 
     @abstractmethod
@@ -48,18 +46,9 @@ class EmbeddingStore(ABC):
         model: AiModel,
         query_text: str,
         asset_type: AssetType,
-        offset: int = 0,
-        limit: int = 10,
+        topk: int = 10,
         filter: str = "",
     ) -> SearchResults:
-        pass
-
-    @abstractmethod
-    def get_number_of_hits(
-        self,
-        asset_type: AssetType,
-        filter: str = "",
-    ) -> int:
         pass
 
 
@@ -210,28 +199,15 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                     collection_name=collection_name, data=data
                 )["insert_count"]
 
-                # Store data locally into JSON files as well if we wish to do so
-                if settings.AIOD.STORE_DATA_IN_JSON:
-                    for i in range(len(data)):
-                        data[i]["vector"] = data[i]["vector"].tolist()
-
-                    full_json_filepath = (
-                        settings.TINYDB_FILEPATH.parent
-                        / f"jsons/{collection_name}"
-                        / f"{str(uuid4())}.json"
-                    )
-                    full_json_filepath.parent.mkdir(parents=True, exist_ok=True)
-
-                    with open(full_json_filepath, "w") as f:
-                        json.dump(data, f)
-
                 all_embeddings = []
                 all_doc_ids = []
                 all_metadata = []
 
         return total_inserted
 
-    def remove_embeddings(self, doc_ids: list[str], collection_name: str) -> int:
+    def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
+        collection_name = self.get_collection_name(asset_type)
+
         return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")[
             "delete_count"
         ]
@@ -241,8 +217,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         model: AiModel,
         query_text: str,
         asset_type: AssetType,
-        offset: int = 0,
-        limit: int = 10,
+        topk: int = 10,
         filter: str = "",
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
@@ -257,8 +232,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         query_results = self.client.search(
             collection_name=collection_name,
             data=query_embeddings,
-            limit=limit * 10 if self.chunk_embedding_store else limit + 1,
-            offset=offset,
+            limit=topk * 10 if self.chunk_embedding_store else topk + 1,
             output_fields=["doc_id"],
             search_params={"metric_type": "COSINE"},
             filter=filter,
@@ -266,29 +240,8 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         doc_ids = [match["entity"]["doc_id"] for match in query_results]
         distances = [1 - match["distance"] for match in query_results]
 
-        indices = pd.Series(data=doc_ids).drop_duplicates().index.values[:limit]
+        indices = pd.Series(data=doc_ids).drop_duplicates().index.values[:topk]
         filtered_docs = [doc_ids[idx] for idx in indices]
         filtered_distances = [distances[idx] for idx in indices]
 
         return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
-
-    def get_number_of_hits(
-        self,
-        asset_type: AssetType,
-        filter: str = "",
-    ) -> int:
-        if filter == "":
-            return len(self.get_all_document_ids(asset_type))
-
-        collection_name = self.get_collection_name(asset_type)
-        if self.client.has_collection(collection_name) is False:
-            raise ValueError(f"Collection '{collection_name}' doesnt exist")
-        self.client.load_collection(collection_name)
-
-        data = list(
-            self.client.query(
-                collection_name=collection_name, filter=filter, output_fields=["doc_id"]
-            )
-        )
-        all_doc_ids = [str(x["doc_id"]) for x in data]
-        return len(np.unique(np.array(all_doc_ids)))

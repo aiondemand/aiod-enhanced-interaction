@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-from asyncio import Condition
 from queue import Queue
 from time import sleep
 from typing import Type
@@ -22,7 +21,6 @@ from requests.exceptions import HTTPError
 from tinydb import Query
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
-QUERY_CONDITIONS: dict[str, Condition] = {}
 
 
 def fill_query_queue(database: Database) -> None:
@@ -38,8 +36,6 @@ def fill_query_queue(database: Database) -> None:
         simple_queries_to_process + filtered_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
-
-    # Perhaps also put type of the query into QUERY_QUEUE ???
     for query in queries_to_process:
         QUERY_QUEUE.put((query.id, type(query)))
 
@@ -104,12 +100,6 @@ async def search_thread() -> None:
                 logging.error(
                     f"Error encountered while processing query ID: {query_id}"
                 )
-            finally:
-                # notify blocking endpoints that the query results have been computed
-                if QUERY_CONDITIONS.get(user_query.id, None) is not None:
-                    async with QUERY_CONDITIONS[user_query.id]:
-                        QUERY_CONDITIONS[user_query.id].notify_all()
-
     except Exception as e:
         logging.error(e)
         logging.error(
@@ -129,9 +119,7 @@ def retrieve_topk_documents_wrapper(
     doc_ids_to_exclude_from_search = []
     doc_ids_to_remove_from_db = []
     documents_to_return = SearchResults()
-    num_docs_to_retrieve = user_query.limit
-
-    topic = user_query.search_query
+    num_docs_to_retrieve = user_query.topk
     meta_filter_str = ""
 
     # apply metadata filtering
@@ -142,7 +130,7 @@ def retrieve_topk_documents_wrapper(
                 user_query.search_query, user_query.asset_type
             )
             meta_filter_str = parsed_query["filter_str"]
-            user_query.update_query_metadata(topic, parsed_query["filters"])
+            user_query.filters = parsed_query["filters"]
         else:
             # user manually defined filters
             meta_filter_str = llm_query_parser.translator_func(
@@ -157,19 +145,19 @@ def retrieve_topk_documents_wrapper(
 
         results = embedding_store.retrieve_topk_document_ids(
             model,
-            topic,
+            user_query.search_query,
             asset_type=user_query.asset_type,
-            offset=user_query.offset,
-            limit=num_docs_to_retrieve,
+            topk=num_docs_to_retrieve,
             filter=filter_str,
         )
         doc_ids_to_exclude_from_search.extend(results.doc_ids)
         if len(results) == 0:
             break
 
-        results.documents = np.array(
+        # check what documents are still valid
+        exists_mask = np.array(
             [
-                get_aiod_document(
+                check_aiod_document(
                     doc_id,
                     user_query.asset_type,
                     sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
@@ -177,14 +165,13 @@ def retrieve_topk_documents_wrapper(
                 for doc_id in results.doc_ids
             ]
         )
-        # check what documents are still valid
-        doc_ids_to_del = results.filter_out_docs()
+        doc_ids_to_del = [results.doc_ids[idx] for idx in np.where(~exists_mask)[0]]
         doc_ids_to_remove_from_db.extend(doc_ids_to_del)
 
         # perform another Milvus extraction if we dont have sufficient amount of
         # documents as a response
-        documents_to_return += results
-        num_docs_to_retrieve = user_query.limit - len(documents_to_return.doc_ids)
+        documents_to_return += results.filter_out_docs(doc_ids_to_del)
+        num_docs_to_retrieve = user_query.topk - len(documents_to_return.doc_ids)
         if num_docs_to_retrieve == 0:
             break
 
@@ -197,13 +184,10 @@ def retrieve_topk_documents_wrapper(
             f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({user_query.asset_type.value}) have been deleted"
         )
 
-    # Compute num_hits in the database that match the query/filters
-    documents_to_return.num_hits = embedding_store.get_number_of_hits(
-        asset_type=user_query.asset_type, filter=meta_filter_str
-    )
     return documents_to_return
 
 
+# TODO perhaps we should move these two function to a different file?
 def get_aiod_document(
     doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
 ) -> dict | None:

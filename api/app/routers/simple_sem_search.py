@@ -1,4 +1,3 @@
-from asyncio import Condition
 from typing import Annotated
 from uuid import UUID
 
@@ -9,48 +8,12 @@ from app.routers.sem_search import (
     validate_query_endpoint_arguments_or_raise,
 )
 from app.schemas.enums import AssetType
-from app.schemas.query import SimpleUserQueryResponseType
+from app.schemas.query import SimpleUserQueryResponse
 from app.services.database import Database
-from app.services.threads.search_thread import QUERY_CONDITIONS
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import RedirectResponse
 
 router = APIRouter()
-
-
-# TODO we should think of a better name for this endpoint
-@router.post("/blocking")
-async def submit_simple_query_blocking(
-    database: Annotated[Database, Depends(Database)],
-    search_query: str = Query(
-        ..., max_length=200, min_length=1, description="User search query"
-    ),
-    asset_type: AssetType = Query(..., description="Asset type"),
-    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of assets to return"
-    ),
-    return_assets: bool = Query(
-        default=False, description="Return entire assets instead of their IDs only"
-    ),
-) -> SimpleUserQueryResponseType:
-    query_id = await _sumbit_simple_query(
-        database,
-        search_query,
-        asset_type,
-        offset=0,
-        limit=topk,
-        return_assets=return_assets,
-    )
-
-    # Wait till its turn to process our current query
-    QUERY_CONDITIONS[query_id] = Condition()
-    async with QUERY_CONDITIONS[query_id]:
-        await QUERY_CONDITIONS[query_id].wait()
-        QUERY_CONDITIONS.pop(query_id)
-
-    return await get_query_results(query_id, database, SimpleUserQuery)
 
 
 @router.post("")
@@ -60,8 +23,6 @@ async def submit_simple_query(
         ..., max_length=200, min_length=1, description="User search query"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
-    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
     topk: int = Query(
         default=10, gt=0, le=100, description="Number of assets to return"
     ),
@@ -73,8 +34,7 @@ async def submit_simple_query(
         database,
         search_query,
         asset_type,
-        offset=0,
-        limit=topk,
+        topk=topk,
         return_assets=return_assets,
     )
     return RedirectResponse(f"/query/{query_id}/result", status_code=202)
@@ -84,7 +44,7 @@ async def submit_simple_query(
 async def get_simple_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
-) -> SimpleUserQueryResponseType:
+) -> SimpleUserQueryResponse:
     return await get_query_results(query_id, database, SimpleUserQuery)
 
 
@@ -92,8 +52,7 @@ async def _sumbit_simple_query(
     database: Database,
     search_query: str,
     asset_type: AssetType,
-    offset: int,
-    limit: int,
+    topk: int,
     return_assets: bool,
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
@@ -105,8 +64,7 @@ async def _sumbit_simple_query(
     user_query = SimpleUserQuery(
         search_query=search_query.strip(),
         asset_type=asset_type,
-        offset=offset,
-        limit=limit,
+        topk=topk,
         return_assets=return_assets,
     )
 

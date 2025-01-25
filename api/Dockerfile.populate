@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir --upgrade -r requirements-populate.txt
 
 COPY ./scripts /code
 
-CMD ["/bin/sh", "-c", "python populate_milvus.py --i $INPUT_DIRPATH --uri $MILVUS_URI --metadata $EXTRACT_METADATA"]
+CMD ["/bin/sh", "-c", "python populate_milvus.py --i $INPUT_DIRPATH --uri $MILVUS_URI" --metadata $EXTRACT_METADATA"]

@@ -1,4 +1,3 @@
-from asyncio import Condition
 from typing import Annotated
 from uuid import UUID
 
@@ -10,11 +9,11 @@ from app.routers.sem_search import (
     validate_query_endpoint_arguments_or_raise,
 )
 from app.schemas.enums import AssetType
-from app.schemas.query import FilteredUserQueryResponseType
+from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
-from app.services.threads.search_thread import QUERY_CONDITIONS
 from fastapi import APIRouter, Body, Depends, Path, Query
 from fastapi.responses import RedirectResponse
+from pydantic import conlist
 
 router = APIRouter()
 
@@ -34,47 +33,6 @@ def get_body_examples_argument() -> dict:
     }
 
 
-# TODO we should think of a better name for this endpoint
-@router.post("/blocking")
-async def submit_filtered_query_blocking(
-    database: Annotated[Database, Depends(Database)],
-    search_query: str = Query(
-        ..., max_length=200, min_length=1, description="User search query with filters"
-    ),
-    asset_type: AssetType = Query(..., description="Asset type"),
-    filters: list[Filter] | None = Body(
-        None,
-        description="Manually user-defined filters to apply",
-        openapi_examples=get_body_examples_argument(),
-    ),
-    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of assets to return"
-    ),
-    return_assets: bool = Query(
-        default=False, description="Return entire assets instead of their IDs only"
-    ),
-) -> FilteredUserQueryResponseType:
-    query_id = await _sumbit_filtered_query(
-        database,
-        search_query,
-        asset_type,
-        filters,
-        offset=0,
-        limit=topk,
-        return_assets=return_assets,
-    )
-
-    # Wait till its turn to process our current query
-    QUERY_CONDITIONS[query_id] = Condition()
-    async with QUERY_CONDITIONS[query_id]:
-        await QUERY_CONDITIONS[query_id].wait()
-        QUERY_CONDITIONS.pop(query_id)
-
-    return await get_query_results(query_id, database, FilteredUserQuery)
-
-
 @router.post("")
 async def submit_filtered_query(
     database: Annotated[Database, Depends(Database)],
@@ -82,13 +40,11 @@ async def submit_filtered_query(
         ..., max_length=200, min_length=1, description="User search query with filters"
     ),
     asset_type: AssetType = Query(..., description="Asset type"),
-    filters: list[Filter] | None = Body(
+    filters: conlist(Filter, max_length=5) | None = Body(
         None,
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
     ),
-    # offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    # limit: int = Query(default=10, gt=0, le=100, description="Pagination limit"),
     topk: int = Query(
         default=10, gt=0, le=100, description="Number of assets to return"
     ),
@@ -101,8 +57,7 @@ async def submit_filtered_query(
         search_query,
         asset_type,
         filters,
-        offset=0,
-        limit=topk,
+        topk=topk,
         return_assets=return_assets,
     )
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
@@ -112,7 +67,7 @@ async def submit_filtered_query(
 async def get_filtered_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
-) -> FilteredUserQueryResponseType:
+) -> FilteredUserQueryResponse:
     return await get_query_results(query_id, database, FilteredUserQuery)
 
 
@@ -121,8 +76,7 @@ async def _sumbit_filtered_query(
     search_query: str,
     asset_type: AssetType,
     filters: list[Filter] | None,
-    offset: int,
-    limit: int,
+    topk: int,
     return_assets: bool,
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
@@ -134,9 +88,7 @@ async def _sumbit_filtered_query(
     user_query = FilteredUserQuery(
         search_query=search_query.strip(),
         asset_type=asset_type,
-        offset=offset,
-        limit=limit,
-        topic=search_query.strip() if filters else "",
+        topk=topk,
         filters=filters if filters else None,
         return_assets=return_assets,
     )
