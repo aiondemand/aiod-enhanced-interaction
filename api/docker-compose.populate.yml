@@ -7,7 +7,6 @@ services:
     environment:
       - INPUT_DIRPATH=/data_to_populate
       - MILVUS_URI=http://milvus-standalone:19530
-      - EXTRACT_METADATA=${USE_LLM}
     depends_on:
       - milvus-standalone
     volumes:
