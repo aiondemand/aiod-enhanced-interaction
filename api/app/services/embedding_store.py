@@ -14,6 +14,7 @@ from pymilvus import DataType, MilvusClient
 from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from typing import Optional, List
 
 
 class EmbeddingStore(ABC):
@@ -43,9 +44,9 @@ class EmbeddingStore(ABC):
         collection_name: str,
         topk: int = 10,
         filter: str = "",
+        precomputed_embedding: Optional[List[float]] = None,
     ) -> SearchResults:
         pass
-
 
 class Milvus_EmbeddingStore(EmbeddingStore):
     def __init__(self, verbose: bool = False) -> None:
@@ -164,22 +165,34 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         collection_name: str,
         topk: int = 10,
         filter: str = "",
+        precomputed_embedding: Optional[List[float]] | None = None,
     ) -> SearchResults:
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
 
-        with torch.no_grad():
-            query_embeddings = model.compute_query_embeddings([query_text])
+        if precomputed_embedding is None:
+            if query_text is None:
+                raise ValueError("Either query_text or precomputed_embedding must be provided.")
+            if model is None:
+                raise ValueError("AiModel instance must be provided to compute embeddings from query_text.")
+            with torch.no_grad():
+                query_embedding = model.compute_query_embeddings([query_text])
+        else:
+            query_embedding = [precomputed_embedding]
 
         query_results = self.client.search(
             collection_name=collection_name,
-            data=query_embeddings,
+            data=query_embedding,
             limit=topk * 10 if self.chunk_embedding_store else topk + 1,
             output_fields=["doc_id"],
             search_params={"metric_type": "COSINE"},
             filter=filter,
         )[0]
+
+        if not query_results:
+            return SearchResults(doc_ids=[], distances=[])
+
         doc_ids = [match["entity"]["doc_id"] for match in query_results]
         distances = [1 - match["distance"] for match in query_results]
 
@@ -188,3 +201,30 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         filtered_distances = [distances[idx] for idx in indices]
 
         return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
+
+    def get_embeddings(
+            self,
+            doc_id: str,
+            collection_name: str
+    ) -> Optional[List[List[float]]]:
+
+        if not self.exists_collection(collection_name):
+            raise ValueError(f"Collection '{collection_name}' does not exist.")
+
+        self.client.load_collection(collection_name)
+
+        try:
+            data = self.client.query(
+                collection_name=collection_name,
+                filter=f'doc_id == "{doc_id}"',
+                output_fields=["vector"],
+            )
+            if not data:
+                return None
+
+            embeddings = [item["vector"] for item in data]
+            return embeddings
+        except Exception as e:
+            logging.error(f"Failed to retrieve embeddings for doc_id '{doc_id}': {e}")
+            return None
+

@@ -4,7 +4,7 @@ import threading
 from datetime import datetime
 from functools import partial
 from time import sleep
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import torch
