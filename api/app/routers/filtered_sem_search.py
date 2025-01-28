@@ -48,17 +48,9 @@ async def submit_filtered_query(
     topk: int = Query(
         default=10, gt=0, le=100, description="Number of assets to return"
     ),
-    return_assets: bool = Query(
-        default=False, description="Return entire assets instead of their IDs only"
-    ),
 ) -> RedirectResponse:
     query_id = await _sumbit_filtered_query(
-        database,
-        search_query,
-        asset_type,
-        filters,
-        topk=topk,
-        return_assets=return_assets,
+        database, search_query, asset_type, filters, topk=topk
     )
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
 
@@ -77,7 +69,6 @@ async def _sumbit_filtered_query(
     asset_type: AssetType,
     filters: list[Filter] | None,
     topk: int,
-    return_assets: bool,
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
         search_query, asset_type, database, apply_filtering=True
@@ -90,6 +81,5 @@ async def _sumbit_filtered_query(
         asset_type=asset_type,
         topk=topk,
         filters=filters if filters else None,
-        return_assets=return_assets,
     )
     return await submit_query(user_query, database)

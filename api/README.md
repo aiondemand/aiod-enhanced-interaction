@@ -37,6 +37,27 @@ URL you can expect the results to be at.
 To maintain the stability of our application, so far we only support handling of one user query at once, hence the use of a query queue. After the specific query
 is processed, the results are saved in a local nosql file-based database and are accessible to the end users via the URL they were given.
 
+## Metadata filtering
+
+Metadata filtering functionality consists of two main processes that need to be taken care of:
+a) Extracting and storing of metadata associated with individual assets
+b) Extracting of filters/conditions found in the user query /user query parsing/
+
+### Extracting of metadata from assets
+
+Currently this process applicability is restricted to only a specific subset of assets we can <ins>manually extract metadata</ins> from, from <ins>Huggingface datasets</ins> to be exact. Due to this extraction process being very time demanding, we have opted to perform the metadata extraction manually without any use of LLMs for now. 
+
+Since the datasets as an asset type is the most prevalent asset in the AIoD platform, we have decided to apply metadata filtering on said asset, whilst choosing solely Huggingface datasets that share a common metadata structure as it can be used to retrieve a handful of metadata fields to be stored in Milvus database.
+
+### Extracting of filters from user queries
+
+Since we wish to minimize the costs and increase computational/time efficiency pertaining to serving of an LLM, we have opted to go for a rather small LLM (Llama 3.1 8B). Due to its size, performing more advanced tasks or multiple tasks at once can often lead incorrect results. To mitigate this to a certain degree, we have divided the <ins>user query parsing process into 2-3 LLM steps</ins> that further dissect and scrutinize a user query on different levels of granularity. The LLM steps are:
+- STEP 1: Extraction of natural language conditions from query (extraction of spans representing a condtions/filters each associated with a specific metadata field)
+- STEP 2: Analysis and transformation of each natural language condition (a span from user query) to a structure representing the condition performed separately
+- [Optional STEP 3]: Further validation of transformed value against a list of permitted values for a particular metadata field
+
+Unlike the former process, the extraction of metadata from assets, that can be performed manually without the use of an LLM to only a limited degree, <ins>the manual approach of defining filters explicitly</ins> is a full-fledged alternative to an automated user query parsing by an LLM. To this end, a user can define the filters himself, which can eliminate possibility for an LLM to misinterpret or omit some conditions user wanted to apply in the first place.
+
 ---
 
 # Repo Setup

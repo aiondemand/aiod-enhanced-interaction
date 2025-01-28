@@ -26,17 +26,8 @@ async def submit_simple_query(
     topk: int = Query(
         default=10, gt=0, le=100, description="Number of assets to return"
     ),
-    return_assets: bool = Query(
-        default=False, description="Return entire assets instead of their IDs only"
-    ),
 ) -> RedirectResponse:
-    query_id = await _sumbit_simple_query(
-        database,
-        search_query,
-        asset_type,
-        topk=topk,
-        return_assets=return_assets,
-    )
+    query_id = await _sumbit_simple_query(database, search_query, asset_type, topk=topk)
     return RedirectResponse(f"/query/{query_id}/result", status_code=202)
 
 
@@ -49,11 +40,7 @@ async def get_simple_query_result(
 
 
 async def _sumbit_simple_query(
-    database: Database,
-    search_query: str,
-    asset_type: AssetType,
-    topk: int,
-    return_assets: bool,
+    database: Database, search_query: str, asset_type: AssetType, topk: int
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
         search_query,
@@ -62,10 +49,7 @@ async def _sumbit_simple_query(
         apply_filtering=False,
     )
     user_query = SimpleUserQuery(
-        search_query=search_query.strip(),
-        asset_type=asset_type,
-        topk=topk,
-        return_assets=return_assets,
+        search_query=search_query.strip(), asset_type=asset_type, topk=topk
     )
 
     return await submit_query(user_query, database)

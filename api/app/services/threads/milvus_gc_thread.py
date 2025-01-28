@@ -6,9 +6,9 @@ import numpy as np
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
-from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
+from app.services.aiod import check_aiod_document
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
-from app.services.threads.search_thread import check_aiod_document
 
 job_lock = threading.Lock()
 
@@ -27,7 +27,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
             )
 
-            embedding_store = await Milvus_EmbeddingStore.init()
+            embedding_store = await MilvusEmbeddingStore.init()
             to_time = datetime.now(tz=timezone.utc)
 
             for asset_type in settings.AIOD.ASSET_TYPES:

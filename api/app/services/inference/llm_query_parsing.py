@@ -32,15 +32,16 @@ class NaturalLanguageCondition(BaseModel):
     )
     field: str = Field(..., description="Name of the metadata field")
 
-    # helper field used for better operator analysis. Even though the model doesnt assign operator correctly all the time
+    # helper field used for better operator analysis. Even though the model doesn't assign operator correctly all the time
     # it's a way of forcing the model to focus on logical operators in between conditions
-    # since the value of this attribute is unreliable we dont use it in the second stage
+    # since the value of this attribute is unreliable we don't use it in the second stage
     operator: Literal["AND", "OR", "NONE"] = Field(
         ...,
         description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead.",
     )
 
 
+# TODO rename
 class UserQuery_Stage1_OutputSchema(BaseModel):
     """Extraction and parsing of conditions and a topic found within a user query"""
 
@@ -66,7 +67,7 @@ class ValidValue(BaseModel):
     )
 
 
-class Prep_LLM:
+class PrepareLLM:
     @classmethod
     def setup_ollama_llm(cls) -> ChatOllama:
         ollama_uri = str(settings.OLLAMA.URI)
@@ -83,7 +84,7 @@ class Prep_LLM:
         )
 
 
-class Llama_ManualFunctionCalling:
+class LlamaManualFunctionCalling:
     tool_prompt_template = """
         You have access to the following functions:
 
@@ -362,7 +363,7 @@ class UserQueryParsing:
                 if list_fields_mask[field]:
                     if comp_operator not in ["==", "!="]:
                         raise ValueError(
-                            "We don't support any other comparison operators but a '==', '!=' for checking whether values exist whithin the metadata field."
+                            "We don't support any other comparison operators but a '==', '!=' for checking whether values exist within the metadata field."
                         )
                     str_expressions.append(
                         list_expression_template.format(
@@ -442,7 +443,7 @@ class UserQueryParsingStages:
         - `condition**: The natural language condition extracted from the user query. This query should contain one or more expressions to be extracted.
 
         **Instructions**:
-        1. Identify potentionally all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
+        1. Identify potentially all the expressions composing the condition. Each expression has its corresponding value and comparison_operator used to compare the value to metadata field for filtering purposes
         2. Make sure that you perform an unambiguous transformation of the raw value associated with each expression to its valid counterpart that is compliant with the restrictions imposed on the metadata field '{field_name}'. The metadata field description and the its value restrictions are the following:
             a) Description: {field_description}
             {field_valid_values}
@@ -589,7 +590,7 @@ class UserQueryParsingStages:
         chain: RunnableSequence,
         input: dict,
         fewshot_examples_dirpath: str | None = None,
-        validation_step: Llama_ManualFunctionCalling | None = None,
+        validation_step: LlamaManualFunctionCalling | None = None,
     ) -> dict | None:
         metadata_field = input["field"]
         asset_schema = input["asset_schema"]
@@ -611,7 +612,7 @@ class UserQueryParsingStages:
                         ]
                     )
                     fewshot_prompt = FewShotChatMessagePromptTemplate(
-                        examples=Llama_ManualFunctionCalling.transform_fewshot_examples(
+                        examples=LlamaManualFunctionCalling.transform_fewshot_examples(
                             dynamic_type, fewshot_examples
                         ),
                         example_prompt=example_prompt,
@@ -641,7 +642,7 @@ class UserQueryParsingStages:
             "field_name": metadata_field,
             "field_description": asset_schema.model_fields[metadata_field].description,
             "field_valid_values": field_valid_values,
-            "system_prompt": Llama_ManualFunctionCalling.populate_tool_prompt(
+            "system_prompt": LlamaManualFunctionCalling.populate_tool_prompt(
                 dynamic_type
             ),
         }
@@ -734,7 +735,7 @@ class UserQueryParsingStages:
                 else:
                     output["conditions"][i] = {"discard": True}
 
-            # we compare current LLM output to potentionally previous LLm outputs
+            # we compare current LLM output to potentially previous LLm outputs
             # and identify the best LLM response (containing the most valid conditions)
             if valid_conditions_count > max_valid_conditions_count:
                 # check whether the entire object is correct once we get
@@ -759,7 +760,7 @@ class UserQueryParsingStages:
         chain: RunnableSequence,
         input: dict,
         wrapper_schema: Type[BaseModel],
-        validation_step: Llama_ManualFunctionCalling | None,
+        validation_step: LlamaManualFunctionCalling | None,
         validation_step_permitted_values: list[str] = [],
         num_retry_attempts: int = 5,
     ) -> dict | None:
@@ -825,7 +826,7 @@ class UserQueryParsingStages:
                 else:
                     output["expressions"][i] = {"discard": True}
 
-            # we compare current LLM output to potentionally previous LLm outputs
+            # we compare current LLM output to potentially previous LLm outputs
             # and identify the best LLM response (containing the most valid expressions)
             if valid_expressions_count > max_valid_expressions_count:
                 # check whether the entire object is correct once we get
@@ -862,7 +863,7 @@ class UserQueryParsingStages:
         cls,
         llm: BaseChatModel,
         fewshot_examples_path: str | None = None,
-    ) -> Llama_ManualFunctionCalling:
+    ) -> LlamaManualFunctionCalling:
         pydantic_model = UserQuery_Stage1_OutputSchema
 
         task_instructions = HumanMessagePromptTemplate.from_template(
@@ -880,7 +881,7 @@ class UserQueryParsingStages:
                     ]
                 )
                 fewshot_prompt = FewShotChatMessagePromptTemplate(
-                    examples=Llama_ManualFunctionCalling.transform_fewshot_examples(
+                    examples=LlamaManualFunctionCalling.transform_fewshot_examples(
                         pydantic_model, fewshot_examples
                     ),
                     example_prompt=example_prompt,
@@ -893,7 +894,7 @@ class UserQueryParsingStages:
                 ("user", "User Query: {query}"),
             ]
         )
-        return Llama_ManualFunctionCalling(
+        return LlamaManualFunctionCalling(
             llm,
             pydantic_model=pydantic_model,
             chat_prompt_no_system=chat_prompt_no_system,
@@ -905,15 +906,15 @@ class UserQueryParsingStages:
         cls,
         llm: BaseChatModel,
         fewshot_examples_dirpath: str | None = None,
-        validation_step: Llama_ManualFunctionCalling | None = None,
-    ) -> Llama_ManualFunctionCalling:
+        validation_step: LlamaManualFunctionCalling | None = None,
+    ) -> LlamaManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages(
             [
                 ("user", cls.task_instructions_stage2),
                 ("user", "Condition: {query}"),
             ]
         )
-        return Llama_ManualFunctionCalling(
+        return LlamaManualFunctionCalling(
             llm,
             pydantic_model=None,
             chat_prompt_no_system=chat_prompt_no_system,
@@ -925,7 +926,7 @@ class UserQueryParsingStages:
         )
 
     @classmethod
-    def init_stage_3(cls, llm: BaseChatModel) -> Llama_ManualFunctionCalling:
+    def init_stage_3(cls, llm: BaseChatModel) -> LlamaManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages(
             [
                 ("user", cls.task_instructions_stage3),
@@ -934,7 +935,7 @@ class UserQueryParsingStages:
                 ("user", "**Value to assess**: {value}"),
             ]
         )
-        return Llama_ManualFunctionCalling(
+        return LlamaManualFunctionCalling(
             llm,
             pydantic_model=ValidValue,
             chat_prompt_no_system=chat_prompt_no_system,

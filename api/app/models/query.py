@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from datetime import datetime, timezone
 from functools import partial
 from typing import Type
@@ -7,7 +8,11 @@ from uuid import uuid4
 
 from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
-from app.schemas.query import FilteredUserQueryResponse, SimpleUserQueryResponse
+from app.schemas.query import (
+    BaseUserQueryResponse,
+    FilteredUserQueryResponse,
+    SimpleUserQueryResponse,
+)
 from app.schemas.search_results import SearchResults
 from pydantic import BaseModel, Field
 
@@ -28,7 +33,9 @@ class BaseUserQuery(BaseModel):
         self.status = status
         self.updated_at = datetime.now(tz=timezone.utc)
 
-    def map_to_response(self, response_model: Type[BaseModel]) -> BaseModel:
+    def _map_to_response(
+        self, response_model: Type[BaseUserQueryResponse]
+    ) -> BaseUserQueryResponse:
         if self.status != QueryStatus.COMPLETED:
             return response_model(**self.model_dump())
 
@@ -43,10 +50,14 @@ class BaseUserQuery(BaseModel):
     def sort_function_to_populate_queue(query):
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
+    @abstractmethod
+    def map_to_response(self) -> BaseUserQueryResponse:
+        raise NotImplementedError
+
 
 class SimpleUserQuery(BaseUserQuery):
     def map_to_response(self) -> SimpleUserQueryResponse:
-        return super().map_to_response(SimpleUserQueryResponse)
+        return self._map_to_response(SimpleUserQueryResponse)
 
 
 class FilteredUserQuery(BaseUserQuery):
@@ -57,4 +68,4 @@ class FilteredUserQuery(BaseUserQuery):
         return self.filters is None
 
     def map_to_response(self) -> FilteredUserQueryResponse:
-        return super().map_to_response(FilteredUserQueryResponse)
+        return self._map_to_response(FilteredUserQueryResponse)

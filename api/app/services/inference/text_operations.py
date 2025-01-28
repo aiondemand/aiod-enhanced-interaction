@@ -9,7 +9,7 @@ from app.schemas.asset_metadata.dataset_metadata import (
 from app.schemas.enums import AssetType
 
 
-class HuggingFaceDatasetExtractMedatada:
+class HuggingFaceDatasetExtractMetadata:
     @classmethod
     def extract_hf_keywords(cls, asset: dict, keyword_type: str) -> list[str]:
         keywords = [

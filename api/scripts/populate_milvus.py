@@ -74,6 +74,9 @@ def create_new_collection(
     schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
 
     if extract_metadata and collection_name.endswith("_datasets"):
+        # TODO for now this is a duplicate code to the index creation process found
+        # in the embedding_store.py file
+
         # TODO so far it only works with datasets
         # (the same goes for the Milvus index in the main application)
         schema.add_field("date_published", DataType.VARCHAR, max_length=22)

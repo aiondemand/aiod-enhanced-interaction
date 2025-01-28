@@ -52,7 +52,7 @@ class EmbeddingStore(ABC):
         pass
 
 
-class Milvus_EmbeddingStore(EmbeddingStore):
+class MilvusEmbeddingStore(EmbeddingStore):
     def __init__(
         self,
         verbose: bool = False,
@@ -64,8 +64,8 @@ class Milvus_EmbeddingStore(EmbeddingStore):
 
         self.client = None
 
-    async def init() -> Milvus_EmbeddingStore:
-        obj = Milvus_EmbeddingStore()
+    async def init() -> MilvusEmbeddingStore:
+        obj = MilvusEmbeddingStore()
         await obj.init_connection()
         return obj
 

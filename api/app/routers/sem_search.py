@@ -19,12 +19,12 @@ async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
 async def get_query_results(
     query_id: UUID, database: Database, query_type: Type[BaseUserQuery]
 ) -> BaseUserQueryResponse:
-    userQuery = database.find_by_id(query_type, id=str(query_id))
-    if userQuery is None:
+    user_query = database.find_by_id(query_type, id=str(query_id))
+    if user_query is None:
         raise HTTPException(
             status_code=404, detail="Requested query doesn't exist or has been deleted."
         )
-    return userQuery.map_to_response()
+    return user_query.map_to_response()
 
 
 def validate_query_endpoint_arguments_or_raise(

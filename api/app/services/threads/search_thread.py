@@ -3,21 +3,19 @@ from __future__ import annotations
 import logging
 import os
 from queue import Queue
-from time import sleep
 from typing import Type
 
 import numpy as np
 from app.config import settings
-from app.helper import _perform_request
 from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
 from app.schemas.asset_metadata.base import SchemaOperations
-from app.schemas.enums import AssetType, QueryStatus
+from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
+from app.services.aiod import check_aiod_document
 from app.services.database import Database
-from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
-from app.services.inference.llm_query_parsing import Prep_LLM, UserQueryParsing
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
-from requests.exceptions import HTTPError
 from tinydb import Query
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
@@ -52,38 +50,37 @@ async def search_thread() -> None:
         fill_query_queue(database)
 
         model = AiModel("cpu")
-        embedding_store = await Milvus_EmbeddingStore.init()
+        embedding_store = await MilvusEmbeddingStore.init()
 
         llm_query_parser = None
         if settings.PERFORM_LLM_QUERY_PARSING:
-            llm_query_parser = UserQueryParsing(llm=Prep_LLM.setup_ollama_llm())
+            llm_query_parser = UserQueryParsing(llm=PrepareLLM.setup_ollama_llm())
 
         while True:
-            try:
-                query_id, query_type = QUERY_QUEUE.get()
-                if query_id is None:
-                    return
-                if (
-                    query_type == FilteredUserQuery
-                    and settings.PERFORM_LLM_QUERY_PARSING is False
-                ):
-                    continue
+            query_id, query_type = QUERY_QUEUE.get()
+            if query_id is None:
+                return
+            if (
+                query_type == FilteredUserQuery
+                and settings.PERFORM_LLM_QUERY_PARSING is False
+            ):
+                continue
+            logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-                logging.info(f"Searching relevant assets for query ID: {query_id}")
-
-                user_query: BaseUserQuery = database.find_by_id(
-                    type=query_type, id=query_id
+            user_query: BaseUserQuery = database.find_by_id(
+                type=query_type, id=query_id
+            )
+            if user_query is None:
+                err_msg = (
+                    f"UserQuery id={query_id} doesn't exist even though it should."
                 )
-                if user_query is None:
-                    err_msg = (
-                        f"UserQuery id={query_id} doesn't exist even though it should."
-                    )
-                    logging.error(err_msg)
-                    continue
+                logging.error(err_msg)
+                continue
 
-                user_query.update_status(QueryStatus.IN_PROGRESS)
-                database.upsert(user_query)
+            user_query.update_status(QueryStatus.IN_PROGRESS)
+            database.upsert(user_query)
 
+            try:
                 results = retrieve_topk_documents_wrapper(
                     model,
                     llm_query_parser,
@@ -185,25 +182,3 @@ def retrieve_topk_documents_wrapper(
         )
 
     return documents_to_return
-
-
-# TODO perhaps we should move these two function to a different file?
-def get_aiod_document(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> dict | None:
-    try:
-        sleep(sleep_time)
-        response = _perform_request(
-            settings.AIOD.get_asset_by_id_url(doc_id, asset_type)
-        )
-        return response.json()
-    except HTTPError as e:
-        if e.response.status_code == 404:
-            return None
-        raise
-
-
-def check_aiod_document(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> bool:
-    return get_aiod_document(doc_id, asset_type, sleep_time) is not None
