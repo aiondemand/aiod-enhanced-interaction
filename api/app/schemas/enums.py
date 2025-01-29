@@ -3,8 +3,9 @@ from enum import Enum
 
 class QueryStatus(Enum):
     QUEUED = "Queued"
-    IN_PROGESS = "In_progress"
+    IN_PROGRESS = "In_progress"
     COMPLETED = "Completed"
+    FAILED = "Failed"
 
 
 class AssetType(Enum):

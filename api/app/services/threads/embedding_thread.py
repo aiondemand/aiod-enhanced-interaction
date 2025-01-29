@@ -1,27 +1,24 @@
 import gc
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
-from time import sleep
-from typing import Callable
+from typing import Callable, Literal
 
 import numpy as np
 import torch
 from app.config import settings
-from app.helper import (
-    _perform_request,
-    parse_asset_date,
-    translate_datetime_to_aiod_params,
-)
-from app.models.asset_collections import AssetCollection
+from app.models.asset_collection import AssetCollection
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
+from app.services.aiod import recursive_aiod_asset_fetch
 from app.services.database import Database
-from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.model import AiModel
-from app.services.inference.text_operations import ConvertJsonToString
-from requests.exceptions import HTTPError
+from app.services.inference.text_operations import (
+    ConvertJsonToString,
+    HuggingFaceDatasetExtractMetadata,
+)
 from torch.utils.data import DataLoader
 
 job_lock = threading.Lock()
@@ -51,22 +48,22 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
     model = AiModel(device=AiModel.get_device())
     database = Database()
-    embedding_store = await Milvus_EmbeddingStore.init()
+    embedding_store = await MilvusEmbeddingStore.init()
 
     try:
         asset_types = settings.AIOD.ASSET_TYPES
         for asset_type in asset_types:
             logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
-            asset_collection = database.get_asset_collection_by_type(asset_type)
+            asset_collection = database.get_first_asset_collection_by_type(asset_type)
             if asset_collection is None:
                 # DB setup
                 asset_collection = AssetCollection(aiod_asset_type=asset_type)
-                database.asset_collections.insert(asset_collection)
+                database.insert(asset_collection)
             elif asset_collection.last_update.finished and first_invocation is False:
                 # Create a new recurring DB update
                 asset_collection.add_recurring_update()
-                database.asset_collections.upsert(asset_collection)
+                database.upsert(asset_collection)
             elif asset_collection.last_update.finished:
                 # The last DB update was sucessful, we skip this asset in the
                 # first invocation
@@ -76,11 +73,20 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 # that one...
                 pass
 
+            extract_metadata_func = None
+            meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+            if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
+                extract_metadata_func = partial(
+                    HuggingFaceDatasetExtractMetadata.extract_huggingface_dataset_metadata,
+                    asset_type=asset_type,
+                )
+
             process_aiod_assets_wrapper(
                 model=model,
                 stringify_function=partial(
                     ConvertJsonToString.extract_relevant_info, asset_type=asset_type
                 ),
+                extract_metadata_function=extract_metadata_func,
                 embedding_store=embedding_store,
                 database=database,
                 asset_collection=asset_collection,
@@ -96,14 +102,13 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
 def process_aiod_assets_wrapper(
     model: AiModel,
     stringify_function: Callable[[dict], str],
+    extract_metadata_function: Callable[[dict], dict] | None,
     embedding_store: EmbeddingStore,
     database: Database,
     asset_collection: AssetCollection,
     asset_type: AssetType,
 ) -> None:
-    asset_url = settings.AIOD.get_assets_url(asset_type)
-    collection_name = settings.MILVUS.get_collection_name(asset_type)
-    existing_doc_ids_from_past = embedding_store.get_all_document_ids(collection_name)
+    existing_doc_ids_from_past = embedding_store.get_all_document_ids(asset_type)
     newly_added_doc_ids = []
 
     last_update = asset_collection.last_update
@@ -136,7 +141,7 @@ def process_aiod_assets_wrapper(
 
     while True:
         assets_to_add, asset_ids_to_remove = get_assets_to_add_and_delete(
-            asset_url,
+            asset_type,
             url_params,
             existing_doc_ids_from_past=existing_doc_ids_from_past,
             newly_added_doc_ids=newly_added_doc_ids,
@@ -149,7 +154,7 @@ def process_aiod_assets_wrapper(
         num_emb_removed = 0
         if len(asset_ids_to_remove) > 0:
             num_emb_removed = embedding_store.remove_embeddings(
-                asset_ids_to_remove, collection_name
+                asset_ids_to_remove, asset_type
             )
             existing_doc_ids_from_past = np.array(existing_doc_ids_from_past)[
                 ~np.isin(existing_doc_ids_from_past, asset_ids_to_remove)
@@ -162,14 +167,24 @@ def process_aiod_assets_wrapper(
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
             asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
 
-            data = [(obj, id) for obj, id in zip(stringified_assets, asset_ids)]
+            metadata = [{} for _ in assets_to_add]
+            if extract_metadata_function is not None:
+                metadata = [extract_metadata_function(obj) for obj in assets_to_add]
+
+            data = [
+                (obj, id, meta)
+                for obj, id, meta in zip(stringified_assets, asset_ids, metadata)
+            ]
             loader = DataLoader(
-                data, batch_size=settings.MODEL_BATCH_SIZE, num_workers=0
+                data,
+                collate_fn=lambda batch: list(zip(*batch)),
+                batch_size=settings.MODEL_BATCH_SIZE,
+                num_workers=0,
             )
             num_emb_added = embedding_store.store_embeddings(
                 model,
                 loader,
-                collection_name=collection_name,
+                asset_type=asset_type,
                 milvus_batch_size=settings.MILVUS.BATCH_SIZE,
             )
             newly_added_doc_ids += asset_ids
@@ -177,7 +192,7 @@ def process_aiod_assets_wrapper(
         asset_collection.update(
             embeddings_added=num_emb_added, embeddings_removed=num_emb_removed
         )
-        database.asset_collections.upsert(asset_collection)
+        database.upsert(asset_collection)
 
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
@@ -185,18 +200,18 @@ def process_aiod_assets_wrapper(
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     asset_collection.finish()
-    database.asset_collections.upsert(asset_collection)
+    database.upsert(asset_collection)
 
 
 def get_assets_to_add_and_delete(
-    url: str,
+    asset_type: AssetType,
     url_params: RequestParams,
     existing_doc_ids_from_past: list[str],
     newly_added_doc_ids: list[str],
     last_db_sync_datetime: datetime | None,
 ) -> tuple[list[dict] | None, list[str] | None]:
     mark_recursions = []
-    assets = recursive_fetch(url, url_params, mark_recursions)
+    assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 
     if len(assets) == 0 and len(mark_recursions) == 0:
         # We have reached the end of the AIoD database
@@ -210,7 +225,7 @@ def get_assets_to_add_and_delete(
 
     asset_ids = [str(obj["identifier"]) for obj in assets]
     modified_dates = np.array(
-        [parse_asset_date(obj, none_value="now") for obj in assets]
+        [parse_aiod_asset_date(obj, none_value="now") for obj in assets]
     )
 
     # new assets to store that we have never encountered before
@@ -238,44 +253,18 @@ def get_assets_to_add_and_delete(
     return assets_to_add, asset_ids_to_del
 
 
-def recursive_fetch(
-    url: str, url_params: RequestParams, mark_recursions: list[int]
-) -> list:
-    try:
-        sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
-        queries = _build_real_url_queries(url_params)
-        response = _perform_request(url, queries)
-        data = response.json()
-    except HTTPError as e:
-        if e.response.status_code != 500:
-            raise e
-        if url_params.limit == 1:
-            return []
+def parse_aiod_asset_date(
+    asset: dict,
+    field: str = "date_modified",
+    none_value: Literal["none", "now", "zero"] = "none",
+) -> datetime | None:
+    string_time = asset.get("aiod_entry", {}).get(field, None)
+    if string_time is None:
+        if none_value == "none":
+            return None
+        if none_value == "now":
+            return datetime.now(tz=timezone.utc)
+        if none_value == "zero":
+            return datetime.fromtimestamp(0, tz=timezone)
 
-        mark_recursions.append(1)
-        first_half_limit = url_params.limit // 2
-        second_half_limit = url_params.limit - first_half_limit
-
-        first_half = recursive_fetch(
-            url, url_params.new_page(limit=first_half_limit), mark_recursions
-        )
-        second_half = recursive_fetch(
-            url,
-            url_params.new_page(
-                offset=url_params.offset + first_half_limit, limit=second_half_limit
-            ),
-            mark_recursions,
-        )
-        return first_half + second_half
-
-    return data
-
-
-def _build_real_url_queries(url_params: RequestParams) -> dict:
-    return {
-        "schema": "aiod",
-        "offset": url_params.offset,
-        "limit": url_params.limit,
-        "date_modified_after": translate_datetime_to_aiod_params(url_params.from_time),
-        "date_modified_before": translate_datetime_to_aiod_params(url_params.to_time),
-    }
+    return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)

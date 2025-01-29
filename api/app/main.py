@@ -5,12 +5,15 @@ from threading import Thread
 from time import sleep
 
 from app.config import settings
-from app.routers import query as query_router
+from app.routers import filtered_sem_search as filtered_query_router
+from app.routers import simple_sem_search as query_router
 from app.services.database import Database
 from app.services.threads import threads
-from app.services.threads.delete_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.embedding_thread import (
     compute_embeddings_for_aiod_assets_wrapper,
+)
+from app.services.threads.milvus_gc_thread import (
+    delete_embeddings_of_aiod_assets_wrapper,
 )
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -30,9 +33,14 @@ async def lifespan(app: FastAPI):
     app_shutdown()
 
 
-app = FastAPI(title="[AIoD] Semantic Search", lifespan=lifespan)
+app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
+if settings.PERFORM_LLM_QUERY_PARSING:
+    app.include_router(
+        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,7 +107,7 @@ def app_init() -> None:
 
 
 def app_shutdown() -> None:
-    QUERY_QUEUE.put(None)
+    QUERY_QUEUE.put((None, None))
     QUERY_THREAD.join(timeout=5)
     IMMEDIATE_EMB_THREAD.join(timeout=5)
     SCHEDULER.shutdown(wait=False)

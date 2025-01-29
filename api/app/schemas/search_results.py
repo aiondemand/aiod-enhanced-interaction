@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SearchResults(BaseModel):
-    doc_ids: list[str] = []
-    distances: list[float] = []
+    doc_ids: list[str] = Field(default_factory=list)
+    distances: list[float] = Field(default_factory=list)
 
     def __add__(self, other: SearchResults) -> SearchResults:
         if isinstance(other, SearchResults) is False:
