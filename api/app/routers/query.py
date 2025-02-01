@@ -11,12 +11,18 @@ from app.services.threads.search_thread import QUERY_QUEUE
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 
-from api.app.config import settings
+from api.app.config import settings, AIoDConfig
 from api.app.schemas.enums import QueryStatus
 from api.app.schemas.query import SimilarQueryResponse
 from api.app.schemas.search_results import SearchResults
 from app.services.embedding_store import Milvus_EmbeddingStore
+from app.services.inference.text_operations import ConvertJsonToString
+from app.services.inference.model import AiModel
+import torch
 
+
+
+import requests
 
 router = APIRouter()
 
@@ -70,8 +76,31 @@ async def get_query_similar_result(
 
         embeddings = embedding_store.get_embeddings(asset_id, collection_name)
 
-        if embeddings is None or len(embeddings) == 0:
-            raise ValueError(f"No embeddings found for asset_id '{asset_id}'.")
+        # If IDs is not in DB, check AIoD catalog
+        # Does AIoD have asset ID?
+        if not embeddings:
+            logging.info(f"No embeddings found for asset_id '{asset_id}'. Fetching from AIOD API...")
+            url = settings.AIOD.URL
+            url = str(url) + "/datasets/v1"
+            print(url)
+            response = requests.get(url, params={"schema": "aiod", "offset": 10000, "limit": 1}) # fixed values for AIoD
+            if response.status_code == 200:
+                dataset_info = response.json()
+                processed_data = ConvertJsonToString.stringify(dataset_info[0])
+                device = torch.device("cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu")
+
+                model = AiModel(device=device)
+
+                embeddings = model.compute_asset_embeddings([processed_data])
+
+                embeddings_list = [emb.cpu().numpy().tolist() for emb in embeddings]
+
+                print("Computed Embeddings:", embeddings_list)
+                pass
+            else:
+                raise HTTPException(
+                    status_code=404, detail="No embeddings found and external API request failed."
+                )
 
         vector = np.mean(embeddings, axis=0).tolist()
 
@@ -86,7 +115,7 @@ async def get_query_similar_result(
 
         if search_results is None:
             raise HTTPException(
-                status_code=404, detail="Requested query doesn't exist."
+                status_code=404, detail="Recommender query not found."
             )
 
         similarQuery = SimilarQuery(

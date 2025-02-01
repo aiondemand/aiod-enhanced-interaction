@@ -48,6 +48,13 @@ class EmbeddingStore(ABC):
     ) -> SearchResults:
         pass
 
+    @abstractmethod
+    def get_embeddings(
+        self, doc_id: str, collection_name: str
+    ) -> Optional[List[List[float]]]:
+        pass
+
+
 class Milvus_EmbeddingStore(EmbeddingStore):
     def __init__(self, verbose: bool = False) -> None:
         self.emb_dimensionality = 1024
@@ -173,9 +180,13 @@ class Milvus_EmbeddingStore(EmbeddingStore):
 
         if precomputed_embedding is None:
             if query_text is None:
-                raise ValueError("Either query_text or precomputed_embedding must be provided.")
+                raise ValueError(
+                    "Either query_text or precomputed_embedding must be provided."
+                )
             if model is None:
-                raise ValueError("AiModel instance must be provided to compute embeddings from query_text.")
+                raise ValueError(
+                    "AiModel instance must be provided to compute embeddings from query_text."
+                )
             with torch.no_grad():
                 query_embedding = model.compute_query_embeddings([query_text])
         else:
@@ -203,9 +214,7 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
 
     def get_embeddings(
-            self,
-            doc_id: str,
-            collection_name: str
+        self, doc_id: str, collection_name: str
     ) -> Optional[List[List[float]]]:
 
         if not self.exists_collection(collection_name):
@@ -227,4 +236,3 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         except Exception as e:
             logging.error(f"Failed to retrieve embeddings for doc_id '{doc_id}': {e}")
             return None
-
