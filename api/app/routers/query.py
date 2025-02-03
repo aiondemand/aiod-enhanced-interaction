@@ -81,22 +81,36 @@ async def get_query_similar_result(
         if not embeddings:
             logging.info(f"No embeddings found for asset_id '{asset_id}'. Fetching from AIOD API...")
             url = settings.AIOD.URL
-            url = str(url) + "/datasets/v1"
-            print(url)
+            url = str(url) + asset_type.value + "/v1"
             response = requests.get(url, params={"schema": "aiod", "offset": 10000, "limit": 1}) # fixed values for AIoD
             if response.status_code == 200:
                 dataset_info = response.json()
                 processed_data = ConvertJsonToString.stringify(dataset_info[0])
+
                 device = torch.device("cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu")
-
                 model = AiModel(device=device)
+                tensor = model.compute_asset_embeddings([processed_data])
+                embeddings_list = [emb.cpu().numpy().tolist() for emb in tensor]
 
-                embeddings = model.compute_asset_embeddings([processed_data])
+                for embedding in embeddings_list:
+                    #TODO
+                    # fix problem if I have multiple embeddings
+                    embedding = np.mean(embedding, axis=0).tolist()
 
-                embeddings_list = [emb.cpu().numpy().tolist() for emb in embeddings]
+                    search_results = embedding_store.retrieve_topk_document_ids(
+                        model=None,
+                        query_text=None,
+                        collection_name=collection_name,
+                        topk=topk,
+                        filter="",
+                        precomputed_embedding=embedding,
+                    )
 
-                print("Computed Embeddings:", embeddings_list)
-                pass
+                    similarQuery = SimilarQuery(
+                        asset_id=asset_id,
+                        result_set=search_results,
+                    )
+                    return similarQuery.map_to_response()
             else:
                 raise HTTPException(
                     status_code=404, detail="No embeddings found and external API request failed."
