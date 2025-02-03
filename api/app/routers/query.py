@@ -77,12 +77,11 @@ async def get_query_similar_result(
         embeddings = embedding_store.get_embeddings(asset_id, collection_name)
 
         # If IDs is not in DB, check AIoD catalog
-        # Does AIoD have asset ID?
         if not embeddings:
             logging.info(f"No embeddings found for asset_id '{asset_id}'. Fetching from AIOD API...")
             url = settings.AIOD.URL
             url = str(url) + asset_type.value + "/v1"
-            response = requests.get(url, params={"schema": "aiod", "offset": 10000, "limit": 1}) # fixed values for AIoD
+            response = requests.get(url, params={"schema": "aiod", "offset": 13000, "limit": 1}) # fixed values for AIoD
             if response.status_code == 200:
                 dataset_info = response.json()
                 processed_data = ConvertJsonToString.stringify(dataset_info[0])
@@ -92,51 +91,67 @@ async def get_query_similar_result(
                 tensor = model.compute_asset_embeddings([processed_data])
                 embeddings_list = [emb.cpu().numpy().tolist() for emb in tensor]
 
+                merged_doc_ids = []
+                merged_distances = []
                 for embedding in embeddings_list:
-                    #TODO
-                    # fix problem if I have multiple embeddings
-                    embedding = np.mean(embedding, axis=0).tolist()
+                    for emb in embedding:
 
-                    search_results = embedding_store.retrieve_topk_document_ids(
-                        model=None,
-                        query_text=None,
-                        collection_name=collection_name,
-                        topk=topk,
-                        filter="",
-                        precomputed_embedding=embedding,
-                    )
+                        search_results = embedding_store.retrieve_topk_document_ids(
+                            model=None,
+                            query_text=None,
+                            collection_name=collection_name,
+                            topk=topk,
+                            filter="",
+                            precomputed_embedding=emb,
+                        )
+                        if search_results:
+                            merged_doc_ids.extend(search_results.doc_ids)
+                            merged_distances.extend(search_results.distances)
 
-                    similarQuery = SimilarQuery(
-                        asset_id=asset_id,
-                        result_set=search_results,
-                    )
+                    merged = list(zip(merged_doc_ids, merged_distances))
+
+                    best_results = {}
+                    for doc_id, distance in merged:
+                        if doc_id in best_results:
+                            if distance > best_results[doc_id]:
+                                best_results[doc_id] = distance
+                        else:
+                            best_results[doc_id] = distance
+
+                    merged_sorted = sorted(best_results.items(), key=lambda x: x[1], reverse=True)[:topk]
+                    final_doc_ids = [doc_id for doc_id, _ in merged_sorted]
+                    final_distances = [distance for _, distance in merged_sorted]
+
+                    final_search_results = SearchResults(doc_ids=final_doc_ids, distances=final_distances)
+                    similarQuery = SimilarQuery(asset_id=asset_id, result_set=final_search_results.dict())
+
                     return similarQuery.map_to_response()
+
             else:
                 raise HTTPException(
                     status_code=404, detail="No embeddings found and external API request failed."
                 )
 
-        vector = np.mean(embeddings, axis=0).tolist()
-
-        search_results = embedding_store.retrieve_topk_document_ids(
-            model=None,
-            query_text=None,
-            collection_name=collection_name,
-            topk=topk,
-            filter="",
-            precomputed_embedding=vector,
-        )
-
-        if search_results is None:
-            raise HTTPException(
-                status_code=404, detail="Recommender query not found."
+        for vector in embeddings:
+            search_results = embedding_store.retrieve_topk_document_ids(
+                model=None,
+                query_text=None,
+                collection_name=collection_name,
+                topk=topk,
+                filter="",
+                precomputed_embedding=vector,
             )
 
-        similarQuery = SimilarQuery(
-            asset_id=asset_id,
-            result_set=search_results,
-        )
-        return similarQuery.map_to_response()
+            if search_results is None:
+                raise HTTPException(
+                    status_code=404, detail="Recommender query not found."
+                )
+
+            similarQuery = SimilarQuery(
+                asset_id=asset_id,
+                result_set=search_results,
+            )
+            return similarQuery.map_to_response()
 
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
