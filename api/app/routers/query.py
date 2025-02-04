@@ -1,28 +1,16 @@
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
-import numpy as np
 from app.models.query import UserQuery, SimilarQuery
 from app.schemas.enums import AssetType
 from app.schemas.query import UserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
+from app.services.recommender import get_similar_query_response
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
-
-from api.app.config import settings, AIoDConfig
-from api.app.schemas.enums import QueryStatus
 from api.app.schemas.query import SimilarQueryResponse
-from api.app.schemas.search_results import SearchResults
-from app.services.embedding_store import Milvus_EmbeddingStore
-from app.services.inference.text_operations import ConvertJsonToString
-from app.services.inference.model import AiModel
-import torch
-
-
-
-import requests
 
 router = APIRouter()
 
@@ -70,89 +58,8 @@ async def get_query_similar_result(
     ),
 ) -> SimilarQueryResponse:
     try:
-        embedding_store = await Milvus_EmbeddingStore.init()
-
-        collection_name = settings.MILVUS.get_collection_name(asset_type)
-
-        embeddings = embedding_store.get_embeddings(asset_id, collection_name)
-
-        # If IDs is not in DB, check AIoD catalog
-        if not embeddings:
-            logging.info(f"No embeddings found for asset_id '{asset_id}'. Fetching from AIOD API...")
-            url = settings.AIOD.URL
-            url = str(url) + asset_type.value + "/v1"
-            response = requests.get(url, params={"schema": "aiod", "offset": 13000, "limit": 1}) # fixed values for AIoD
-            if response.status_code == 200:
-                dataset_info = response.json()
-                processed_data = ConvertJsonToString.stringify(dataset_info[0])
-
-                device = torch.device("cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu")
-                model = AiModel(device=device)
-                tensor = model.compute_asset_embeddings([processed_data])
-                embeddings_list = [emb.cpu().numpy().tolist() for emb in tensor]
-
-                merged_doc_ids = []
-                merged_distances = []
-                for embedding in embeddings_list:
-                    for emb in embedding:
-
-                        search_results = embedding_store.retrieve_topk_document_ids(
-                            model=None,
-                            query_text=None,
-                            collection_name=collection_name,
-                            topk=topk,
-                            filter="",
-                            precomputed_embedding=emb,
-                        )
-                        if search_results:
-                            merged_doc_ids.extend(search_results.doc_ids)
-                            merged_distances.extend(search_results.distances)
-
-                    merged = list(zip(merged_doc_ids, merged_distances))
-
-                    best_results = {}
-                    for doc_id, distance in merged:
-                        if doc_id in best_results:
-                            if distance > best_results[doc_id]:
-                                best_results[doc_id] = distance
-                        else:
-                            best_results[doc_id] = distance
-
-                    merged_sorted = sorted(best_results.items(), key=lambda x: x[1], reverse=True)[:topk]
-                    final_doc_ids = [doc_id for doc_id, _ in merged_sorted]
-                    final_distances = [distance for _, distance in merged_sorted]
-
-                    final_search_results = SearchResults(doc_ids=final_doc_ids, distances=final_distances)
-                    similarQuery = SimilarQuery(asset_id=asset_id, result_set=final_search_results.dict())
-
-                    return similarQuery.map_to_response()
-
-            else:
-                raise HTTPException(
-                    status_code=404, detail="No embeddings found and external API request failed."
-                )
-
-        for vector in embeddings:
-            search_results = embedding_store.retrieve_topk_document_ids(
-                model=None,
-                query_text=None,
-                collection_name=collection_name,
-                topk=topk,
-                filter="",
-                precomputed_embedding=vector,
-            )
-
-            if search_results is None:
-                raise HTTPException(
-                    status_code=404, detail="Recommender query not found."
-                )
-
-            similarQuery = SimilarQuery(
-                asset_id=asset_id,
-                result_set=search_results,
-            )
-            return similarQuery.map_to_response()
-
+        response = await get_similar_query_response(asset_id, asset_type, topk)
+        return response
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
