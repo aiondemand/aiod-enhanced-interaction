@@ -37,7 +37,7 @@ class HuggingFaceDatasetExtractMedatada:
         }
     
     @classmethod
-    def simplify_licenses(cls, licenses: list[str]) -> list[str]:    
+    def simplify_license(cls, licenses: list[str]) -> str | None:    
         main_license_prefixes = sorted([
             "mit",
             "apache",
@@ -73,7 +73,9 @@ class HuggingFaceDatasetExtractMedatada:
                     processed_licenses.append(prefix)
                     break
             
-        return processed_licenses
+        if len(processed_licenses) == 0:
+            return None
+        return processed_licenses[0]
 
     @classmethod
     def translate_size_category(cls, size_categories: list[str]) -> tuple[int, int] | tuple[None, None]:
@@ -113,9 +115,14 @@ class HuggingFaceDatasetExtractMedatada:
         return None, None
 
     @classmethod
-    def extract_huggingface_dataset_metadata(
-        cls, obj: dict, valid_metadata_values: dict[str, list[str]]
-    ) -> dict:
+    def extract_huggingface_dataset_metadata(cls, obj: dict) -> dict:
+        # For now we only support extracting of metadata information from HuggingFace
+        # As other platforms have their metadata more spread out and we would need
+        # an LLM to extract the same information that we can currently easily parse
+        # from HuggingFace keywords
+        if obj["platform"] != "huggingface":
+            return {}
+
         date_published_str = (
             obj["date_published"] + "Z" 
             if obj.get("date_published", None) is not None 
@@ -131,33 +138,26 @@ class HuggingFaceDatasetExtractMedatada:
 
         kw_licenses = cls.extract_hf_keywords(obj, keyword_type="license")
         if obj.get("license", None) is not None:
-            kw_licenses = list(set(kw_licenses + [obj["license"]]))
-        kw_licenses = cls.simplify_licenses(cls.strip_unknown(kw_licenses))
+            kw_licenses = list(set([obj["license"]] + kw_licenses))
+        license = cls.simplify_license(cls.strip_unknown(kw_licenses))
 
         task_types = cls.strip_unknown(list(set(
             cls.extract_hf_keywords(obj, keyword_type="task_categories") +
-            cls.extract_hf_keywords(obj, keyword_type="task_ids"),
+            cls.extract_hf_keywords(obj, keyword_type="task_ids")
         )))
-        task_types = [
-            typ for typ in task_types 
-            if typ in valid_metadata_values["task_types"]
-        ] 
-
+        
         size_categories = cls.strip_unknown(cls.extract_hf_keywords(
             obj, keyword_type="size_categories"
         ))
         lower_bound, upper_bound = None, None
         if len(size_categories) > 0:
             lower_bound, upper_bound = cls.translate_size_category(size_categories)
-            
         
         obj_to_return = {
             "date_published": date_published_str,
             "size_in_mb": ds_size,
-            "licenses": kw_licenses,
+            "license": license,
             "task_types": task_types,
-            "task_categories": cls.extract_hf_keywords(obj, keyword_type="task_categories"),
-            "task_ids": cls.extract_hf_keywords(obj, keyword_type="task_ids"),
             "languages": cls.extract_hf_keywords(obj, keyword_type="language"),
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound

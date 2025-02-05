@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 from app.config import settings
+from app.schemas.enums import AssetType
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 from pymilvus import DataType, MilvusClient
@@ -19,21 +20,25 @@ from typing import Optional, List
 
 class EmbeddingStore(ABC):
     @abstractmethod
+    def get_collection_name(self, asset_type: AssetType) -> str:
+        pass
+
+    @abstractmethod
     def store_embeddings(
-        self, model: AiModel, loader: DataLoader, collection_name: str, **kwargs
+        self, model: AiModel, loader: DataLoader, asset_type: AssetType, **kwargs
     ) -> int:
         pass
 
     @abstractmethod
-    def remove_embeddings(self, doc_ids: list[str], collection_name: str) -> int:
+    def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
         pass
 
     @abstractmethod
-    def exists_collection(self, collection_name: str) -> bool:
+    def exists_collection(self, asset_type: AssetType) -> bool:
         pass
 
     @abstractmethod
-    def get_all_document_ids(self, collection_name: str) -> list[str]:
+    def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
         pass
 
     @abstractmethod
@@ -41,7 +46,7 @@ class EmbeddingStore(ABC):
         self,
         model: AiModel,
         query_text: str,
-        collection_name: str,
+        asset_type: AssetType,
         topk: int = 10,
         filter: str = "",
         precomputed_embedding: Optional[List[float]] = None,
@@ -55,16 +60,20 @@ class EmbeddingStore(ABC):
         pass
 
 
-class Milvus_EmbeddingStore(EmbeddingStore):
-    def __init__(self, verbose: bool = False) -> None:
+class MilvusEmbeddingStore(EmbeddingStore):
+    def __init__(
+        self,
+        verbose: bool = False,
+    ) -> None:
         self.emb_dimensionality = 1024
+        self.extract_metadata = settings.MILVUS.EXTRACT_METADATA
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
         self.client = None
 
-    async def init() -> Milvus_EmbeddingStore:
-        obj = Milvus_EmbeddingStore()
+    async def init() -> MilvusEmbeddingStore:
+        obj = MilvusEmbeddingStore()
         await obj.init_connection()
         return obj
 
@@ -85,12 +94,48 @@ class Milvus_EmbeddingStore(EmbeddingStore):
             logging.error(err_msg)
             raise ValueError(err_msg)
 
-    def _create_collection(self, collection_name: str) -> None:
+    def get_collection_name(self, asset_type: AssetType) -> str:
+        return f"{settings.MILVUS.COLLECTION_PREFIX}_{asset_type.value}"
+
+    def _create_collection(self, asset_type: AssetType) -> None:
+        collection_name = self.get_collection_name(asset_type)
+
         if self.client.has_collection(collection_name) is False:
             schema = self.client.create_schema(auto_id=True)
             schema.add_field("id", DataType.INT64, is_primary=True)
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
             schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
+
+            if self.extract_metadata:
+                if asset_type == AssetType.DATASETS:
+                    # TODO
+                    # Currently this schema reflects some what easily accessible and constant
+                    # metadata we can retrieve from HuggingFace
+                    schema.add_field("date_published", DataType.VARCHAR, max_length=22)
+                    schema.add_field("size_in_mb", DataType.FLOAT, default=None)
+                    schema.add_field(
+                        "license", DataType.VARCHAR, max_length=20, default=None
+                    )
+
+                    schema.add_field(
+                        "task_types",
+                        DataType.ARRAY,
+                        element_type=DataType.VARCHAR,
+                        max_length=50,
+                        max_capacity=20,
+                        default=None,
+                    )
+                    schema.add_field(
+                        "languages",
+                        DataType.ARRAY,
+                        element_type=DataType.VARCHAR,
+                        max_length=2,
+                        max_capacity=50,
+                        default=None,
+                    )
+                    schema.add_field("datapoints_upper_bound", DataType.INT64)
+                    schema.add_field("datapoints_lower_bound", DataType.INT64)
+
             schema.verify()
 
             index_params = IndexParams()
@@ -103,10 +148,12 @@ class Milvus_EmbeddingStore(EmbeddingStore):
                 auto_id=True,
             )
 
-    def exists_collection(self, collection_name: str) -> bool:
-        return self.client.has_collection(collection_name)
+    def exists_collection(self, asset_type: AssetType) -> bool:
+        return self.client.has_collection(self.get_collection_name(asset_type))
 
-    def get_all_document_ids(self, collection_name: str) -> list[str]:
+    def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
+        collection_name = self.get_collection_name(asset_type)
+
         if self.client.has_collection(collection_name) is False:
             return []
         self.client.load_collection(collection_name)
@@ -125,31 +172,36 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         self,
         model: AiModel,
         loader: DataLoader,
-        collection_name: str,
+        asset_type: AssetType,
         milvus_batch_size: int = 50,
     ) -> int:
-        self._create_collection(collection_name)
+        collection_name = self.get_collection_name(asset_type)
+        self._create_collection(asset_type)
 
         all_embeddings = []
         all_doc_ids = []
+        all_metadata = []
+
         total_inserted = 0
-        for it, (texts, doc_ids) in tqdm(
+        for it, (texts, doc_ids, docs_metadata) in tqdm(
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
             chunks_embeddings_of_multiple_docs = model.compute_asset_embeddings(texts)
-
-            for chunk_embeds_of_a_doc, doc_id in zip(
-                chunks_embeddings_of_multiple_docs, doc_ids
+            for chunk_embeds_of_a_doc, doc_id, meta in zip(
+                chunks_embeddings_of_multiple_docs, doc_ids, docs_metadata
             ):
                 all_embeddings.extend(
                     [chunk_emb for chunk_emb in chunk_embeds_of_a_doc.cpu().numpy()]
                 )
                 all_doc_ids.extend([doc_id] * len(chunk_embeds_of_a_doc))
+                all_metadata.extend([meta] * len(chunk_embeds_of_a_doc))
 
             if len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1:
                 data = [
-                    {"vector": emb, "doc_id": doc_id}
-                    for emb, doc_id in zip(all_embeddings, all_doc_ids)
+                    {"vector": emb, "doc_id": doc_id, **meta}
+                    for emb, doc_id, meta in zip(
+                        all_embeddings, all_doc_ids, all_metadata
+                    )
                 ]
                 total_inserted += self.client.insert(
                     collection_name=collection_name, data=data
@@ -157,10 +209,13 @@ class Milvus_EmbeddingStore(EmbeddingStore):
 
                 all_embeddings = []
                 all_doc_ids = []
+                all_metadata = []
 
         return total_inserted
 
-    def remove_embeddings(self, doc_ids: list[str], collection_name: str) -> int:
+    def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
+        collection_name = self.get_collection_name(asset_type)
+
         return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")[
             "delete_count"
         ]
@@ -169,11 +224,13 @@ class Milvus_EmbeddingStore(EmbeddingStore):
         self,
         model: AiModel,
         query_text: str,
-        collection_name: str,
+        asset_type: AssetType,
         topk: int = 10,
         filter: str = "",
         precomputed_embedding: Optional[List[float]] | None = None,
     ) -> SearchResults:
+        collection_name = self.get_collection_name(asset_type)
+
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
@@ -216,9 +273,6 @@ class Milvus_EmbeddingStore(EmbeddingStore):
     def get_embeddings(
         self, doc_id: str, collection_name: str
     ) -> Optional[List[List[float]]]:
-
-        if not self.exists_collection(collection_name):
-            raise ValueError(f"Collection '{collection_name}' does not exist.")
 
         self.client.load_collection(collection_name)
 

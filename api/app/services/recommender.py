@@ -5,7 +5,7 @@ import requests
 from fastapi import HTTPException
 from app.schemas.search_results import SearchResults
 from app.models.query import SimilarQuery
-from app.services.embedding_store import Milvus_EmbeddingStore
+from app.services.embedding_store import MilvusEmbeddingStore
 from app.services.inference.text_operations import ConvertJsonToString
 from app.services.inference.model import AiModel
 from api.app.config import settings
@@ -15,20 +15,24 @@ from app.schemas.enums import AssetType
 async def get_similar_query_response(
     asset_id: str, asset_type: AssetType, topk: int
 ) -> dict:
-    embedding_store = await Milvus_EmbeddingStore.init()
-    collection_name = settings.MILVUS.get_collection_name(asset_type)
+    embedding_store = await MilvusEmbeddingStore.init()
+    collection_name = embedding_store.get_collection_name(asset_type)
+
+    if collection_name is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
     embeddings = embedding_store.get_embeddings(asset_id, collection_name)
 
     if not embeddings:
         return await fetch_and_compute_external_results(
-            asset_id, asset_type, topk, embedding_store, collection_name
+            asset_id, asset_type, topk, embedding_store
         )
 
     for vector in embeddings:
         search_results = embedding_store.retrieve_topk_document_ids(
             model=None,
             query_text=None,
-            collection_name=collection_name,
+            asset_type=asset_type,
             topk=topk,
             filter="",
             precomputed_embedding=vector,
@@ -45,7 +49,6 @@ async def fetch_and_compute_external_results(
     asset_type: AssetType,
     topk: int,
     embedding_store,
-    collection_name: str,
 ) -> dict:
 
     logging.info(
@@ -70,27 +73,25 @@ async def fetch_and_compute_external_results(
     embeddings_list = [emb.cpu().numpy().tolist() for emb in tensor]
 
     merged_results = merge_search_results_from_embeddings(
-        embedding_store, collection_name, topk, embeddings_list
+        embedding_store, asset_type, topk, embeddings_list
     )
     similar_query = SimilarQuery(asset_id=asset_id, result_set=merged_results)
     return similar_query.map_to_response()
 
 
 def merge_search_results_from_embeddings(
-    embedding_store, collection_name: str, topk: int, embeddings_list: list
+    embedding_store, asset_type: AssetType, topk: int, embeddings_list: list
 ) -> SearchResults:
 
     merged_doc_ids = []
     merged_distances = []
 
-    for (
-        emb
-    ) in embeddings_list:  # can return multiple lists (if there are multiple chunks)
+    for emb in embeddings_list:  # can return multiple lists (if there are multiple chunks)
         for doc in emb:
             search_results = embedding_store.retrieve_topk_document_ids(
                 model=None,
                 query_text=None,
-                collection_name=collection_name,
+                asset_type=asset_type,
                 topk=topk,
                 filter="",
                 precomputed_embedding=doc,

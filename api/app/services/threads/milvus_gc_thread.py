@@ -1,16 +1,14 @@
 import logging
 import threading
 from datetime import datetime, timezone
-from time import sleep
 
 import numpy as np
 from app.config import settings
-from app.helper import _perform_request
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
-from app.services.embedding_store import EmbeddingStore, Milvus_EmbeddingStore
+from app.services.aiod import check_aiod_document
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
-from requests.exceptions import HTTPError
 
 job_lock = threading.Lock()
 
@@ -29,7 +27,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
             )
 
-            embedding_store = await Milvus_EmbeddingStore.init()
+            embedding_store = await MilvusEmbeddingStore.init()
             to_time = datetime.now(tz=timezone.utc)
 
             for asset_type in settings.AIOD.ASSET_TYPES:
@@ -56,8 +54,7 @@ def delete_asset_embeddings(
         limit=settings.AIOD.WINDOW_SIZE,
         to_time=to_time,
     )
-    collection_name = settings.MILVUS.get_collection_name(asset_type)
-    milvus_doc_ids = embedding_store.get_all_document_ids(collection_name)
+    milvus_doc_ids = embedding_store.get_all_document_ids(asset_type)
 
     # iterate over entirety of AIoD database, store all the doc IDs
     while True:
@@ -90,26 +87,13 @@ def delete_asset_embeddings(
     ids_to_really_delete = [
         id
         for id in candidates_for_del
-        if check_document_existence(
+        if check_aiod_document(
             id, asset_type, sleep_time=settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC
         )
         is False
     ]
     if len(ids_to_really_delete) > 0:
-        embedding_store.remove_embeddings(ids_to_really_delete, collection_name)
+        embedding_store.remove_embeddings(ids_to_really_delete, asset_type)
         logging.info(
             f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
         )
-
-
-def check_document_existence(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> bool:
-    try:
-        sleep(sleep_time)
-        _perform_request(settings.AIOD.get_asset_by_id_url(doc_id, asset_type))
-        return True
-    except HTTPError as e:
-        if e.response.status_code == 404:
-            return False
-        raise

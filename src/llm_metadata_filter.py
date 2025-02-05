@@ -39,6 +39,12 @@ class SurfaceQueryParsing(BaseModel):
     conditions: list[NaturalLanguageCondition] = Field(..., description="Natural language conditions")
             
 
+class ValidValue(BaseModel):
+    """Validation of a value against a list of permitted values"""
+    validated_value: str = Field(..., description="A value that has been validated against a list of permitted values for a particular field")
+    is_matched: bool = Field(..., description="Whether the value has been matched against the list of permitted values or not")
+
+
 class HuggingFaceDatasetMetadataTemplate(BaseModel):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
@@ -55,9 +61,9 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
         ge=0,
     )
-    licenses: Optional[list[str]] = Field(
+    license: Optional[str] = Field(
         None, 
-        description="The licenses associated with this dataset, e.g., 'mit', 'apache-2.0'"
+        description="The license associated with this dataset, e.g., 'mit', 'apache-2.0'"
     )
     task_types: Optional[list[str]] = Field(
         None, 
@@ -67,13 +73,13 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         None, 
         description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...)."
     )
-    datapoints_upper_bound: Optional[int] = Field(
-        None,
-        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset."
-    )
     datapoints_lower_bound: Optional[int] = Field(
         None,
         description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset."
+    )
+    datapoints_upper_bound: Optional[int] = Field(
+        None,
+        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset."
     )
 
     @classmethod
@@ -117,10 +123,10 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
         return bool(re.match(pattern, value))
     
-    @field_validator("licenses", mode="before")
+    @field_validator("license", mode="before")
     @classmethod
-    def check_licenses(cls, values: list[str]) -> list[str] | None:
-        return cls._check_field_against_list_wrapper(values, "licenses")
+    def check_license(cls, values: list[str]) -> list[str] | None:
+        return cls._check_field_against_list_wrapper(values, "license")
     
     @field_validator("task_types", mode="before")
     @classmethod
@@ -611,30 +617,26 @@ class UserQueryParsing:
     def __init__(
         self, 
         llm: BaseLLM,
-        asset_type: Literal["datasets"],
         db_to_translate: Literal["Milvus"] = "Milvus",
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None
     ) -> None:
-        assert asset_type in self.SCHEMA_MAPPING.keys(), f"Invalid asset_type argument '{asset_type}'"
         assert db_to_translate in ["Milvus"], f"Invalid db_to_translate argument '{db_to_translate}'"
 
-        self.asset_type = asset_type
         self.db_to_translate = db_to_translate
 
-        self.asset_schema = self.get_asset_schema(asset_type)
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
             llm=llm,
-            asset_schema=self.asset_schema,
             fewshot_examples_path=stage_1_fewshot_examples_filepath
         )
         self.pipe_stage_2 = UserQueryParsingStages.init_stage_2(
             llm=llm,
-            asset_schema=self.asset_schema,
             fewshot_examples_dirpath=stage_2_fewshot_examples_dirpath
         )
 
-    def __call__(self, user_query: str) -> dict:        
+    def __call__(
+        self, user_query: str, asset_type: str, apply_translator: bool = False
+    ) -> tuple[str, str] | tuple[str, list[dict]]:
         def expand_topic_query(
             topic_list: list[str], new_objects: list[dict], content_key: str
         ) -> list[str]:
@@ -648,8 +650,14 @@ class UserQueryParsing:
             ]
             return topic_list + to_add
         
-        
-        out_stage_1 = self.stage_pipe_1({"query": user_query})
+        assert asset_type in self.SCHEMA_MAPPING.keys(), f"Invalid asset_type argument '{asset_type}'"
+        asset_schema = self.get_asset_schema(asset_type)
+
+        stage_1_input = {
+            "query": user_query,
+            "asset_schema": asset_schema
+        }
+        out_stage_1 = self.stage_pipe_1(stage_1_input)
         if out_stage_1 is None:
             return {
                 "query": user_query,
@@ -669,7 +677,8 @@ class UserQueryParsing:
         for nl_cond in valid_conditions:    
             input = {    
                 "condition": nl_cond["condition"],
-                "field": nl_cond["field"]
+                "field": nl_cond["field"],
+                "asset_schema": asset_schema
             }
             out_stage_2 = self.pipe_stage_2(input)
             if out_stage_2 is None:
@@ -692,17 +701,17 @@ class UserQueryParsing:
                 })
 
         topic = " ".join(topic_list)
-        filter_string = self.milvus_translate(parsed_conditions)
+        filter_string = self.milvus_translate(parsed_conditions, asset_schema)
 
         return topic, filter_string
 
-    def milvus_translate(self, parsed_conditions: list[dict]) -> str:
+    def milvus_translate(self, parsed_conditions: list[dict], asset_schema: Type[BaseModel]) -> str:
         simple_expression_template = "({field} {op} {val})"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
         format_value = lambda x: f"'{x.lower()}'" if isinstance(x, str) else x
         list_fields = {
             k: get_origin(strip_optional_type(v)) is list
-            for k, v in self.asset_schema.__annotations__.items()
+            for k, v in asset_schema.__annotations__.items()
         }
 
         condition_strings = []
@@ -809,14 +818,42 @@ class UserQueryParsingStages:
         3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
     """
 
+    task_instructions_stage3 = """
+        Your task is to determine whether a given `value` representing a field of an ML asset can be mapped to one of the values in a provided list of `permitted_values`. Use the following rules:
+
+        1. **Input Details**:
+        - **Field**: The specific field of an ML asset the value pertains to (e.g., "languages", "task_types", "license", ...).
+        - **Value to assess**: The `value` that is subject of analysis and potential transformation.
+        - **Permitted Values**: A list of valid values for this field.
+
+        2. **Validation Rules**:
+        - If the `value` can be unambiguously matched to one of the permitted values, return the matched value.
+        - If the mapping is ambiguous or if the `value` cannot be matched, stick to the `value` as-is and mark it as unmatched.
+
+        3. **Output Schema**:
+        Return a JSON object with the following fields:
+        ```json
+        {{
+            "validated_value": "string",
+            "is_matched": true or false
+        }}
+    """
+
     @classmethod
     def _create_dynamic_stage2_schema(cls, field_name: str, asset_schema: Type[BaseModel]) -> Type[BaseModel]:
         def validate_func(cls, value: Any, func: Callable) -> Any:
-            if value == "NONE" or func(value):
-                return value        
-            raise ValueError(
-                f"Invalid processed value"
-            )
+            is_list_field = is_list_type(strip_optional_type(original_field.annotation))
+            
+            if value == "NONE":
+                return value
+            if is_list_field is False:
+                return func(value)
+            if is_list_field:
+                out = func([value])
+                if len(out) > 0:
+                    return out[0]
+                
+            raise ValueError(f"Invalid processed value")
         
         original_field = asset_schema.model_fields[field_name]    
         inner_class_dict = {
@@ -898,24 +935,16 @@ class UserQueryParsingStages:
             float: "float"
         }[data_type]
     
-    @classmethod
-    def _call_function_stage_1(
-        cls, 
-        chain: RunnableSequence, 
-        input: dict,
-        asset_schema: Type[BaseModel]
-    ) -> dict | None:
-        return cls._try_invoke_stage_1(chain, input, asset_schema)
         
     @classmethod
     def _call_function_stage_2(
         cls, 
         chain: RunnableSequence, 
         input: dict, 
-        asset_schema: Type[BaseModel],
         fewshot_examples_dirpath: str | None = None
     ) -> dict | None:
         metadata_field = input["field"]
+        asset_schema = input["asset_schema"]
         dynamic_type = cls._create_dynamic_stage2_schema(metadata_field, asset_schema)
 
         chain_to_use = chain
@@ -958,9 +987,19 @@ class UserQueryParsingStages:
         return cls._try_invoke_stage_2(chain_to_use, input_variables, dynamic_type)
     
     @classmethod
+    def prepare_simplified_model_schema_stage_1(cls, asset_schema: Type[BaseModel]) -> str:
+        metadata_field_info = [
+            {
+                "name": name, 
+                "description": field.description, 
+                "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
+            } for name, field in asset_schema.model_fields.items()
+        ]
+        return json.dumps(metadata_field_info)
+    
+    @classmethod
     def _try_invoke_stage_1(
-        cls, chain: RunnableSequence, input: dict, 
-        asset_schema: Type[BaseModel], 
+        cls, chain: RunnableSequence, input: dict,
         num_retry_attempts: int = 5
     ) -> dict | None:
         def exists_conditions_list_in_wrapper_dict(obj: dict) -> bool:
@@ -997,9 +1036,15 @@ class UserQueryParsingStages:
             
         best_llm_response = None
         max_valid_conditions_count = 0
+                
+        asset_schema = input["asset_schema"]
+        simple_model_schema = cls.prepare_simplified_model_schema_stage_1(asset_schema)
 
         for _ in range(num_retry_attempts):
-            output = chain.invoke(input)
+            output = chain.invoke({
+                "query": input["query"],
+                "model_schema": simple_model_schema
+            })
             if output is None:
                 continue
             valid_field_names = list(asset_schema.model_fields.keys())
@@ -1030,7 +1075,7 @@ class UserQueryParsingStages:
                     if cond.get("discard", "false") == "false"
                 ]
                 if is_valid_wrapper_class(helper_object, valid_field_names):
-                    best_llm_response = SurfaceQueryParsing(**output).model_dump()
+                    best_llm_response = SurfaceQueryParsing(**helper_object).model_dump()
                     max_valid_conditions_count = valid_conditions_count
 
         return best_llm_response
@@ -1096,32 +1141,42 @@ class UserQueryParsingStages:
                     if expr.get("discard", "false") == "false"
                 ]
                 if is_valid_wrapper_class(helper_object):
-                    best_llm_response = wrapper_schema(**output).model_dump()
+                    best_llm_response = wrapper_schema(**helper_object).model_dump()
                     max_valid_expressions_count = valid_expressions_count
             
         return best_llm_response
+    
+    @classmethod
+    def _try_invoke_stage_3(
+        cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
+    ) -> dict | None:
+        # TODO this function is being developed on api/ folder
+        # TODO we need to create a list of permitted values on the fly based on the field
+        
+        for _ in range(num_retry_attempts):
+            output = chain.invoke(input)
+        
+            if output is None:
+                continue
+            try:
+                ValidValue(**output)
+                break
+            except:
+                pass
+
+        return output
         
     @classmethod
     def init_stage_1(
         cls, 
         llm: BaseLLM,
-        asset_schema: Type[BaseModel],
         fewshot_examples_path: str | None = None, 
     ) -> Llama_ManualFunctionCalling:
         pydantic_model = SurfaceQueryParsing
         
-        metadata_field_info = [
-            {
-                "name": name, 
-                "description": field.description, 
-                "type": cls._translate_primitive_type_to_str(cls._get_inner_most_primitive_type(field.annotation))
-            } for name, field in asset_schema.model_fields.items()
-        ]
         task_instructions = HumanMessagePromptTemplate.from_template(
             cls.task_instructions_stage1, 
-            partial_variables={"model_schema": json.dumps(metadata_field_info)}
         )
-
         fewshot_prompt = ("user", "")
         if fewshot_examples_path is not None and os.path.exists(fewshot_examples_path):
             with open(fewshot_examples_path) as f:
@@ -1147,17 +1202,13 @@ class UserQueryParsingStages:
             llm, 
             pydantic_model=pydantic_model, 
             chat_prompt_no_system=chat_prompt_no_system,
-            call_function=partial(
-                cls._call_function_stage_1, 
-                asset_schema=asset_schema
-            )
+            call_function=cls._try_invoke_stage_1
         )
     
     @classmethod
     def init_stage_2(
         cls, 
         llm: BaseLLM,
-        asset_schema: Type[BaseModel],
         fewshot_examples_dirpath: str | None = None
     ) -> Llama_ManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages([
@@ -1169,9 +1220,28 @@ class UserQueryParsingStages:
             pydantic_model=None, 
             chat_prompt_no_system=chat_prompt_no_system,
             call_function=partial(
-                cls._call_function_stage_2, 
-                asset_schema=asset_schema,
+                cls._call_function_stage_2,
                 fewshot_examples_dirpath=fewshot_examples_dirpath
+            )
+        )
+
+    @classmethod
+    def init_stage_3(
+        cls, 
+        llm: BaseLLM
+    ) -> Llama_ManualFunctionCalling:
+        chat_prompt_no_system = ChatPromptTemplate.from_messages([
+            ("user", cls.task_instructions_stage3),
+            ("user", "**Field**: {field}"),
+            ("user", "**Permitted values**: {permitted_values}"),
+            ("user", "**Value to assess**: {value}"),
+        ])
+        return Llama_ManualFunctionCalling(
+            llm, 
+            pydantic_model=ValidValue, 
+            chat_prompt_no_system=chat_prompt_no_system,
+            call_function=partial(
+                cls._try_invoke_stage_3
             )
         )
 
@@ -1180,27 +1250,19 @@ if __name__ == "__main__":
     MODEL_NAME = "llama3.1:8b"
     model = ChatOllama(model=MODEL_NAME, num_predict=1_024, num_ctx=4_096)
     
-    # user_query = (
-    #     "Retrieve all the translation datasets that have more than 20k datapoints and fewer than 80k datapoints " +
-    #     "and the dataset should contain one or more of the following languages: Chinese, Iniiidian, Japanese. The data is stored in CSV files"
+
+    stage = UserQueryParsingStages.init_stage_3(model)
+    
+    input = {
+        "field": "task_types",
+        "permitted_values": ["summarization", "translation", "classification"],
+        "value": "summarize"
+    }
+    out = stage(input)
+
+    # user_query_parsing = UserQueryParsing(
+    #     model, stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
     # )
-    # user_query = (
-    #     "Retrieve all the summarization datasets from years 2022 and 2023 in CSV format that have more than 20k datapoints, but fewer than 480 000."
-    # )
+    # topic, str_filter = user_query_parsing(user_query, asset_type="datasets")
 
-    user_query = (
-        "Retrieve all the claim-matching datasets that are older than March of 2022 and that have more than 20k datapoints, but fewer than 5 million."
-    )
-
-    # user_query = (
-    #     "Retrieve all datasets that tackle the problem of machine translation, with English, French and German data"
-    # )
-
-    user_query_parsing = UserQueryParsing(
-        model,
-        asset_type="datasets",
-        stage_1_fewshot_examples_filepath="src/fewshot_examples/user_query_stage1/stage1.json"
-    )
-    topic, str_filter = user_query_parsing(user_query)
-
-    exit()
+    # exit()
