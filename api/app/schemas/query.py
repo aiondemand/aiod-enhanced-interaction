@@ -17,10 +17,12 @@ class BaseUserQueryResponse(BaseModel):
 
 
 class SimilarQueryResponse(BaseModel):
+    search_query: str
+    asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
-    asset_id: str
-    num_doc_ids: int = 0
-    result_doc_ids: Optional[List[str]] = None
+    topk: int
+    returned_doc_count: int = -1
+    result_doc_ids: list[str] | None = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):

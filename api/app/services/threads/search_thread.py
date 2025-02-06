@@ -7,7 +7,12 @@ from typing import Type
 
 import numpy as np
 from app.config import settings
-from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
+from app.models.query import (
+    BaseUserQuery,
+    FilteredUserQuery,
+    SimpleUserQuery,
+    SimilarQuery,
+)
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
@@ -27,11 +32,22 @@ def fill_query_queue(database: Database) -> None:
     )
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
-    if len(simple_queries_to_process + filtered_queries_to_process) == 0:
+    similar_queries_to_process = database.search(SimilarQuery, condition)
+
+    if (
+        len(
+            simple_queries_to_process
+            + filtered_queries_to_process
+            + similar_queries_to_process
+        )
+        == 0
+    ):
         return
 
     queries_to_process = sorted(
-        simple_queries_to_process + filtered_queries_to_process,
+        simple_queries_to_process
+        + filtered_queries_to_process
+        + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
     for query in queries_to_process:
@@ -81,15 +97,24 @@ async def search_thread() -> None:
             database.upsert(user_query)
 
             try:
-                results = retrieve_topk_documents_wrapper(
-                    model,
-                    llm_query_parser,
-                    embedding_store,
-                    user_query,
-                )
-                user_query.result_set = results
-                user_query.update_status(QueryStatus.COMPLETED)
-                database.upsert(user_query)
+                if isinstance(user_query, (SimpleUserQuery, FilteredUserQuery)):
+                    results = retrieve_topk_documents_wrapper(
+                        model,
+                        llm_query_parser,
+                        embedding_store,
+                        user_query,
+                    )
+                    user_query.result_set = results
+                    user_query.update_status(QueryStatus.COMPLETED)
+                    database.upsert(user_query)
+                elif isinstance(user_query, SimilarQuery):
+                    results = retrieve_topk_similar_docs_wrapper(
+                        embedding_store,
+                        user_query,
+                    )
+                    user_query.result_set = results
+                    user_query.update_status(QueryStatus.COMPLETED)
+                    database.upsert(user_query)
             except Exception as e:
                 user_query.update_status(QueryStatus.FAILED)
                 database.upsert(user_query)
@@ -182,3 +207,21 @@ def retrieve_topk_documents_wrapper(
         )
 
     return documents_to_return
+
+
+def retrieve_topk_similar_docs_wrapper(
+    embedding_store: EmbeddingStore,
+    user_query: SimilarQuery,
+) -> SearchResults:
+
+    doc_id = user_query.doc_id
+
+    results = embedding_store.retrieve_topk_document_ids(
+        model=None,
+        doc_id=doc_id,
+        asset_type=user_query.asset_type,
+        topk=user_query.topk,
+        filter="",
+    )
+
+    return results

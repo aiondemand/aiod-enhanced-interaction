@@ -47,7 +47,6 @@ class MilvusConfig(BaseModel):
         return f"{self.USER}:{self.PASS}"
 
 
-
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
     MODEL_NAME: str = Field("llama3.1:8b", max_length=50)

@@ -12,7 +12,7 @@ from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
     SimpleUserQueryResponse,
-    SimilarQueryResponse
+    SimilarQueryResponse,
 )
 from app.schemas.search_results import SearchResults
 from pydantic import BaseModel, Field
@@ -74,30 +74,32 @@ class FilteredUserQuery(BaseUserQuery):
 
 
 class SimilarQuery(BaseModel):
-    asset_id: str
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    doc_id: str
+    asset_type: AssetType
+    topk: int
     status: QueryStatus = QueryStatus.QUEUED
+
+    created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     result_set: SearchResults | None = None
-
-    def map_to_response(self) -> SimilarQueryResponse:
-        if self.result_set is None:
-            return SimilarQueryResponse(
-                status=self.status,
-                asset_id=self.asset_id,
-            )
-
-        doc_ids = self.result_set.doc_ids
-        return SimilarQueryResponse(
-            status=self.status,
-            asset_id=self.asset_id,
-            num_doc_ids=len(doc_ids),
-            result_doc_ids=doc_ids,
-        )
 
     def update_status(self, status: QueryStatus) -> None:
         self.status = status
         self.updated_at = datetime.now(tz=timezone.utc)
 
     @staticmethod
-    def sort_function_to_populate_queue(query):
-        return (query.status != QueryStatus.IN_PROGESS, query.updated_at.timestamp())
+    def sort_function_to_populate_queue(query: SimilarQuery) -> tuple[bool, float]:
+        return query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp()
+
+    def map_to_response(self) -> SimilarQueryResponse:
+        if self.status != QueryStatus.COMPLETED:
+            return SimilarQueryResponse(**self.model_dump())
+        doc_ids = self.result_set.doc_ids
+        return SimilarQueryResponse(
+            search_query=self.doc_id,
+            returned_doc_count=len(doc_ids),
+            result_doc_ids=doc_ids,
+            **self.model_dump(),
+        )

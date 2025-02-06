@@ -7,14 +7,13 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
+
 from app.schemas.enums import AssetType
-from app.schemas.query import SimpleUserQueryResponse
+from app.schemas.query import SimpleUserQueryResponse, SimilarQueryResponse
 from app.services.database import Database
-from fastapi import APIRouter, Depends, Path, Query, HTTPException
+from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import RedirectResponse
 
-from api.app.schemas.query import SimilarQueryResponse
-from api.app.services.recommender import get_similar_query_response
 
 router = APIRouter()
 
@@ -56,21 +55,3 @@ async def _sumbit_simple_query(
     )
 
     return await submit_query(user_query, database)
-
-
-
-@router.get("/recommender/{asset_id}")
-async def get_similar_query_result(
-    asset_type: AssetType = Query(..., description="Asset type"),
-    asset_id: str = Path(..., description="Asset ID"),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of similar assets to return"
-    ),
-) -> SimilarQueryResponse:
-    try:
-        response = await get_similar_query_response(asset_id, asset_type, topk)
-        return response
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

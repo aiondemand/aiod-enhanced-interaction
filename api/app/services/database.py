@@ -5,7 +5,7 @@ from typing import Any, Generic, Type, TypeVar
 
 from app.config import settings
 from app.models.asset_collection import AssetCollection
-from app.models.query import FilteredUserQuery, SimpleUserQuery
+from app.models.query import FilteredUserQuery, SimpleUserQuery, SimilarQuery
 from app.schemas.enums import AssetType, QueryStatus
 from pydantic import BaseModel
 from tinydb import Query, TinyDB
@@ -79,6 +79,9 @@ class Database:
             ),
             AssetCollection: MyCollection[AssetCollection](
                 self.db.table("asset_collections"), self.db_lock
+            ),
+            SimilarQuery: MyCollection[SimilarQuery](
+                self.db.table("similar_queries"), self.db_lock
             ),
         }
 
