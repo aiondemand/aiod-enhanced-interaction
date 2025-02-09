@@ -6,8 +6,8 @@ from time import sleep
 
 from app.config import settings
 from app.routers import filtered_sem_search as filtered_query_router
+from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
-from app.routers import recommender_search as recommender_query
 from app.services.database import Database
 from app.services.threads import threads
 from app.services.threads.embedding_thread import (
@@ -38,7 +38,7 @@ app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(
-    recommender_query.router, prefix="/recommender", tags=["recommender_query"]
+    recommender_router.router, prefix="/recommender", tags=["recommender_query"]
 )
 if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(

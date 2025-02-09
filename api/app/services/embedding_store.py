@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,6 @@ from pymilvus import DataType, MilvusClient
 from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from typing import Optional, List
 
 
 class EmbeddingStore(ABC):
@@ -44,18 +44,18 @@ class EmbeddingStore(ABC):
     @abstractmethod
     def retrieve_topk_document_ids(
         self,
-        model: AiModel,
+        model: AiModel | None,
         asset_type: AssetType,
-        query_text: str = None,
-        doc_id: str = None,
+        query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
+        precomputed_embedding: list[float] = None,
     ) -> SearchResults:
         pass
 
     @abstractmethod
-    def get_embeddings(
-        self, doc_id: str, collection_name: str
+    def get_asset_embeddings(
+        self, doc_id: str, asset_type: AssetType
     ) -> Optional[List[List[float]]]:
         pass
 
@@ -222,12 +222,12 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
     def retrieve_topk_document_ids(
         self,
-        model: AiModel,
-        query_text: Optional[str] = None,
-        doc_id: Optional[str] = None,
-        asset_type: Optional[AssetType] = None,
+        model: AiModel | None,
+        asset_type: AssetType,
+        query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
+        precomputed_embedding: list[float] = None,
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 
@@ -235,30 +235,19 @@ class MilvusEmbeddingStore(EmbeddingStore):
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
 
-        query_embedding = None
-        if doc_id:
-            query_embedding = self.get_embeddings(
-                doc_id, collection_name=collection_name
-            )
-            # print(type(query_embedding))
-            # query_embedding = query_embedding[0]
-            # print(type(query_embedding))
-            if not query_embedding:
+        if precomputed_embedding is None:
+            if query_text is None:
                 raise ValueError(
-                    f"No embeddings found in Milvus for doc_id='{doc_id}'."
+                    "Either query_text or precomputed_embedding must be provided."
                 )
-        elif query_text:
             if model is None:
                 raise ValueError(
-                    "AiModel instance must be provided if `query_text` is used."
+                    "AiModel instance must be provided to compute embeddings from query_text."
                 )
             with torch.no_grad():
                 query_embedding = model.compute_query_embeddings([query_text])
         else:
-            raise ValueError("Either `query_text` or `doc_id` must be provided.")
-
-        if not query_embedding:
-            return SearchResults(doc_ids=[], distances=[])
+            query_embedding = [precomputed_embedding]
 
         query_results = self.client.search(
             collection_name=collection_name,
@@ -269,9 +258,6 @@ class MilvusEmbeddingStore(EmbeddingStore):
             filter=filter,
         )[0]
 
-        if not query_results:
-            return SearchResults(doc_ids=[], distances=[])
-
         doc_ids = [match["entity"]["doc_id"] for match in query_results]
         distances = [1 - match["distance"] for match in query_results]
 
@@ -281,11 +267,11 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
         return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
 
-    def get_embeddings(
-        self, doc_id: str, collection_name: str
+    def get_asset_embeddings(
+        self, doc_id: str, asset_type: AssetType
     ) -> Optional[List[List[float]]]:
 
-        self.client.load_collection(collection_name)
+        collection_name = self.get_collection_name(asset_type)
 
         try:
             data = self.client.query(

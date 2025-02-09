@@ -11,8 +11,8 @@ from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
-    SimpleUserQueryResponse,
     SimilarQueryResponse,
+    SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
 from pydantic import BaseModel, Field
@@ -20,12 +20,11 @@ from pydantic import BaseModel, Field
 
 class BaseUserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    search_query: str
+    search_query: str = ""
 
     asset_type: AssetType
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
-    topk: int
 
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
@@ -49,7 +48,7 @@ class BaseUserQuery(BaseModel):
         )
 
     @staticmethod
-    def sort_function_to_populate_queue(query):
+    def sort_function_to_populate_queue(query) -> tuple[bool, float]:
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
@@ -73,33 +72,19 @@ class FilteredUserQuery(BaseUserQuery):
         return self._map_to_response(FilteredUserQueryResponse)
 
 
-class SimilarQuery(BaseModel):
-
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    doc_id: str
-    asset_type: AssetType
-    topk: int
-    status: QueryStatus = QueryStatus.QUEUED
-
-    created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    result_set: SearchResults | None = None
-
-    def update_status(self, status: QueryStatus) -> None:
-        self.status = status
-        self.updated_at = datetime.now(tz=timezone.utc)
-
-    @staticmethod
-    def sort_function_to_populate_queue(query: SimilarQuery) -> tuple[bool, float]:
-        return query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp()
+class SimilarQuery(BaseUserQuery):
+    doc_id: int
 
     def map_to_response(self) -> SimilarQueryResponse:
         if self.status != QueryStatus.COMPLETED:
-            return SimilarQueryResponse(**self.model_dump())
-        doc_ids = self.result_set.doc_ids
-        return SimilarQueryResponse(
-            search_query=self.doc_id,
-            returned_doc_count=len(doc_ids),
-            result_doc_ids=doc_ids,
-            **self.model_dump(),
-        )
+            data = self.model_dump()
+            data["asset_id"] = self.doc_id
+            return SimilarQueryResponse(**data)
+
+        doc_ids = self.result_set.doc_ids if self.result_set else []
+        data = self.model_dump()
+        data["asset_id"] = self.doc_id
+        data["returned_doc_count"] = len(doc_ids)
+        data["result_doc_ids"] = doc_ids
+
+        return SimilarQueryResponse(**data)

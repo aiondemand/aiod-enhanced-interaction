@@ -3,8 +3,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 from functools import partial
-from time import sleep
-from typing import Callable, Optional, Literal
+from typing import Callable, Literal
 
 import numpy as np
 import torch

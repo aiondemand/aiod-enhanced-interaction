@@ -6,12 +6,13 @@ from queue import Queue
 from typing import Type
 
 import numpy as np
+import torch
 from app.config import settings
 from app.models.query import (
     BaseUserQuery,
     FilteredUserQuery,
-    SimpleUserQuery,
     SimilarQuery,
+    SimpleUserQuery,
 )
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
@@ -22,6 +23,9 @@ from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from tinydb import Query
+
+from api.app.services import recommender
+from api.app.services.inference.text_operations import ConvertJsonToString
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 
@@ -97,24 +101,21 @@ async def search_thread() -> None:
             database.upsert(user_query)
 
             try:
-                if isinstance(user_query, (SimpleUserQuery, FilteredUserQuery)):
+                if isinstance(user_query, SimilarQuery):
+                    results = retrieve_topk_similar_docs_wrapper(
+                        embedding_store, user_query
+                    )
+                else:
                     results = retrieve_topk_documents_wrapper(
                         model,
                         llm_query_parser,
                         embedding_store,
                         user_query,
                     )
-                    user_query.result_set = results
-                    user_query.update_status(QueryStatus.COMPLETED)
-                    database.upsert(user_query)
-                elif isinstance(user_query, SimilarQuery):
-                    results = retrieve_topk_similar_docs_wrapper(
-                        embedding_store,
-                        user_query,
-                    )
-                    user_query.result_set = results
-                    user_query.update_status(QueryStatus.COMPLETED)
-                    database.upsert(user_query)
+
+                user_query.result_set = results
+                user_query.update_status(QueryStatus.COMPLETED)
+                database.upsert(user_query)
             except Exception as e:
                 user_query.update_status(QueryStatus.FAILED)
                 database.upsert(user_query)
@@ -166,8 +167,8 @@ def retrieve_topk_documents_wrapper(
             filter_str = f"({meta_filter_str}) and ({filter_str})"
 
         results = embedding_store.retrieve_topk_document_ids(
-            model,
-            user_query.search_query,
+            model=model,
+            query_text=user_query.search_query,
             asset_type=user_query.asset_type,
             topk=num_docs_to_retrieve,
             filter=filter_str,
@@ -213,15 +214,50 @@ def retrieve_topk_similar_docs_wrapper(
     embedding_store: EmbeddingStore,
     user_query: SimilarQuery,
 ) -> SearchResults:
-
-    doc_id = user_query.doc_id
-
-    results = embedding_store.retrieve_topk_document_ids(
-        model=None,
-        doc_id=doc_id,
-        asset_type=user_query.asset_type,
-        topk=user_query.topk,
-        filter="",
+    embeddings = embedding_store.get_asset_embeddings(
+        user_query.doc_id, user_query.asset_type
     )
+
+    if embeddings:
+        query_embedding = embeddings[0]
+        results = embedding_store.retrieve_topk_document_ids(
+            model=None,
+            query_text=None,
+            asset_type=user_query.asset_type,
+            topk=user_query.topk,
+            filter="",
+            precomputed_embedding=query_embedding,
+        )
+    else:
+        logging.warning(
+            f"No embedding found for doc_id='{user_query.doc_id}' in Milvus."
+        )
+
+        dataset_info = recommender._fetch_external_data(
+            user_query.doc_id, user_query.asset_type
+        )
+        text_data = ConvertJsonToString.stringify(dataset_info)
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu"
+        )
+        model = AiModel(device=device)
+
+        tensor = model.compute_asset_embeddings([text_data])
+        embeddings_list = [emb.cpu().numpy() for emb in tensor]
+
+        all_results = []
+        for emb_array in embeddings_list:
+            for emb in emb_array:
+                candidate_results = embedding_store.retrieve_topk_document_ids(
+                    model=None,
+                    query_text=None,
+                    asset_type=user_query.asset_type,
+                    topk=user_query.topk,
+                    filter="",
+                    precomputed_embedding=emb,
+                )
+                all_results.append(candidate_results)
+
+        results = recommender.combine_search_results(all_results, topk=user_query.topk)
 
     return results

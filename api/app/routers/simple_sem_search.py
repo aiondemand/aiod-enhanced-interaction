@@ -7,13 +7,11 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
-
 from app.schemas.enums import AssetType
-from app.schemas.query import SimpleUserQueryResponse, SimilarQueryResponse
+from app.schemas.query import SimpleUserQueryResponse
 from app.services.database import Database
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import RedirectResponse
-
 
 router = APIRouter()
 

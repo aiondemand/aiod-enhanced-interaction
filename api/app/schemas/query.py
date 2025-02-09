@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional, List
-
 from app.models.filter import Filter
 from app.schemas.enums import QueryStatus
 from pydantic import BaseModel
@@ -16,13 +14,9 @@ class BaseUserQueryResponse(BaseModel):
     result_doc_ids: list[str] | None = None
 
 
-class SimilarQueryResponse(BaseModel):
-    search_query: str
-    asset_type: str
-    status: QueryStatus = QueryStatus.QUEUED
-    topk: int
-    returned_doc_count: int = -1
-    result_doc_ids: list[str] | None = None
+class SimilarQueryResponse(BaseUserQueryResponse):
+    asset_id: int
+    search_query: str = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):

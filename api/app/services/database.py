@@ -5,7 +5,7 @@ from typing import Any, Generic, Type, TypeVar
 
 from app.config import settings
 from app.models.asset_collection import AssetCollection
-from app.models.query import FilteredUserQuery, SimpleUserQuery, SimilarQuery
+from app.models.query import FilteredUserQuery, SimilarQuery, SimpleUserQuery
 from app.schemas.enums import AssetType, QueryStatus
 from pydantic import BaseModel
 from tinydb import Query, TinyDB

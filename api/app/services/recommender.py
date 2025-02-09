@@ -1,51 +1,15 @@
 import logging
+
 import requests
 import torch
-from fastapi import HTTPException
-from app.schemas.search_results import SearchResults
+from app.config import settings
 from app.models.query import SimilarQuery
-from app.services.embedding_store import MilvusEmbeddingStore
-from app.services.inference.text_operations import ConvertJsonToString
-from app.services.inference.model import AiModel
 from app.schemas.enums import AssetType
-from api.app.config import settings
-
-
-async def get_similar_query_response(
-    asset_id: str, asset_type: AssetType, topk: int
-) -> dict:
-    embedding_store = await MilvusEmbeddingStore.init()
-    collection_name = embedding_store.get_collection_name(asset_type)
-    embeddings = embedding_store.get_embeddings(asset_id, collection_name)
-
-    if not embeddings:
-        return await _fallback_fetch_and_search(
-            asset_id, asset_type, topk, embedding_store
-        )
-
-    try:
-        search_results = embedding_store.retrieve_topk_document_ids(
-            model=None,
-            asset_type=asset_type,
-            topk=topk,
-            doc_id=asset_id,
-            filter="",
-        )
-
-        if not search_results.doc_ids:
-            return await _fallback_fetch_and_search(
-                asset_id, asset_type, topk, embedding_store
-            )
-
-        similar_query = SimilarQuery(
-            doc_id=asset_id, asset_type=asset_type, topk=topk, result_set=search_results
-        )
-        return similar_query.map_to_response()
-
-    except ValueError:
-        return await _fallback_fetch_and_search(
-            asset_id, asset_type, topk, embedding_store
-        )
+from app.schemas.search_results import SearchResults
+from app.services.embedding_store import MilvusEmbeddingStore
+from app.services.inference.model import AiModel
+from app.services.inference.text_operations import ConvertJsonToString
+from fastapi import HTTPException
 
 
 async def _fallback_fetch_and_search(
@@ -74,7 +38,12 @@ async def _fallback_fetch_and_search(
         )
 
     search_results = embedding_store.retrieve_topk_document_ids(
-        model=None, asset_type=asset_type, topk=topk, doc_id=asset_id, filter=""
+        model=None,
+        query_text=str,
+        doc_id=asset_id,
+        asset_type=asset_type,
+        topk=topk,
+        filter="",
     )
     if not search_results.doc_ids:
         raise HTTPException(
@@ -100,3 +69,29 @@ def _fetch_external_data(asset_id: str, asset_type: AssetType) -> dict:
             detail=f"External API request failed for asset_id='{asset_id}', asset_type='{asset_type.value}'.",
         )
     return response.json()
+
+
+def combine_search_results(
+    results_list: list[SearchResults], topk: int = None
+) -> SearchResults:
+
+    all_docs = []
+    for sr in results_list:
+        for doc_id, dist in zip(sr.doc_ids, sr.distances):
+            all_docs.append({"doc_id": doc_id, "distance": dist})
+
+    doc_map = {}
+    for doc in all_docs:
+        d_id = doc["doc_id"]
+        d_dist = doc["distance"]
+        if d_id not in doc_map or d_dist < doc_map[d_id]["distance"]:
+            doc_map[d_id] = doc
+
+    sorted_docs = sorted(doc_map.values(), key=lambda x: x["distance"], reverse=False)
+
+    if topk is not None:
+        sorted_docs = sorted_docs[:topk]
+
+    final_doc_ids = [doc["doc_id"] for doc in sorted_docs]
+    final_distances = [doc["distance"] for doc in sorted_docs]
+    return SearchResults(doc_ids=final_doc_ids, distances=final_distances)
