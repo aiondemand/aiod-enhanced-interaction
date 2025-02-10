@@ -215,7 +215,7 @@ def retrieve_topk_similar_docs_wrapper(
     user_query: SimilarQuery,
 ) -> SearchResults:
     embeddings = embedding_store.get_asset_embeddings(
-        user_query.doc_id, user_query.asset_type
+        user_query.asset_id, user_query.asset_type
     )
 
     if embeddings:
@@ -230,11 +230,11 @@ def retrieve_topk_similar_docs_wrapper(
         )
     else:
         logging.warning(
-            f"No embedding found for doc_id='{user_query.doc_id}' in Milvus."
+            f"No embedding found for doc_id='{user_query.asset_id}' in Milvus."
         )
 
         dataset_info = recommender._fetch_external_data(
-            user_query.doc_id, user_query.asset_type
+            user_query.asset_id, user_query.asset_type
         )
         text_data = ConvertJsonToString.stringify(dataset_info)
         device = torch.device(

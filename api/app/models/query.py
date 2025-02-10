@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 
 class BaseUserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    search_query: str = ""
 
     asset_type: AssetType
     topk: int
@@ -57,11 +56,14 @@ class BaseUserQuery(BaseModel):
 
 
 class SimpleUserQuery(BaseUserQuery):
+    search_query: str
+
     def map_to_response(self) -> SimpleUserQueryResponse:
         return self._map_to_response(SimpleUserQueryResponse)
 
 
 class FilteredUserQuery(BaseUserQuery):
+    search_query: str
     filters: list[Filter] | None = None
 
     @property
@@ -73,18 +75,7 @@ class FilteredUserQuery(BaseUserQuery):
 
 
 class SimilarQuery(BaseUserQuery):
-    doc_id: int
+    asset_id: int
 
     def map_to_response(self) -> SimilarQueryResponse:
-        if self.status != QueryStatus.COMPLETED:
-            data = self.model_dump()
-            data["asset_id"] = self.doc_id
-            return SimilarQueryResponse(**data)
-
-        doc_ids = self.result_set.doc_ids if self.result_set else []
-        data = self.model_dump()
-        data["asset_id"] = self.doc_id
-        data["returned_doc_count"] = len(doc_ids)
-        data["result_doc_ids"] = doc_ids
-
-        return SimilarQueryResponse(**data)
+        return self._map_to_response(SimilarQueryResponse)

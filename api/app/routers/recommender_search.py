@@ -22,7 +22,7 @@ async def submit_recommender_query(
     ),
 ) -> RedirectResponse:
     query_job = SimilarQuery(
-        doc_id=asset_id,
+        asset_id=asset_id,
         asset_type=asset_type,
         topk=topk,
     )

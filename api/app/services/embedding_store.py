@@ -268,7 +268,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
 
     def get_asset_embeddings(
-        self, doc_id: str, asset_type: AssetType
+        self, asset_id: int, asset_type: AssetType
     ) -> Optional[List[List[float]]]:
 
         collection_name = self.get_collection_name(asset_type)
@@ -276,7 +276,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         try:
             data = self.client.query(
                 collection_name=collection_name,
-                filter=f'doc_id == "{doc_id}"',
+                filter=f'doc_id == "{asset_id}"',
                 output_fields=["vector"],
             )
             if not data:
@@ -285,5 +285,5 @@ class MilvusEmbeddingStore(EmbeddingStore):
             embeddings = [item["vector"] for item in data]
             return embeddings
         except Exception as e:
-            logging.error(f"Failed to retrieve embeddings for doc_id '{doc_id}': {e}")
+            logging.error(f"Failed to retrieve embeddings for doc_id '{asset_id}': {e}")
             return None

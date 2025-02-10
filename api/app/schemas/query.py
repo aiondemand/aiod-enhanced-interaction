@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 
 class BaseUserQueryResponse(BaseModel):
-    search_query: str
     asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
     topk: int
@@ -14,14 +13,14 @@ class BaseUserQueryResponse(BaseModel):
     result_doc_ids: list[str] | None = None
 
 
-class SimilarQueryResponse(BaseUserQueryResponse):
-    asset_id: int
-    search_query: str = None
-
-
 class SimpleUserQueryResponse(BaseUserQueryResponse):
-    pass
+    search_query: str
 
 
 class FilteredUserQueryResponse(BaseUserQueryResponse):
+    search_query: str
     filters: list[Filter] | None = None
+
+
+class SimilarQueryResponse(BaseUserQueryResponse):
+    asset_id: int

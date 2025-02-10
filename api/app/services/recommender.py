@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 
 async def _fallback_fetch_and_search(
-    asset_id: str,
+    asset_id: int,
     asset_type: AssetType,
     topk: int,
     embedding_store: MilvusEmbeddingStore,
@@ -60,7 +60,7 @@ async def _fallback_fetch_and_search(
     return similar_query.map_to_response()
 
 
-def _fetch_external_data(asset_id: str, asset_type: AssetType) -> dict:
+def _fetch_external_data(asset_id: int, asset_type: AssetType) -> dict:
     url = f"{settings.AIOD.URL}{asset_type.value}/v1/{asset_id}"
     response = requests.get(url, params={"schema": "aiod"})
     if response.status_code != 200:
