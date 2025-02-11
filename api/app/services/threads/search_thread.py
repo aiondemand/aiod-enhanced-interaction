@@ -100,11 +100,6 @@ async def search_thread() -> None:
             database.upsert(user_query)
 
             try:
-                # if isinstance(user_query, SimilarQuery):
-                #     results = retrieve_topk_documents_wrapper(
-                #         embedding_store, user_query
-                #     )
-                # else:
                 results = retrieve_topk_documents_wrapper(
                     model,
                     llm_query_parser,
