@@ -55,7 +55,7 @@ class EmbeddingStore(ABC):
 
     @abstractmethod
     def get_asset_embeddings(
-        self, doc_id: str, asset_type: AssetType
+        self, asset_id: int, asset_type: AssetType
     ) -> Optional[List[List[float]]]:
         pass
 
@@ -227,7 +227,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        precomputed_embedding: list[float] = None,
+        precomputed_embedding: list[float] | None = None,
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 
@@ -245,13 +245,13 @@ class MilvusEmbeddingStore(EmbeddingStore):
                     "AiModel instance must be provided to compute embeddings from query_text."
                 )
             with torch.no_grad():
-                query_embedding = model.compute_query_embeddings([query_text])
+                query_embeddings = model.compute_query_embeddings([query_text])
         else:
-            query_embedding = [precomputed_embedding]
+            query_embeddings = [precomputed_embedding]
 
         query_results = self.client.search(
             collection_name=collection_name,
-            data=query_embedding,
+            data=query_embeddings,
             limit=topk * 10 if self.chunk_embedding_store else topk + 1,
             output_fields=["doc_id"],
             search_params={"metric_type": "COSINE"},
