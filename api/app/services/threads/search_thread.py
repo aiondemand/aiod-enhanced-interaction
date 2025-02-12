@@ -6,7 +6,6 @@ from queue import Queue
 from typing import Type
 
 import numpy as np
-import torch
 from app.config import settings
 from app.models.query import (
     BaseUserQuery,
@@ -17,7 +16,6 @@ from app.models.query import (
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
-from app.services import recommender
 from app.services.aiod import check_aiod_document, get_aiod_document
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
@@ -138,8 +136,7 @@ def retrieve_topk_documents_wrapper(
     documents_to_return = SearchResults()
     num_docs_to_retrieve = user_query.topk
     meta_filter_str = ""
-    precomputed_embedding = None
-    precomputed_embeddings_list = None
+    precomputed_embeddings = None
 
     # apply metadata filtering
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -157,63 +154,37 @@ def retrieve_topk_documents_wrapper(
                 asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
     elif isinstance(user_query, SimilarUserQuery):
-        embeddings = embedding_store.get_asset_embeddings(
+        # We need to exclude embeddings of the asset in question from the results set
+        doc_ids_to_exclude_from_search.append(str(user_query.asset_id))
+
+        precomputed_embeddings = embedding_store.get_asset_embeddings(
             user_query.asset_id, user_query.asset_type
         )
-
-        if embeddings:
-            precomputed_embedding = embeddings[0]
-        else:
+        if not precomputed_embeddings:
             # if the asset is not found in Milvus --> fetch data from AIoD platform
             logging.warning(
                 f"No embedding found for doc_id='{user_query.asset_id}' in Milvus."
             )
+            asset_obj = get_aiod_document(user_query.asset_id, user_query.asset_type)
+            stringified_asset = ConvertJsonToString.stringify(asset_obj)
 
-            dataset_info = get_aiod_document(user_query.asset_id, user_query.asset_type)
-            text_data = ConvertJsonToString.stringify(dataset_info)
-            device = torch.device(
-                "cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu"
-            )
-            model = AiModel(device=device)
-
-            tensor = model.compute_asset_embeddings([text_data])
-            precomputed_embeddings_list = [emb.cpu().numpy() for emb in tensor]
+            emb = model.compute_asset_embeddings(stringified_asset)[0]
+            precomputed_embeddings = emb.cpu().numpy().tolist()
 
     for _ in range(num_search_retries):
         filter_str = f"doc_id not in {doc_ids_to_exclude_from_search}"
         if len(meta_filter_str) > 0:
             filter_str = f"({meta_filter_str}) and ({filter_str})"
 
-        # if there are multiple lists of embeddings
-        if precomputed_embeddings_list is not None:
-            all_results = []
-            for emb_array in precomputed_embeddings_list:
-                for precomputed_embedding in emb_array:
-                    print(precomputed_embedding)
-                    candidate_results = embedding_store.retrieve_topk_document_ids(
-                        model=None,
-                        query_text=None,
-                        asset_type=user_query.asset_type,
-                        topk=user_query.topk,
-                        filter="",
-                        precomputed_embedding=precomputed_embedding,
-                    )
-                    all_results.append(candidate_results)
-
-            #
-            results = recommender.combine_search_results(
-                all_results, topk=user_query.topk
-            )
-        else:
-            search_query = getattr(user_query, "search_query", "")
-            results = embedding_store.retrieve_topk_document_ids(
-                model=model,
-                query_text=search_query,
-                asset_type=user_query.asset_type,
-                topk=num_docs_to_retrieve,
-                filter=filter_str,
-                precomputed_embedding=precomputed_embedding,
-            )
+        search_query = getattr(user_query, "search_query", "")
+        results = embedding_store.retrieve_topk_document_ids(
+            model=model,
+            query_text=search_query,
+            asset_type=user_query.asset_type,
+            topk=num_docs_to_retrieve,
+            filter=filter_str,
+            query_embeddings=precomputed_embeddings,
+        )
 
         doc_ids_to_exclude_from_search.extend(results.doc_ids)
         if len(results) == 0:

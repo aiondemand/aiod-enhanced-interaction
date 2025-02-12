@@ -1,6 +1,7 @@
 from app.schemas.search_results import SearchResults
 
 
+# This function is obsolete now :)
 def combine_search_results(
     results_list: list[SearchResults], topk: int = None
 ) -> SearchResults:

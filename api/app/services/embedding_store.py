@@ -7,7 +7,6 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-import torch
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.search_results import SearchResults
@@ -44,19 +43,19 @@ class EmbeddingStore(ABC):
     @abstractmethod
     def retrieve_topk_document_ids(
         self,
-        model: AiModel | None,
+        model: AiModel,
         asset_type: AssetType,
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        precomputed_embedding: list[float] = None,
+        query_embeddings: list[list[float]] = None,
     ) -> SearchResults:
         pass
 
     @abstractmethod
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
-    ) -> Optional[List[List[float]]]:
+    ) -> list[list[float]] | None:
         pass
 
 
@@ -222,12 +221,12 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
     def retrieve_topk_document_ids(
         self,
-        model: AiModel | None,
+        model: AiModel,
         asset_type: AssetType,
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        precomputed_embedding: list[float] | None = None,
+        query_embeddings: list[float] | None = None,
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 
@@ -235,33 +234,37 @@ class MilvusEmbeddingStore(EmbeddingStore):
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
 
-        if precomputed_embedding is None:
+        if query_embeddings is None:
             if query_text is None:
                 raise ValueError(
                     "Either query_text or precomputed_embedding must be provided."
                 )
-            if model is None:
-                raise ValueError(
-                    "AiModel instance must be provided to compute embeddings from query_text."
-                )
-            with torch.no_grad():
-                query_embeddings = model.compute_query_embeddings([query_text])
-        else:
-            query_embeddings = [precomputed_embedding]
+            query_embeddings = model.compute_query_embeddings(query_text)
 
-        query_results = self.client.search(
-            collection_name=collection_name,
-            data=query_embeddings,
-            limit=topk * 10 if self.chunk_embedding_store else topk + 1,
-            output_fields=["doc_id"],
-            search_params={"metric_type": "COSINE"},
-            filter=filter,
-        )[0]
+        query_results = list(
+            self.client.search(
+                collection_name=collection_name,
+                data=query_embeddings,
+                limit=topk * 10 if self.chunk_embedding_store else topk + 1,
+                output_fields=["doc_id"],
+                search_params={"metric_type": "COSINE"},
+                filter=filter,
+            )
+        )
 
-        doc_ids = [match["entity"]["doc_id"] for match in query_results]
-        distances = [1 - match["distance"] for match in query_results]
+        doc_ids = []
+        distances = []
+        for results in query_results:
+            doc_ids.extend([match["entity"]["doc_id"] for match in results])
+            distances.extend([1 - match["distance"] for match in results])
 
-        indices = pd.Series(data=doc_ids).drop_duplicates().index.values[:topk]
+        help_df = pd.DataFrame(data=[doc_ids, distances]).T
+        help_df.columns = ["doc_ids", "distances"]
+        indices = (
+            help_df.sort_values(by=["distances"])
+            .drop_duplicates(subset=["doc_ids"])
+            .index.values[:topk]
+        )
         filtered_docs = [doc_ids[idx] for idx in indices]
         filtered_distances = [distances[idx] for idx in indices]
 
@@ -270,7 +273,6 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
     ) -> Optional[List[List[float]]]:
-
         collection_name = self.get_collection_name(asset_type)
 
         try:

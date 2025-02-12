@@ -58,21 +58,22 @@ class AiModel:
         model.to(device)
         return model
 
+    @torch.no_grad()
     def compute_asset_embeddings(self, assets: list[str]) -> list[torch.Tensor]:
-        with torch.no_grad():
-            chunks_embeddings_of_multiple_docs = self.model(assets)
+        chunks_embeddings_of_multiple_docs = self.model(assets)
         if self.use_chunking is False:
             chunks_embeddings_of_multiple_docs = [
                 emb[None] for emb in chunks_embeddings_of_multiple_docs
             ]
         return chunks_embeddings_of_multiple_docs
 
-    def compute_query_embeddings(self, queries: list[str]) -> list[list[float]]:
-        with torch.no_grad():
-            embeddings = self.model(queries)
-        if self.use_chunking:
-            return torch.vstack([emb[0] for emb in embeddings]).cpu().numpy().tolist()
-        return torch.vstack(embeddings).cpu().numpy().tolist()
+    @torch.no_grad()
+    def compute_query_embeddings(self, query: str) -> list[list[float]]:
+        embedding = self.model(query)[0]
+
+        if self.use_chunking is False:
+            embedding = embedding[None]
+        return embedding.cpu().numpy().tolist()
 
     def to_device(self, device: torch.device = "cpu") -> None:
         self.model.dev = device
