@@ -22,5 +22,5 @@ class FilteredUserQueryResponse(BaseUserQueryResponse):
     filters: list[Filter] | None = None
 
 
-class SimilarQueryResponse(BaseUserQueryResponse):
+class SimilarUserQueryResponse(BaseUserQueryResponse):
     asset_id: int

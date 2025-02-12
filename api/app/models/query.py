@@ -11,7 +11,7 @@ from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
-    SimilarQueryResponse,
+    SimilarUserQueryResponse,
     SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
@@ -74,8 +74,8 @@ class FilteredUserQuery(BaseUserQuery):
         return self._map_to_response(FilteredUserQueryResponse)
 
 
-class SimilarQuery(BaseUserQuery):
+class SimilarUserQuery(BaseUserQuery):
     asset_id: int
 
-    def map_to_response(self) -> SimilarQueryResponse:
-        return self._map_to_response(SimilarQueryResponse)
+    def map_to_response(self) -> SimilarUserQueryResponse:
+        return self._map_to_response(SimilarUserQueryResponse)

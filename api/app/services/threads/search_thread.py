@@ -11,7 +11,7 @@ from app.config import settings
 from app.models.query import (
     BaseUserQuery,
     FilteredUserQuery,
-    SimilarQuery,
+    SimilarUserQuery,
     SimpleUserQuery,
 )
 from app.schemas.asset_metadata.base import SchemaOperations
@@ -35,7 +35,7 @@ def fill_query_queue(database: Database) -> None:
     )
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
-    similar_queries_to_process = database.search(SimilarQuery, condition)
+    similar_queries_to_process = database.search(SimilarUserQuery, condition)
 
     if (
         len(
@@ -156,7 +156,7 @@ def retrieve_topk_documents_wrapper(
                 filters=user_query.filters,
                 asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
-    elif isinstance(user_query, SimilarQuery):
+    elif isinstance(user_query, SimilarUserQuery):
         embeddings = embedding_store.get_asset_embeddings(
             user_query.asset_id, user_query.asset_type
         )
