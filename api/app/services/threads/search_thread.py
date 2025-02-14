@@ -7,7 +7,12 @@ from typing import Type
 
 import numpy as np
 from app.config import settings
-from app.models.query import BaseUserQuery, FilteredUserQuery, SimpleUserQuery
+from app.models.query import (
+    BaseUserQuery,
+    FilteredUserQuery,
+    RecommenderUserQuery,
+    SimpleUserQuery,
+)
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
@@ -16,6 +21,7 @@ from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
+from app.services.recommender import get_precomputed_embeddings_for_recommender
 from tinydb import Query
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
@@ -27,11 +33,22 @@ def fill_query_queue(database: Database) -> None:
     )
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
-    if len(simple_queries_to_process + filtered_queries_to_process) == 0:
+    similar_queries_to_process = database.search(RecommenderUserQuery, condition)
+
+    if (
+        len(
+            simple_queries_to_process
+            + filtered_queries_to_process
+            + similar_queries_to_process
+        )
+        == 0
+    ):
         return
 
     queries_to_process = sorted(
-        simple_queries_to_process + filtered_queries_to_process,
+        simple_queries_to_process
+        + filtered_queries_to_process
+        + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
     for query in queries_to_process:
@@ -87,6 +104,7 @@ async def search_thread() -> None:
                     embedding_store,
                     user_query,
                 )
+
                 user_query.result_set = results
                 user_query.update_status(QueryStatus.COMPLETED)
                 database.upsert(user_query)
@@ -107,7 +125,7 @@ async def search_thread() -> None:
 
 
 def retrieve_topk_documents_wrapper(
-    model: AiModel,
+    model: AiModel | None,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
@@ -118,6 +136,7 @@ def retrieve_topk_documents_wrapper(
     documents_to_return = SearchResults()
     num_docs_to_retrieve = user_query.topk
     meta_filter_str = ""
+    precomputed_embeddings = None
 
     # apply metadata filtering
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -134,19 +153,38 @@ def retrieve_topk_documents_wrapper(
                 filters=user_query.filters,
                 asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
+    elif isinstance(user_query, RecommenderUserQuery):
+        precomputed_embeddings = get_precomputed_embeddings_for_recommender(
+            model,
+            embedding_store,
+            user_query,
+            doc_ids_to_exclude_from_search,
+        )
+        if precomputed_embeddings is None:
+            return SearchResults()
+
+    # In Recommender it is necessary to compare asset_id with other output assets
+    target_asset_type = (
+        user_query.output_asset_type
+        if isinstance(user_query, RecommenderUserQuery)
+        else user_query.asset_type
+    )
 
     for _ in range(num_search_retries):
         filter_str = f"doc_id not in {doc_ids_to_exclude_from_search}"
         if len(meta_filter_str) > 0:
             filter_str = f"({meta_filter_str}) and ({filter_str})"
 
+        search_query = getattr(user_query, "search_query", "")
         results = embedding_store.retrieve_topk_document_ids(
-            model,
-            user_query.search_query,
-            asset_type=user_query.asset_type,
+            model=model,
+            query_text=search_query,
+            asset_type=target_asset_type,
             topk=num_docs_to_retrieve,
             filter=filter_str,
+            query_embeddings=precomputed_embeddings,
         )
+
         doc_ids_to_exclude_from_search.extend(results.doc_ids)
         if len(results) == 0:
             break

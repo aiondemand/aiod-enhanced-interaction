@@ -11,6 +11,7 @@ from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
+    RecommenderUserQueryResponse,
     SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
@@ -19,11 +20,10 @@ from pydantic import BaseModel, Field
 
 class BaseUserQuery(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    search_query: str
 
     asset_type: AssetType
-    status: QueryStatus = QueryStatus.QUEUED
     topk: int
+    status: QueryStatus = QueryStatus.QUEUED
 
     created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
@@ -47,7 +47,7 @@ class BaseUserQuery(BaseModel):
         )
 
     @staticmethod
-    def sort_function_to_populate_queue(query):
+    def sort_function_to_populate_queue(query: BaseUserQuery) -> tuple[bool, float]:
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
@@ -56,11 +56,14 @@ class BaseUserQuery(BaseModel):
 
 
 class SimpleUserQuery(BaseUserQuery):
+    search_query: str
+
     def map_to_response(self) -> SimpleUserQueryResponse:
         return self._map_to_response(SimpleUserQueryResponse)
 
 
 class FilteredUserQuery(BaseUserQuery):
+    search_query: str
     filters: list[Filter] | None = None
 
     @property
@@ -69,3 +72,11 @@ class FilteredUserQuery(BaseUserQuery):
 
     def map_to_response(self) -> FilteredUserQueryResponse:
         return self._map_to_response(FilteredUserQueryResponse)
+
+
+class RecommenderUserQuery(BaseUserQuery):
+    asset_id: int
+    output_asset_type: AssetType
+
+    def map_to_response(self) -> RecommenderUserQueryResponse:
+        return self._map_to_response(RecommenderUserQueryResponse)

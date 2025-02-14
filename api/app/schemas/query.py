@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 
 class BaseUserQueryResponse(BaseModel):
-    search_query: str
     asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
     topk: int
@@ -15,8 +14,14 @@ class BaseUserQueryResponse(BaseModel):
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):
-    pass
+    search_query: str
 
 
 class FilteredUserQueryResponse(BaseUserQueryResponse):
+    search_query: str
     filters: list[Filter] | None = None
+
+
+class RecommenderUserQueryResponse(BaseUserQueryResponse):
+    asset_id: int
+    output_asset_type: str
