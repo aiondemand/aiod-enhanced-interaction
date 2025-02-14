@@ -32,6 +32,8 @@ docker compose -f docker-compose.yml -f docker-compose.populate.yml up populate-
 EXIT_CODE=$?
 docker compose -f docker-compose.yml -f docker-compose.populate.yml down
 
+# TODO fix
+# Exit code is still set to 0, even if the application in the docker crashes
 if [ $EXIT_CODE -eq 0 ]; then
   echo "Population of vector DB has run successfully."
   mkdir -p ${DATA_DIRPATH}/volumes/tinydb/

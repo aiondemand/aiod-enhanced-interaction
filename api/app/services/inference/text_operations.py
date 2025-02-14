@@ -151,7 +151,7 @@ class HuggingFaceDatasetExtractMetadata:
                     + cls.extract_hf_keywords(obj, keyword_type="task_ids")
                 )
             )
-        )
+        )[:100]
 
         size_categories = cls.strip_unknown(
             cls.extract_hf_keywords(obj, keyword_type="size_categories")
@@ -165,7 +165,7 @@ class HuggingFaceDatasetExtractMetadata:
             "size_in_mb": ds_size,
             "license": license,
             "task_types": task_types,
-            "languages": cls.extract_hf_keywords(obj, keyword_type="language"),
+            "languages": cls.extract_hf_keywords(obj, keyword_type="language")[:200],
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound,
         }

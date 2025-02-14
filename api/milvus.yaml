@@ -63,7 +63,10 @@ etcd:
     password:  # password for etcd authentication
 
 metastore:
-  type: etcd # Default value: etcd, Valid values: [etcd, tikv] 
+  type: etcd # Default value: etcd, Valid values: [etcd, tikv]
+  snapshot:
+    ttl: 86400 # snapshot ttl in seconds
+    reserveTime: 3600 # snapshot reserve time in seconds
 
 # Related configuration of tikv, used to store Milvus metadata.
 # Notice that when TiKV is enabled for metastore, you still need to have etcd for service discovery.
@@ -133,11 +136,17 @@ minio:
   # aliyun (ecs): https://www.alibabacloud.com/help/en/elastic-compute-service/latest/attach-an-instance-ram-role
   useIAM: false
   # Cloud Provider of S3. Supports: "aws", "gcp", "aliyun".
+  # Cloud Provider of Google Cloud Storage. Supports: "gcpnative".
   # You can use "aws" for other cloud provider supports S3 API with signature v4, e.g.: minio
   # You can use "gcp" for other cloud provider supports S3 API with signature v2
   # You can use "aliyun" for other cloud provider uses virtual host style bucket
+  # You can use "gcpnative" for the Google Cloud Platform provider. Uses service account credentials
+  # for authentication.
   # When useIAM enabled, only "aws", "gcp", "aliyun" is supported for now
   cloudProvider: aws
+  # The JSON content contains the gcs service account credentials.
+  # Used only for the "gcpnative" cloud provider.
+  gcpCredentialJSON: 
   # Custom endpoint for fetch IAM role credentials. when useIAM is true & cloudProvider is "aws".
   # Leave it empty if you want to use AWS default endpoint
   iamEndpoint: 
@@ -161,11 +170,15 @@ mq:
   enablePursuitMode: true # Default value: "true"
   pursuitLag: 10 # time tick lag threshold to enter pursuit mode, in seconds
   pursuitBufferSize: 8388608 # pursuit mode buffer size in bytes
+  pursuitBufferTime: 60 # pursuit mode buffer time in seconds
   mqBufSize: 16 # MQ client consumer buffer length
   dispatcher:
     mergeCheckInterval: 1 # the interval time(in seconds) for dispatcher to check whether to merge
     targetBufSize: 16 # the lenth of channel buffer for targe
     maxTolerantLag: 3 # Default value: "3", the timeout(in seconds) that target sends msgPack
+    maxDispatcherNumPerPchannel: 5 # The maximum number of dispatchers per physical channel, primarily to limit the number of consumers and prevent performance issues(e.g., during recovery when a large number of channels are watched).
+    retrySleep: 3 # register retry sleep time in seconds
+    retryTimeout: 60 # register retry timeout in seconds
 
 # Related configuration of pulsar, used to manage Milvus logs of recent mutation operations, output streaming log, and provide log publish-subscribe services.
 pulsar:
@@ -178,9 +191,9 @@ pulsar:
   port: 6650 # Port of Pulsar service.
   webport: 80 # Web port of of Pulsar service. If you connect direcly without proxy, should use 8080.
   # The maximum size of each message in Pulsar. Unit: Byte.
-  # By default, Pulsar can transmit at most 5 MB of data in a single message. When the size of inserted data is greater than this value, proxy fragments the data into multiple messages to ensure that they can be transmitted correctly.
+  # By default, Pulsar can transmit at most 2MB of data in a single message. When the size of inserted data is greater than this value, proxy fragments the data into multiple messages to ensure that they can be transmitted correctly.
   # If the corresponding parameter in Pulsar remains unchanged, increasing this configuration will cause Milvus to fail, and reducing it produces no advantage.
-  maxMessageSize: 5242880
+  maxMessageSize: 2097152
   # Pulsar can be provisioned for specific tenants with appropriate capacity allocated to the tenant.
   # To share a Pulsar instance among multiple Milvus instances, you can change this to an Pulsar tenant rather than the default one for each Milvus instance before you start them. However, if you do not want Pulsar multi-tenancy, you are advised to change msgChannel.chanNamePrefix.cluster to the different value.
   tenant: public
@@ -190,7 +203,7 @@ pulsar:
 
 # If you want to enable kafka, needs to comment the pulsar configs
 # kafka:
-#   brokerList: 
+#   brokerList: localhost:9092
 #   saslUsername: 
 #   saslPassword: 
 #   saslMechanisms: 
@@ -276,6 +289,8 @@ proxy:
   ginLogging: true
   ginLogSkipPaths: / # skip url path for gin log
   maxTaskNum: 1024 # The maximum number of tasks in the task queue of the proxy.
+  ddlConcurrency: 16 # The concurrent execution number of DDL at proxy.
+  dclConcurrency: 16 # The concurrent execution number of DCL at proxy.
   mustUsePartitionKey: false # switch for whether proxy must use partition key for the collection
   accessLog:
     enable: false # Whether to enable the access log feature.
@@ -335,6 +350,9 @@ queryCoord:
   rowCountFactor: 0.4 # the row count weight used when balancing segments among queryNodes
   segmentCountFactor: 0.4 # the segment count weight used when balancing segments among queryNodes
   globalSegmentCountFactor: 0.1 # the segment count weight used when balancing segments among queryNodes
+  # the channel count weight used when balancing channels among queryNodes, 
+  # 		A higher value reduces the likelihood of assigning channels from the same collection to the same QueryNode. Set to 1 to disable this feature.
+  collectionChannelCountFactor: 10
   segmentCountMaxSteps: 50 # segment count based plan generator max steps
   rowCountMaxSteps: 50 # segment count based plan generator max steps
   randomMaxSteps: 10 # segment count based plan generator max steps
@@ -343,7 +361,7 @@ queryCoord:
   balanceCostThreshold: 0.001 # the threshold of balance cost, if the difference of cluster's cost after executing the balance plan is less than this value, the plan will not be executed
   checkSegmentInterval: 1000
   checkChannelInterval: 1000
-  checkBalanceInterval: 10000
+  checkBalanceInterval: 3000
   checkIndexInterval: 10000
   channelTaskTimeout: 60000 # 1 minute
   segmentTaskTimeout: 120000 # 2 minute
@@ -367,7 +385,7 @@ queryCoord:
   channelExclusiveNodeFactor: 4 # the least node number for enable channel's exclusive mode
   collectionObserverInterval: 200 # the interval of collection observer
   checkExecutedFlagInterval: 100 # the interval of check executed flag to force to pull dist
-  updateCollectionLoadStatusInterval: 5 # 5m, max interval for updating collection loaded status
+  updateCollectionLoadStatusInterval: 5 # 5m, max interval of updating collection loaded status for check health
   cleanExcludeSegmentInterval: 60 # the time duration of clean pipeline exclude segment which used for filter invalid data, in seconds
   ip:  # TCP/IP address of queryCoord. If not specified, use the first unicastable address
   port: 19531 # TCP port of queryCoord
@@ -393,12 +411,12 @@ queryNode:
       nprobe: 16 # nprobe to search small index, based on your accuracy requirement, must smaller than nlist
       memExpansionRate: 1.15 # extra memory needed by building interim index
       buildParallelRate: 0.5 # the ratio of building interim index parallel matched with cpu num
+    multipleChunkedEnable: true # Enable multiple chunked search
     knowhereScoreConsistency: false # Enable knowhere strong consistency score computation logic
   loadMemoryUsageFactor: 1 # The multiply factor of calculating the memory usage while loading segments
   enableDisk: false # enable querynode load disk index, and search on disk index
   maxDiskUsagePercentage: 95
   cache:
-    enabled: true
     memoryLimit: 2147483648 # 2 GB, 2 * 1024 *1024 *1024
     readAheadPolicy: willneed # The read ahead policy of chunk cache, options: `normal, random, sequential, willneed, dontneed`
     # options: async, sync, disable. 
@@ -409,8 +427,15 @@ queryNode:
     # 2. If set to "disable" original vector data will only be loaded into the chunk cache during search/query.
     warmup: disable
   mmap:
-    mmapEnabled: false # Enable mmap for loading data
-    growingMmapEnabled: false # Enable mmap for using in growing raw data
+    vectorField: false # Enable mmap for loading vector data
+    vectorIndex: false # Enable mmap for loading vector index
+    scalarField: false # Enable mmap for loading scalar data
+    scalarIndex: false # Enable mmap for loading scalar index
+    chunkCache: true # Enable mmap for chunk cache (raw vector retrieving).
+    # Enable memory mapping (mmap) to optimize the handling of growing raw data. 
+    # By activating this feature, the memory overhead associated with newly added or modified data will be significantly minimized. 
+    # However, this optimization may come at the cost of a slight decrease in query latency for the affected data segments.
+    growingMmapEnabled: false
     fixedFileSizeForMmapAlloc: 1 # tmp file size for mmap chunk manager
     maxDiskUsagePercentageForMmapAlloc: 50 # disk percentage used in mmap chunk manager
   lazyload:
@@ -420,6 +445,7 @@ queryNode:
     requestResourceRetryInterval: 2000 # retry interval in milliseconds for waiting request resource for lazy load, 2s by default
     maxRetryTimes: 1 # max retry times for lazy load, 1 by default
     maxEvictPerRetry: 1 # max evict count for lazy load, 1 by default
+  indexOffsetCacheEnabled: false # enable index offset cache for some scalar indexes, now is just for bitmap index, enable this param can improve performance for retrieving raw data from index
   grouping:
     enabled: true
     maxNQ: 1000
@@ -447,13 +473,16 @@ queryNode:
       taskQueueExpire: 60 # Control how long (many seconds) that queue retains since queue is empty
       enableCrossUserGrouping: false # Enable Cross user grouping when using user-task-polling policy. (Disable it if user's task can not merge each other)
       maxPendingTaskPerUser: 1024 # Max pending task per user in scheduler
+  levelZeroForwardPolicy: FilterByBF # delegator level zero deletion forward policy, possible option["FilterByBF", "RemoteLoad"]
+  streamingDeltaForwardPolicy: FilterByBF # delegator streaming deletion forward policy, possible option["FilterByBF", "Direct"]
   dataSync:
     flowGraph:
       maxQueueLength: 16 # The maximum size of task queue cache in flow graph in query node.
       maxParallelism: 1024 # Maximum number of tasks executed in parallel in the flowgraph
   enableSegmentPrune: false # use partition stats to prune data in search/query on shard delegator
+  queryStreamBatchSize: 4194304 # return min batch size of stream query
+  queryStreamMaxBatchSize: 134217728 # return max batch size of stream query
   bloomFilterApplyParallelFactor: 4 # parallel factor when to apply pk to bloom filter, default to 4*CPU_CORE_NUM
-  queryStreamBatchSize: 4194304 # return batch size of stream query
   workerPooling:
     size: 10 # the size for worker querynode client pool
   ip:  # TCP/IP address of queryNode. If not specified, use the first unicastable address
@@ -489,7 +518,6 @@ indexNode:
 dataCoord:
   channel:
     watchTimeoutInterval: 300 # Timeout on watching channels (in seconds). Datanode tickler update watch progress will reset timeout timer.
-    balanceWithRpc: true # Whether to enable balance with RPC, default to use etcd watch
     legacyVersionWithoutRPCWatch: 2.4.1 # Datanodes <= this version are considered as legacy nodes, which doesn't have rpc based watch(). This is only used during rolling upgrade where legacy nodes won't get new channels
     balanceSilentDuration: 300 # The duration after which the channel manager start background channel balancing
     balanceInterval: 360 # The interval with which the channel manager check dml channel balance status
@@ -499,6 +527,7 @@ dataCoord:
     maxSize: 1024 # The maximum size of a segment, unit: MB. datacoord.segment.maxSize and datacoord.segment.sealProportion together determine if a segment can be sealed.
     diskSegmentMaxSize: 2048 # Maximun size of a segment in MB for collection which has Disk index
     sealProportion: 0.12 # The minimum proportion to datacoord.segment.maxSize to seal a segment. datacoord.segment.maxSize and datacoord.segment.sealProportion together determine if a segment can be sealed.
+    sealProportionJitter: 0.1 # segment seal proportion jitter ratio, default value 0.1(10%), if seal proportion is 12%, with jitter=0.1, the actuall applied ratio will be 10.8~12%
     assignmentExpiration: 2000 # Expiration time of the segment assignment, unit: ms
     allocLatestExpireAttempt: 200 # The time attempting to alloc latest lastExpire from rootCoord after restart
     maxLife: 86400 # The max lifetime of segment in seconds, 24*60*60
@@ -507,8 +536,8 @@ dataCoord:
     # The max idle time of segment in seconds, 10*60.
     maxIdleTime: 600
     minSizeFromIdleToSealed: 16 # The min size in MB of segment which can be idle from sealed.
-    # The max number of binlog file for one segment, the segment will be sealed if
-    # the number of binlog file reaches to max value.
+    # The max number of binlog (which is equal to the binlog file num of primary key) for one segment, 
+    # the segment will be sealed if the number of binlog file reaches to max value.
     maxBinlogFileNumber: 32
     smallProportion: 0.5 # The segment is considered as "small segment" when its # of rows is smaller than
     # (smallProportion * segment max # of rows).
@@ -533,9 +562,33 @@ dataCoord:
     # This configuration takes effect only when dataCoord.enableCompaction is set as true.
     enableAutoCompaction: true
     indexBasedCompaction: true
+    # compaction task prioritizer, options: [default, level, mix]. 
+    # default is FIFO.
+    # level is prioritized by level: L0 compactions first, then mix compactions, then clustering compactions.
+    # mix is prioritized by level: mix compactions first, then L0 compactions, then clustering compactions.
+    taskPrioritizer: default
+    taskQueueCapacity: 100000 # compaction task queue size
     rpcTimeout: 10
     maxParallelTaskNum: 10
-    workerMaxParallelTaskNum: 2
+    dropTolerance: 86400 # Compaction task will be cleaned after finish longer than this time(in seconds)
+    gcInterval: 1800 # The time interval in seconds for compaction gc
+    mix:
+      triggerInterval: 60 # The time interval in seconds to trigger mix compaction
+    levelzero:
+      triggerInterval: 10 # The time interval in seconds for trigger L0 compaction
+      forceTrigger:
+        minSize: 8388608 # The minmum size in bytes to force trigger a LevelZero Compaction, default as 8MB
+        maxSize: 67108864 # The maxmum size in bytes to force trigger a LevelZero Compaction, default as 64MB
+        deltalogMinNum: 10 # The minimum number of deltalog files to force trigger a LevelZero Compaction
+        deltalogMaxNum: 30 # The maxmum number of deltalog files to force trigger a LevelZero Compaction, default as 30
+    single:
+      ratio:
+        threshold: 0.2 # The ratio threshold of a segment to trigger a single compaction, default as 0.2
+      deltalog:
+        maxsize: 16777216 # The deltalog size of a segment to trigger a single compaction, default as 16MB
+        maxnum: 200 # The deltalog count of a segment to trigger a compaction, default as 200
+      expiredlog:
+        maxsize: 10485760 # The expired log size of a segment to trigger a compaction, default as 10MB
     clustering:
       enable: true # Enable clustering compaction
       autoEnable: false # Enable auto clustering compaction
@@ -551,13 +604,9 @@ dataCoord:
       minClusterSizeRatio: 0.01 # minimum cluster size / avg size in Kmeans train
       maxClusterSizeRatio: 10 # maximum cluster size / avg size in Kmeans train
       maxClusterSize: 5g # maximum cluster size in Kmeans train
-    levelzero:
-      forceTrigger:
-        minSize: 8388608 # The minmum size in bytes to force trigger a LevelZero Compaction, default as 8MB
-        maxSize: 67108864 # The maxmum size in bytes to force trigger a LevelZero Compaction, default as 64MB
-        deltalogMinNum: 10 # The minimum number of deltalog files to force trigger a LevelZero Compaction
-        deltalogMaxNum: 30 # The maxmum number of deltalog files to force trigger a LevelZero Compaction, default as 30
   syncSegmentsInterval: 300 # The time interval for regularly syncing segments
+  index:
+    memSizeEstimateMultiplier: 2 # When the memory size is not setup by index procedure, multiplier to estimate the memory size of index data
   enableGarbageCollection: true # Switch value to control if to enable garbage collection to clear the discarded data in MinIO or S3 service.
   gc:
     interval: 3600 # The interval at which data coord performs garbage collection, unit: second.
@@ -577,6 +626,7 @@ dataCoord:
     checkIntervalHigh: 2 # The interval for checking import, measured in seconds, is set to a high frequency for the import checker.
     checkIntervalLow: 120 # The interval for checking import, measured in seconds, is set to a low frequency for the import checker.
     maxImportFileNumPerReq: 1024 # The maximum number of files allowed per single import request.
+    maxImportJobNum: 1024 # Maximum number of import jobs that are executing or pending.
     waitForIndex: true # Indicates whether the import operation waits for the completion of index building.
   gracefulStopTimeout: 5 # seconds. force stop node without graceful stop
   slot:
@@ -614,7 +664,6 @@ dataNode:
     checkInterval: 3000 # the interal to check datanode memory usage, in milliseconds
     forceSyncWatermark: 0.5 # memory watermark for standalone, upon reaching this watermark, segments will be synced.
   timetick:
-    byRPC: true
     interval: 500
   channel:
     # specify the size of global work pool of all channels
@@ -632,15 +681,21 @@ dataNode:
     maxConcurrentTaskNum: 16 # The maximum number of import/pre-import tasks allowed to run concurrently on a datanode.
     maxImportFileSizeInGB: 16 # The maximum file size (in GB) for an import file, where an import file refers to either a Row-Based file or a set of Column-Based files.
     readBufferSizeInMB: 16 # The data block size (in MB) read from chunk manager by the datanode during import.
+    maxTaskSlotNum: 16 # The maximum number of slots occupied by each import/pre-import task.
   compaction:
-    levelZeroBatchMemoryRatio: 0.05 # The minimal memory ratio of free memory for level zero compaction executing in batch mode
+    levelZeroBatchMemoryRatio: 0.5 # The minimal memory ratio of free memory for level zero compaction executing in batch mode
     levelZeroMaxBatchSize: -1 # Max batch size refers to the max number of L1/L2 segments in a batch when executing L0 compaction. Default to -1, any value that is less than 1 means no limit. Valid range: >= 1.
+    useMergeSort: false # Whether to enable mergeSort mode when performing mixCompaction.
+    maxSegmentMergeSort: 30 # The maximum number of segments to be merged in mergeSort mode.
   gracefulStopTimeout: 1800 # seconds. force stop node without graceful stop
   slot:
     slotCap: 16 # The maximum number of tasks(e.g. compaction, importing) allowed to run concurrently on a datanode
   clusteringCompaction:
-    memoryBufferRatio: 0.1 # The ratio of memory buffer of clustering compaction. Data larger than threshold will be flushed to storage.
+    memoryBufferRatio: 0.3 # The ratio of memory buffer of clustering compaction. Data larger than threshold will be flushed to storage.
     workPoolSize: 8 # worker pool size for one clustering compaction job.
+  bloomFilterApplyParallelFactor: 4 # parallel factor when to apply pk to bloom filter, default to 4*CPU_CORE_NUM
+  storage:
+    deltalog: json # deltalog format, options: [json, parquet]
   ip:  # TCP/IP address of dataNode. If not specified, use the first unicastable address
   port: 21124 # TCP port of dataNode
   grpc:
@@ -726,15 +781,23 @@ grpc:
     maxMaxAttempts: 10
     initialBackoff: 0.2
     maxBackoff: 10
+    backoffMultiplier: 2
     minResetInterval: 1000
     maxCancelError: 32
     minSessionCheckInterval: 200
 
-# Configure the proxy tls enable.
+# Configure external tls.
 tls:
   serverPemPath: configs/cert/server.pem
   serverKeyPath: configs/cert/server.key
   caPemPath: configs/cert/ca.pem
+
+# Configure internal tls.
+internaltls:
+  serverPemPath: configs/cert/server.pem
+  serverKeyPath: configs/cert/server.key
+  caPemPath: configs/cert/ca.pem
+  sni: localhost # The server name indication (SNI) for internal TLS, should be the same as the name provided by the certificates ref: https://en.wikipedia.org/wiki/Server_Name_Indication
 
 common:
   defaultPartitionName: _default # Name of the default partition when a collection is created
@@ -766,6 +829,33 @@ common:
     # The superusers will ignore some system check processes,
     # like the old password verification when updating the credential
     superUsers: 
+    defaultRootPassword: "Milvus" # default password for root user. The maximum length is 72 characters, and double quotes are required.
+    rootShouldBindRole: false # Whether the root user should bind a role when the authorization is enabled.
+    rbac:
+      overrideBuiltInPrivilegeGroups:
+        enabled: false # Whether to override build-in privilege groups
+      cluster:
+        readonly:
+          privileges: ListDatabases,SelectOwnership,SelectUser,DescribeResourceGroup,ListResourceGroups,ListPrivilegeGroups # Cluster level readonly privileges
+        readwrite:
+          privileges: ListDatabases,SelectOwnership,SelectUser,DescribeResourceGroup,ListResourceGroups,ListPrivilegeGroups,FlushAll,TransferNode,TransferReplica,UpdateResourceGroups # Cluster level readwrite privileges
+        admin:
+          privileges: ListDatabases,SelectOwnership,SelectUser,DescribeResourceGroup,ListResourceGroups,ListPrivilegeGroups,FlushAll,TransferNode,TransferReplica,UpdateResourceGroups,BackupRBAC,RestoreRBAC,CreateDatabase,DropDatabase,CreateOwnership,DropOwnership,ManageOwnership,CreateResourceGroup,DropResourceGroup,UpdateUser,RenameCollection,CreatePrivilegeGroup,DropPrivilegeGroup,OperatePrivilegeGroup # Cluster level admin privileges
+      database:
+        readonly:
+          privileges: ShowCollections,DescribeDatabase # Database level readonly privileges
+        readwrite:
+          privileges: ShowCollections,DescribeDatabase,AlterDatabase # Database level readwrite privileges
+        admin:
+          privileges: ShowCollections,DescribeDatabase,AlterDatabase,CreateCollection,DropCollection # Database level admin privileges
+      collection:
+        readonly:
+          privileges: Query,Search,IndexDetail,GetFlushState,GetLoadState,GetLoadingProgress,HasPartition,ShowPartitions,DescribeCollection,DescribeAlias,GetStatistics,ListAliases # Collection level readonly privileges
+        readwrite:
+          privileges: Query,Search,IndexDetail,GetFlushState,GetLoadState,GetLoadingProgress,HasPartition,ShowPartitions,DescribeCollection,DescribeAlias,GetStatistics,ListAliases,Load,Release,Insert,Delete,Upsert,Import,Flush,Compaction,LoadBalance,CreateIndex,DropIndex,CreatePartition,DropPartition # Collection level readwrite privileges
+        admin:
+          privileges: Query,Search,IndexDetail,GetFlushState,GetLoadState,GetLoadingProgress,HasPartition,ShowPartitions,DescribeCollection,DescribeAlias,GetStatistics,ListAliases,Load,Release,Insert,Delete,Upsert,Import,Flush,Compaction,LoadBalance,CreateIndex,DropIndex,CreatePartition,DropPartition,CreateAlias,DropAlias # Collection level admin privileges
+    internaltlsEnabled: false
     tlsMode: 0
   session:
     ttl: 30 # ttl value when session granting a lease to register service
@@ -776,6 +866,7 @@ common:
     threshold:
       info: 500 # minimum milliseconds for printing durations in info level
       warn: 1000 # minimum milliseconds for printing durations in warn level
+    maxWLockConditionalWaitTime: 600 # maximum seconds for waiting wlock conditional
   storage:
     scheme: s3
     enablev2: false
@@ -785,12 +876,16 @@ common:
   ttMsgEnabled: true
   traceLogMode: 0 # trace request info
   bloomFilterSize: 100000 # bloom filter initial size
+  bloomFilterType: BlockedBloomFilter # bloom filter type, support BasicBloomFilter and BlockedBloomFilter
   maxBloomFalsePositive: 0.001 # max false positive rate for bloom filter
-  bloomFilterType: BasicBloomFilter # bloom filter type, support BasicBloomFilter and BlockedBloomFilter
   bloomFilterApplyBatchSize: 1000 # batch size when to apply pk to bloom filter
+  collectionReplicateEnable: false # Whether to enable collection replication.
   usePartitionKeyAsClusteringKey: false # if true, do clustering compaction and segment prune on partition key field
   useVectorAsClusteringKey: false # if true, do clustering compaction and segment prune on vector field
   enableVectorClusteringKey: false # if true, enable vector clustering key and vector clustering compaction
+  localRPCEnabled: false # enable local rpc for internal communication when mix or standalone mode.
+  sync:
+    taskPoolReleaseTimeoutSeconds: 60 # The maximum time to wait for the task to finish and release resources in the pool
 
 # QuotaConfig, configurations of Milvus quota and limits.
 # By default, we enable:
@@ -817,6 +912,7 @@ quotaAndLimits:
     maxCollectionNumPerDB: 65536 # Maximum number of collections per database.
     maxInsertSize: -1 # maximum size of a single insert request, in bytes, -1 means no limit
     maxResourceGroupNumOfQueryNode: 1024 # maximum number of resource groups of query nodes
+    maxGroupSize: 10 # maximum size for one single group when doing search group by
   ddl:
     enabled: false # Whether DDL request throttling is enabled.
     # Maximum number of collection-related DDL requests per second.
@@ -968,37 +1064,20 @@ quotaAndLimits:
       diskQuotaPerPartition: -1 # MB, (0, +inf), default no limit
     l0SegmentsRowCountProtection:
       enabled: false # switch to enable l0 segment row count quota
-      lowWaterLevel: 32768 # l0 segment row count quota, low water level
-      highWaterLevel: 65536 # l0 segment row count quota, low water level
+      lowWaterLevel: 30000000 # l0 segment row count quota, low water level
+      highWaterLevel: 50000000 # l0 segment row count quota, high water level
+    deleteBufferRowCountProtection:
+      enabled: false # switch to enable delete buffer row count quota
+      lowWaterLevel: 32768 # delete buffer row count quota, low water level
+      highWaterLevel: 65536 # delete buffer row count quota, high water level
+    deleteBufferSizeProtection:
+      enabled: false # switch to enable delete buffer size quota
+      lowWaterLevel: 134217728 # delete buffer size quota, low water level
+      highWaterLevel: 268435456 # delete buffer size quota, high water level
   limitReading:
     # forceDeny false means dql requests are allowed (except for some
     # specific conditions, such as collection has been dropped), true means always reject all dql requests.
     forceDeny: false
-    queueProtection:
-      enabled: false
-      # nqInQueueThreshold indicated that the system was under backpressure for Search/Query path.
-      # If NQ in any QueryNode's queue is greater than nqInQueueThreshold, search&query rates would gradually cool off
-      # until the NQ in queue no longer exceeds nqInQueueThreshold. We think of the NQ of query request as 1.
-      # int, default no limit
-      nqInQueueThreshold: -1
-      # queueLatencyThreshold indicated that the system was under backpressure for Search/Query path.
-      # If dql latency of queuing is greater than queueLatencyThreshold, search&query rates would gradually cool off
-      # until the latency of queuing no longer exceeds queueLatencyThreshold.
-      # The latency here refers to the averaged latency over a period of time.
-      # milliseconds, default no limit
-      queueLatencyThreshold: -1
-    resultProtection:
-      enabled: false
-      # maxReadResultRate indicated that the system was under backpressure for Search/Query path.
-      # If dql result rate is greater than maxReadResultRate, search&query rates would gradually cool off
-      # until the read result rate no longer exceeds maxReadResultRate.
-      # MB/s, default no limit
-      maxReadResultRate: -1
-      maxReadResultRatePerDB: -1
-      maxReadResultRatePerCollection: -1
-    # colOffSpeed is the speed of search&query rates cool off.
-    # (0, 1]
-    coolOffSpeed: 0.9
 
 trace:
   # trace exporter type, default is stdout,
@@ -1023,5 +1102,42 @@ trace:
 #milvus will automatically initialize half of the available GPU memory,
 #maxMemSize will the whole available GPU memory.
 gpu:
-  initMemSize:  # Gpu Memory Pool init size
-  maxMemSize:  # Gpu Memory Pool Max size
+  initMemSize: 2048 # Gpu Memory Pool init size
+  maxMemSize: 4096 # Gpu Memory Pool Max size
+
+# Any configuration related to the streaming node server.
+streamingNode:
+  ip:  # TCP/IP address of streamingNode. If not specified, use the first unicastable address
+  port: 22222 # TCP port of streamingNode
+  grpc:
+    serverMaxSendSize: 268435456 # The maximum size of each RPC request that the streamingNode can send, unit: byte
+    serverMaxRecvSize: 268435456 # The maximum size of each RPC request that the streamingNode can receive, unit: byte
+    clientMaxSendSize: 268435456 # The maximum size of each RPC request that the clients on streamingNode can send, unit: byte
+    clientMaxRecvSize: 268435456 # The maximum size of each RPC request that the clients on streamingNode can receive, unit: byte
+
+# Any configuration related to the streaming service.
+streaming:
+  walBalancer:
+    # The interval of balance task trigger at background, 1 min by default. 
+    # It's ok to set it into duration string, such as 30s or 1m30s, see time.ParseDuration
+    triggerInterval: 1m
+    # The initial interval of balance task trigger backoff, 50 ms by default. 
+    # It's ok to set it into duration string, such as 30s or 1m30s, see time.ParseDuration
+    backoffInitialInterval: 50ms
+    backoffMultiplier: 2 # The multiplier of balance task trigger backoff, 2 by default
+  walBroadcaster:
+    concurrencyRatio: 1 # The concurrency ratio based on number of CPU for wal broadcaster, 1 by default.
+  txn:
+    defaultKeepaliveTimeout: 10s # The default keepalive timeout for wal txn, 10s by default
+
+# Any configuration related to the knowhere vector search engine
+knowhere:
+  enable: true # When enable this configuration, the index parameters defined following will be automatically populated as index parameters, without requiring user input.
+  DISKANN:
+    build:
+      max_degree: 56 # Maximum degree of the Vamana graph
+      pq_code_budget_gb_ratio: 0.125 # Size limit on the PQ code (compared with raw data)
+      search_cache_budget_gb_ratio: 0.1 # Ratio of cached node numbers to raw data
+      search_list_size: 100 # Size of the candidate list during building graph
+    search:
+      beam_width_ratio: 4 # Ratio between the maximum number of IO requests per search iteration and CPU number

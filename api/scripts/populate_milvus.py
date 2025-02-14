@@ -31,9 +31,24 @@ def populate_database(args: InputArgs) -> None:
 
     sleep(10)  # Headstart for Milvus to fully initialize
     client = MilvusClient(uri=args.uri, user=args.username, password=args.password)
+
     for collection_name in sorted(os.listdir(args.input_dirpath)):
         path = os.path.join(args.input_dirpath, collection_name)
         populate_collection(client, collection_name, path, args.metadata)
+
+
+def get_all_doc_ids(client: MilvusClient, collection_name: str) -> set[str]:
+    client.load_collection(collection_name)
+
+    data = list(
+        client.query(
+            collection_name=collection_name,
+            filter="id > 0",
+            output_fields=["doc_id"],
+        )
+    )
+    all_doc_ids = [str(x["doc_id"]) for x in data]
+    return set(np.unique(np.array(all_doc_ids)).tolist())
 
 
 def populate_collection(
@@ -42,21 +57,29 @@ def populate_collection(
     json_dirpath: str,
     extract_metadata: bool,
 ) -> None:
-    created_new = create_new_collection(client, collection_name, extract_metadata)
-    if created_new is False:
-        return
+    unique_doc_ids = set()
+    newly_created_col = create_new_collection(client, collection_name, extract_metadata)
+    if newly_created_col is False:
+        unique_doc_ids = get_all_doc_ids(client, collection_name)
 
     print(f"Populating collection: {collection_name}")
-
-    unique_doc_ids = set()
     for file in tqdm(os.listdir(json_dirpath)):
         path = os.path.join(json_dirpath, file)
         with open(path) as f:
             data = json.load(f)
 
         data = [d for d in data if d["doc_id"] not in unique_doc_ids]
+        if len(data) == 0:
+            continue
+
         for i in range(len(data)):
             data[i]["vector"] = np.array(data[i]["vector"])
+
+            # remove irrelevant fields from the data pertaining to metadata
+            if extract_metadata is False:
+                fields_to_del = set(data[i].keys()) - {"doc_id", "vector"}
+                for field in fields_to_del:
+                    data[i].pop(field)
 
         client.insert(collection_name=collection_name, data=data)
         unique_doc_ids.update(d["doc_id"] for d in data)
@@ -79,28 +102,30 @@ def create_new_collection(
 
         # TODO so far it only works with datasets
         # (the same goes for the Milvus index in the main application)
-        schema.add_field("date_published", DataType.VARCHAR, max_length=22)
-        schema.add_field("size_in_mb", DataType.FLOAT, default=None)
-        schema.add_field("license", DataType.VARCHAR, max_length=20, default=None)
+        schema.add_field(
+            "date_published", DataType.VARCHAR, max_length=22, nullable=True
+        )
+        schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
+        schema.add_field("license", DataType.VARCHAR, max_length=20, nullable=True)
 
         schema.add_field(
             "task_types",
             DataType.ARRAY,
             element_type=DataType.VARCHAR,
             max_length=50,
-            max_capacity=20,
-            default=None,
+            max_capacity=100,
+            nullable=True,
         )
         schema.add_field(
             "languages",
             DataType.ARRAY,
             element_type=DataType.VARCHAR,
             max_length=2,
-            max_capacity=50,
-            default=None,
+            max_capacity=200,
+            nullable=True,
         )
-        schema.add_field("datapoints_upper_bound", DataType.INT64)
-        schema.add_field("datapoints_lower_bound", DataType.INT64)
+        schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
+        schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
     schema.verify()
 
@@ -109,9 +134,7 @@ def create_new_collection(
     index_params.add_index("doc_id", "", "")
 
     client.create_collection(
-        collection_name=collection_name,
-        dimension=1024,
-        auto_id=True,
+        collection_name=collection_name, schema=schema, index_params=index_params
     )
     return True
 
@@ -153,8 +176,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--metadata",
         type=str,
-        choices=["false", "true"],
+        required=False,
         help="Whether we wish to create an Milvus indices accounting for metadata to extract",
+        default="false",
     )
 
     try:

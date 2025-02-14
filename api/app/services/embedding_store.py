@@ -103,10 +103,12 @@ class MilvusEmbeddingStore(EmbeddingStore):
                     # TODO
                     # Currently this schema reflects some what easily accessible and constant
                     # metadata we can retrieve from HuggingFace
-                    schema.add_field("date_published", DataType.VARCHAR, max_length=22)
-                    schema.add_field("size_in_mb", DataType.FLOAT, default=None)
                     schema.add_field(
-                        "license", DataType.VARCHAR, max_length=20, default=None
+                        "date_published", DataType.VARCHAR, max_length=22, nullable=True
+                    )
+                    schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
+                    schema.add_field(
+                        "license", DataType.VARCHAR, max_length=20, nullable=True
                     )
 
                     schema.add_field(
@@ -114,19 +116,23 @@ class MilvusEmbeddingStore(EmbeddingStore):
                         DataType.ARRAY,
                         element_type=DataType.VARCHAR,
                         max_length=50,
-                        max_capacity=20,
-                        default=None,
+                        max_capacity=100,
+                        nullable=True,
                     )
                     schema.add_field(
                         "languages",
                         DataType.ARRAY,
                         element_type=DataType.VARCHAR,
                         max_length=2,
-                        max_capacity=50,
-                        default=None,
+                        max_capacity=200,
+                        nullable=True,
                     )
-                    schema.add_field("datapoints_upper_bound", DataType.INT64)
-                    schema.add_field("datapoints_lower_bound", DataType.INT64)
+                    schema.add_field(
+                        "datapoints_upper_bound", DataType.INT64, nullable=True
+                    )
+                    schema.add_field(
+                        "datapoints_lower_bound", DataType.INT64, nullable=True
+                    )
 
             schema.verify()
 
@@ -136,8 +142,8 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
             self.client.create_collection(
                 collection_name=collection_name,
-                dimension=self.emb_dimensionality,
-                auto_id=True,
+                schema=schema,
+                index_params=index_params,
             )
 
     def exists_collection(self, asset_type: AssetType) -> bool:
