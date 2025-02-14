@@ -11,7 +11,7 @@ from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
-    SimilarUserQueryResponse,
+    RecommenderUserQueryResponse,
     SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
@@ -47,7 +47,7 @@ class BaseUserQuery(BaseModel):
         )
 
     @staticmethod
-    def sort_function_to_populate_queue(query) -> tuple[bool, float]:
+    def sort_function_to_populate_queue(query: BaseUserQuery) -> tuple[bool, float]:
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
@@ -74,8 +74,9 @@ class FilteredUserQuery(BaseUserQuery):
         return self._map_to_response(FilteredUserQueryResponse)
 
 
-class SimilarUserQuery(BaseUserQuery):
+class RecommenderUserQuery(BaseUserQuery):
     asset_id: int
+    output_asset_type: AssetType
 
-    def map_to_response(self) -> SimilarUserQueryResponse:
-        return self._map_to_response(SimilarUserQueryResponse)
+    def map_to_response(self) -> RecommenderUserQueryResponse:
+        return self._map_to_response(RecommenderUserQueryResponse)

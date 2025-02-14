@@ -22,5 +22,6 @@ class FilteredUserQueryResponse(BaseUserQueryResponse):
     filters: list[Filter] | None = None
 
 
-class SimilarUserQueryResponse(BaseUserQueryResponse):
+class RecommenderUserQueryResponse(BaseUserQueryResponse):
     asset_id: int
+    output_asset_type: str

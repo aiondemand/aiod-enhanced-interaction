@@ -10,18 +10,18 @@ from app.config import settings
 from app.models.query import (
     BaseUserQuery,
     FilteredUserQuery,
-    SimilarUserQuery,
+    RecommenderUserQuery,
     SimpleUserQuery,
 )
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
-from app.services.aiod import check_aiod_document, get_aiod_document
+from app.services.aiod import check_aiod_document
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
-from app.services.inference.text_operations import ConvertJsonToString
+from app.services.recommender import get_precomputed_embeddings_for_recommender
 from tinydb import Query
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
@@ -33,7 +33,7 @@ def fill_query_queue(database: Database) -> None:
     )
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
-    similar_queries_to_process = database.search(SimilarUserQuery, condition)
+    similar_queries_to_process = database.search(RecommenderUserQuery, condition)
 
     if (
         len(
@@ -153,23 +153,22 @@ def retrieve_topk_documents_wrapper(
                 filters=user_query.filters,
                 asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
-    elif isinstance(user_query, SimilarUserQuery):
-        # We need to exclude embeddings of the asset in question from the results set
-        doc_ids_to_exclude_from_search.append(str(user_query.asset_id))
-
-        precomputed_embeddings = embedding_store.get_asset_embeddings(
-            user_query.asset_id, user_query.asset_type
+    elif isinstance(user_query, RecommenderUserQuery):
+        precomputed_embeddings = get_precomputed_embeddings_for_recommender(
+            model,
+            embedding_store,
+            user_query,
+            doc_ids_to_exclude_from_search,
         )
-        if not precomputed_embeddings:
-            # if the asset is not found in Milvus --> fetch data from AIoD platform
-            logging.warning(
-                f"No embedding found for doc_id='{user_query.asset_id}' in Milvus."
-            )
-            asset_obj = get_aiod_document(user_query.asset_id, user_query.asset_type)
-            stringified_asset = ConvertJsonToString.stringify(asset_obj)
+        if precomputed_embeddings is None:
+            return SearchResults()
 
-            emb = model.compute_asset_embeddings(stringified_asset)[0]
-            precomputed_embeddings = emb.cpu().numpy().tolist()
+    # In Recommender it is necessary to compare asset_id with other output assets
+    target_asset_type = (
+        user_query.output_asset_type
+        if isinstance(user_query, RecommenderUserQuery)
+        else user_query.asset_type
+    )
 
     for _ in range(num_search_retries):
         filter_str = f"doc_id not in {doc_ids_to_exclude_from_search}"
@@ -180,7 +179,7 @@ def retrieve_topk_documents_wrapper(
         results = embedding_store.retrieve_topk_document_ids(
             model=model,
             query_text=search_query,
-            asset_type=user_query.asset_type,
+            asset_type=target_asset_type,
             topk=num_docs_to_retrieve,
             filter=filter_str,
             query_embeddings=precomputed_embeddings,

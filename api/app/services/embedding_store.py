@@ -60,6 +60,8 @@ class EmbeddingStore(ABC):
 
 
 class MilvusEmbeddingStore(EmbeddingStore):
+    # TODO
+    # In the future we should pass an embedding_dim as an argument
     def __init__(
         self,
         verbose: bool = False,

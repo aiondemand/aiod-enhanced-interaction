@@ -46,6 +46,8 @@ def validate_query_endpoint_arguments_or_raise(
             status_code=501,
             detail=f"The database for the asset type '{asset_type.value}' has yet to be built. Try again later...",
         )
+    # TODO
+    # It needs to be revised.
     if isinstance(query, str):
         if not query.strip():
             raise HTTPException(
