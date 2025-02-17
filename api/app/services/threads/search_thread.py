@@ -124,6 +124,7 @@ async def search_thread() -> None:
         os._exit(1)
 
 
+# TODO split the function into smaller pieces
 def retrieve_topk_documents_wrapper(
     model: AiModel | None,
     llm_query_parser: UserQueryParsing | None,
@@ -154,11 +155,12 @@ def retrieve_topk_documents_wrapper(
                 asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
             )
     elif isinstance(user_query, RecommenderUserQuery):
+        # Ignore the asset itself from the search
+        if user_query.asset_type == user_query.output_asset_type:
+            doc_ids_to_exclude_from_search.append(str(user_query.asset_id))
+
         precomputed_embeddings = get_precomputed_embeddings_for_recommender(
-            model,
-            embedding_store,
-            user_query,
-            doc_ids_to_exclude_from_search,
+            model, embedding_store, user_query
         )
         if precomputed_embeddings is None:
             return SearchResults()
@@ -194,7 +196,7 @@ def retrieve_topk_documents_wrapper(
             [
                 check_aiod_document(
                     doc_id,
-                    user_query.asset_type,
+                    target_asset_type,
                     sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
                 )
                 for doc_id in results.doc_ids
@@ -212,11 +214,9 @@ def retrieve_topk_documents_wrapper(
 
     # delete invalid documents from Milvus => lazy delete
     if len(doc_ids_to_remove_from_db) > 0:
-        embedding_store.remove_embeddings(
-            doc_ids_to_remove_from_db, user_query.asset_type
-        )
+        embedding_store.remove_embeddings(doc_ids_to_remove_from_db, target_asset_type)
         logging.info(
-            f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({user_query.asset_type.value}) have been deleted"
+            f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({target_asset_type.value}) have been deleted"
         )
 
     return documents_to_return

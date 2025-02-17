@@ -1,6 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
+from app.config import settings
 from app.models.query import RecommenderUserQuery
 from app.routers.sem_search import (
     get_query_results,
@@ -12,8 +13,6 @@ from app.schemas.query import RecommenderUserQueryResponse
 from app.services.database import Database
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-
-from api.app.config import settings
 
 router = APIRouter()
 
@@ -56,9 +55,9 @@ async def _submit_recommender_query(
         apply_filtering=False,
     )
 
+    # TODO this should be revised too
     # validation output_asset_type
-    valid_asset_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-    if output_asset_type not in valid_asset_types:
+    if output_asset_type not in settings.AIOD.ASSET_TYPES:
         raise HTTPException(
             status_code=404,
             detail=f"We currently do not support asset type '{output_asset_type.value}'",

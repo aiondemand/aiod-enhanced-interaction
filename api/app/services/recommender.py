@@ -7,25 +7,26 @@ from app.services.inference.model import AiModel
 from app.services.inference.text_operations import ConvertJsonToString
 
 
+# TODO I don't think there's a need for this file to exist
+# just to host one function
 def get_precomputed_embeddings_for_recommender(
     model: AiModel,
     embedding_store: EmbeddingStore,
     user_query: RecommenderUserQuery,
-    doc_ids_to_exclude_from_search: list[str],
 ) -> list | None:
-    doc_ids_to_exclude_from_search.append(str(user_query.asset_id))
-
     precomputed_embeddings = embedding_store.get_asset_embeddings(
         user_query.asset_id, user_query.asset_type
     )
     if not precomputed_embeddings:
         logging.warning(
-            f"No embedding found for doc_id='{user_query.asset_id}' in Milvus."
+            f"No embedding found for doc_id='{user_query.asset_id}' ({user_query.asset_type}) in Milvus."
         )
         asset_obj = get_aiod_document(user_query.asset_id, user_query.asset_type)
         if asset_obj is None:
+            # TODO we should pass the information to the user that the asset_id they provided is invalid
+            # For now, current implementation returns an empty list of similar documents to a non-existing asset
             logging.error(
-                f"Asset with id '{user_query.asset_id}' not found in AIoD platform."
+                f"Asset with id '{user_query.asset_id}' ({user_query.asset_type}) not found in AIoD platform."
             )
             return None
         stringified_asset = ConvertJsonToString.stringify(asset_obj)

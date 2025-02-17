@@ -81,7 +81,7 @@ class Database:
                 self.db.table("asset_collections"), self.db_lock
             ),
             RecommenderUserQuery: MyCollection[RecommenderUserQuery](
-                self.db.table("similar_queries"), self.db_lock
+                self.db.table("recommender_queries"), self.db_lock
             ),
         }
 
