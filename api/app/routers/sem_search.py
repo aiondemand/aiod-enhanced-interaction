@@ -28,7 +28,7 @@ async def get_query_results(
 
 
 def validate_query_endpoint_arguments_or_raise(
-    query: str, asset_type: AssetType, database: Database, apply_filtering: bool
+    query: str | int, asset_type: AssetType, database: Database, apply_filtering: bool
 ) -> None:
     valid_asset_types = (
         settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
@@ -46,8 +46,22 @@ def validate_query_endpoint_arguments_or_raise(
             status_code=501,
             detail=f"The database for the asset type '{asset_type.value}' has yet to be built. Try again later...",
         )
-    if len(query.strip()) == 0:
+    # TODO
+    # It needs to be revised.
+    if isinstance(query, str):
+        if not query.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid/empty user query",
+            )
+    elif isinstance(query, int):
+        if query is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid asset id. It must be a positive integer.",
+            )
+    else:
         raise HTTPException(
             status_code=400,
-            detail="Invalid/empty user query",
+            detail="Query must be a non-empty string or a positive integer asset id.",
         )

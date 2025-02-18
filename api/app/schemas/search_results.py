@@ -5,6 +5,9 @@ from pydantic import BaseModel, Field
 
 
 class SearchResults(BaseModel):
+    # TODO later we should think about merging asset_id and doc_id variables
+    # Currently asset_id (associated with recommender endopoints) is of type int (AIoD)
+    # whereas doc_id is of type string...
     doc_ids: list[str] = Field(default_factory=list)
     distances: list[float] = Field(default_factory=list)
 
