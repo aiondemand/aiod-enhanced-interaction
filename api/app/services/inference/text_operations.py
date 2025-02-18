@@ -205,6 +205,7 @@ class ConvertJsonToString:
         "execution_settings",
         "reproducibility_explanation",
     ]
+    service_flat_fields = ["slogan", "terms_of_service"]
 
     @classmethod
     def stringify(cls, data: dict) -> str:
@@ -298,6 +299,9 @@ class ConvertJsonToString:
             flat_fields.extend(cls.educational_flat_fields)
         elif asset_type == AssetType.EXPERIMENTS:
             flat_fields.extend(cls.experiment_flat_fields)
+        elif asset_type == AssetType.SERVICES:
+            flat_fields.extend(cls.service_flat_fields)
+
         for field_value in flat_fields:
             x = data.get(field_value, None)
             if x is not None:

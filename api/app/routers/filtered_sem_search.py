@@ -39,7 +39,10 @@ async def submit_filtered_query(
     search_query: str = Query(
         ..., max_length=200, min_length=1, description="User search query with filters"
     ),
-    asset_type: AssetType = Query(..., description="Asset type"),
+    asset_type: AssetType = Query(
+        AssetType.DATASETS,
+        description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
+    ),
     filters: conlist(Filter, max_length=5) | None = Body(
         None,
         description="Manually user-defined filters to apply",
@@ -83,3 +86,7 @@ async def _sumbit_filtered_query(
         filters=filters if filters else None,
     )
     return await submit_query(user_query, database)
+
+
+# TODO endpoints defining schemas for metadata filtering are required
+# so that a user has an idea how he can build filters manually...

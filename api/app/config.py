@@ -67,6 +67,11 @@ class AIoDConfig(BaseModel):
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
 
+    @classmethod
+    def convert_csv_to_asset_types(cls, value: str) -> list[AssetType]:
+        types = value.lower().split(",")
+        return [AssetType(typ.strip()) for typ in types if len(typ.strip()) > 0]
+
     @field_validator(
         "COMMA_SEPARATED_ASSET_TYPES",
         "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON",
@@ -75,8 +80,7 @@ class AIoDConfig(BaseModel):
     @classmethod
     def validate_asset_types(cls, value: str) -> str:
         try:
-            types = value.lower().split("")
-            types = [AssetType(typ) for typ in types]
+            cls.convert_csv_to_asset_types(value)
         except ValueError:
             ValueError("Invalid asset types defined")
         return value
@@ -92,15 +96,13 @@ class AIoDConfig(BaseModel):
 
     @property
     def ASSET_TYPES(self) -> list[str]:
-        types = self.COMMA_SEPARATED_ASSET_TYPES.lower().split(",")
-        return [AssetType(typ) for typ in types]
+        return self.convert_csv_to_asset_types(self.COMMA_SEPARATED_ASSET_TYPES)
 
     @property
     def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[str]:
-        types = self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON.lower().split(
-            ","
+        types = self.convert_csv_to_asset_types(
+            self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON
         )
-        types = [AssetType(typ) for typ in types]
 
         assert set(types).issubset(
             set(self.ASSET_TYPES)

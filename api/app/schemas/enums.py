@@ -15,3 +15,4 @@ class AssetType(Enum):
     CASE_STUDIES = "case_studies"
     EDUCATIONAL_RESOURCES = "educational_resources"
     EXPERIMENTS = "experiments"
+    SERVICES = "services"
