@@ -1,3 +1,14 @@
+[project]
+name = "aiod_enhanced_interaction"
+description = "An Enhanced Asset Search for AI on Demand"
+requires-python = ">=3.11"
+authors = [
+    { name = "Marcel Veselý", email = "marcel.vesely@kinit.sk" },
+    { name = "Alexander Brecko", email = "alexander.brecko@kinit.sk" },
+    { name = "Andrej Ridzik", email = "andrej.ridzik@kinit.sk" }
+]
+readme = "README.md"
+
 [tool.black]
 target-version = ["py311"]
 
