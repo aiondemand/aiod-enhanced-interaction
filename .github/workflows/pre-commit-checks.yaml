@@ -1,0 +1,42 @@
+# This workflow will install Python dependencies and run pre-commit hook with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name:  Run pre-commit checks
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  # allows to manually start a workflow run from the GitHub UI or using the GitHub API.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Setup Python virtual environment
+      run: |
+        python3.11 -m venv venv
+        source venv/bin/activate
+
+    - name: Install dependencies
+      run: |
+        source venv/bin/activate
+        python -m pip install -r api/requirements-dev.txt
+        pre-commit install
+
+    - name: pre-commit check
+      run: |
+        source venv/bin/activate
+        pre-commit run --all

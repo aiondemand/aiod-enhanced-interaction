@@ -1,6 +1,7 @@
 [project]
 name = "aiod_enhanced_interaction"
 description = "An Enhanced Asset Search for AI on Demand"
+version = "1.0.20250228"
 requires-python = ">=3.11"
 authors = [
     { name = "Marcel Veselý", email = "marcel.vesely@kinit.sk" },
