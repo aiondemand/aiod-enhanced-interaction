@@ -25,7 +25,7 @@ class QueryDatapoint(BaseModel):
             doc for doc in self.annotated_docs
             if relevance_func(doc.score)
         ]
-    
+
 
 class SemanticSearchResult(BaseModel):
     query_id: str
@@ -41,11 +41,11 @@ class RetrievedDocuments(BaseModel):
 class MetricsClassAtK(BaseModel):
     @abstractmethod
     def compute_metrics_for_datapoint(
-        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,  
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,
         k: int, **kwargs
     ) -> None:
         pass
-        
+
     @abstractmethod
     def average_results(self) -> None:
         pass
@@ -63,4 +63,3 @@ class MetricsClass(BaseModel):
     @abstractmethod
     def average_results(self) -> None:
         pass
-    

@@ -9,9 +9,21 @@ authors = [
 ]
 readme = "README.md"
 
-[tool.black]
-target-version = ["py311"]
+[tool.ruff]
+line-length = 100
+exclude = [
+    # TODO: Remove once refactored
+    "src",
+]
 
-[tool.isort]
-profile = "black"
-known_local_folder = ["api/app"]
+[tool.codespell]
+ignore-words-list = "checkin"
+
+[tool.ruff.lint]
+select = [
+    "S",
+    "I",
+]
+
+[tool.ruff.lint.isort]
+known-local-folder = ["api/app"]

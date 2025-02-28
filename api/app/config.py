@@ -2,9 +2,10 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urljoin
 
-from app.schemas.enums import AssetType
 from pydantic import AnyUrl, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings
+
+from app.schemas.enums import AssetType
 
 
 class Validators:
@@ -28,13 +29,9 @@ class MilvusConfig(BaseModel):
     @classmethod
     def valid_collection_name(cls, value: str):
         if not value[0].isalpha() and value[0] != "_":
-            raise ValueError(
-                "Collection name must start with a letter or an underscore."
-            )
+            raise ValueError("Collection name must start with a letter or an underscore.")
         if not all(c.isalnum() or c == "_" for c in value):
-            raise ValueError(
-                "Collection name can only contain letters, numbers, and underscores."
-            )
+            raise ValueError("Collection name can only contain letters, numbers, and underscores.")
         return value
 
     @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
@@ -104,9 +101,10 @@ class AIoDConfig(BaseModel):
             self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON
         )
 
-        assert set(types).issubset(
-            set(self.ASSET_TYPES)
-        ), "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+        if not set(types).issubset(set(self.ASSET_TYPES)):
+            raise ValueError(
+                "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+            )
         return types
 
     def get_assets_url(self, asset_type: AssetType) -> str:

@@ -28,41 +28,32 @@ QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 
 
 def fill_query_queue(database: Database) -> None:
-    condition = (Query().status == QueryStatus.IN_PROGRESS) | (
-        Query().status == QueryStatus.QUEUED
-    )
+    condition = (Query().status == QueryStatus.IN_PROGRESS) | (Query().status == QueryStatus.QUEUED)
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
     similar_queries_to_process = database.search(RecommenderUserQuery, condition)
 
     if (
-        len(
-            simple_queries_to_process
-            + filtered_queries_to_process
-            + similar_queries_to_process
-        )
+        len(simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process)
         == 0
     ):
         return
 
     queries_to_process = sorted(
-        simple_queries_to_process
-        + filtered_queries_to_process
-        + similar_queries_to_process,
+        simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
     for query in queries_to_process:
         QUERY_QUEUE.put((query.id, type(query)))
 
     logging.info(
-        f"Query queue has been populated with {len(queries_to_process)} "
-        + "queries to process."
+        f"Query queue has been populated with {len(queries_to_process)} " + "queries to process."
     )
 
 
 async def search_thread() -> None:
     try:
-        # Singleton - already instantialized
+        # Singleton - already instantiated
         database = Database()
         fill_query_queue(database)
 
@@ -77,20 +68,13 @@ async def search_thread() -> None:
             query_id, query_type = QUERY_QUEUE.get()
             if query_id is None:
                 return
-            if (
-                query_type == FilteredUserQuery
-                and settings.PERFORM_LLM_QUERY_PARSING is False
-            ):
+            if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
                 continue
             logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query: BaseUserQuery = database.find_by_id(
-                type=query_type, id=query_id
-            )
+            user_query: BaseUserQuery = database.find_by_id(type=query_type, id=query_id)
             if user_query is None:
-                err_msg = (
-                    f"UserQuery id={query_id} doesn't exist even though it should."
-                )
+                err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
                 logging.error(err_msg)
                 continue
 
@@ -112,9 +96,7 @@ async def search_thread() -> None:
                 user_query.update_status(QueryStatus.FAILED)
                 database.upsert(user_query)
                 logging.error(e)
-                logging.error(
-                    f"Error encountered while processing query ID: {query_id}"
-                )
+                logging.error(f"Error encountered while processing query ID: {query_id}")
     except Exception as e:
         logging.error(e)
         logging.error(
@@ -143,9 +125,7 @@ def retrieve_topk_documents_wrapper(
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
         if user_query.invoke_llm_for_parsing:
             # utilize LLM to automatically extract filters from the user query
-            parsed_query = llm_query_parser(
-                user_query.search_query, user_query.asset_type
-            )
+            parsed_query = llm_query_parser(user_query.search_query, user_query.asset_type)
             meta_filter_str = parsed_query["filter_str"]
             user_query.filters = parsed_query["filters"]
         else:

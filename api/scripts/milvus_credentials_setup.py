@@ -23,18 +23,18 @@ if __name__ == "__main__":
         client.close()
         exit(0)
     except Exception:
+        # TODO: Fix logic
+        print("Continue process..")
         pass
 
-    client = MilvusClient(uri=uri, token="root:Milvus")
+    client = MilvusClient(uri=uri, token="root:Milvus")  # noqa: S106
 
     client.create_user(user_name=aiod_user, password=aiod_pass)
     client.grant_role(user_name=aiod_user, role_name="admin")
     print("CREATED NEW USER:", client.describe_user(aiod_user))
 
     # Changing root password
-    client.update_password(
-        user_name="root", old_password="Milvus", new_password=new_root_pass
-    )
+    client.update_password(user_name="root", old_password="Milvus", new_password=new_root_pass)  # noqa: S106
     client = MilvusClient(uri=uri, token=new_root_token)
     print("CHANGED ROOT USER CREDENTIALS:", client.describe_user("root"))
 

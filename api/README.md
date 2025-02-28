@@ -1,16 +1,16 @@
 # Semantic search module
 
-This API service expands the AIoD platform by providing a separately managed 
-semantic search module that can be applied to AIoD assets, 
+This API service expands the AIoD platform by providing a separately managed
+semantic search module that can be applied to AIoD assets,
 i.e, Datasets, Models, Publications, etc.
 
 This API service contains the following key functionalities:
 - API endpoints for retrieving the most similar assets to a user query
 - Retrieving and storing asset embeddings into a embedding store (Milvus)
 
-As of right now, this service utilizes a [GTE large model](https://huggingface.co/Alibaba-NLP/gte-large-en-v1.5) to embed the assets into 
-multiple chunks depending on the lengths of the input documents. Each supported asset 
-type is stored in its own vector collection. 
+As of right now, this service utilizes a [GTE large model](https://huggingface.co/Alibaba-NLP/gte-large-en-v1.5) to embed the assets into
+multiple chunks depending on the lengths of the input documents. Each supported asset
+type is stored in its own vector collection.
 
 Currently supported AIoD asset types:
 - Dataset
@@ -20,18 +20,18 @@ Currently supported AIoD asset types:
 - Educational resources
 - Experiments
 
-## Acquisition of AIoD assets 
+## Acquisition of AIoD assets
 
-In order to keep track of all the AIoD asset changes and subsequently propagate them into embedding store, we 
+In order to keep track of all the AIoD asset changes and subsequently propagate them into embedding store, we
 prompt the AIoD API for detected asset changed in regular intervals.
 
 The initial population of the embedding store is performed immediately after the application is executed for the first time.
-In this case, we iterate over all the AIoD assets in order to embed them. Once the database is filled, we perform the aforementioned recurring job of 
+In this case, we iterate over all the AIoD assets in order to embed them. Once the database is filled, we perform the aforementioned recurring job of
 detecting changes made to AIoD assets.
 
 ## User query handling
 
-After you invoke API endpoint in hopes of retrieving most relevant assets to your query, said query is put onto a queue to be processed and you're given a 
+After you invoke API endpoint in hopes of retrieving most relevant assets to your query, said query is put onto a queue to be processed and you're given a
 URL you can expect the results to be at.
 
 To maintain the stability of our application, so far we only support handling of one user query at once, hence the use of a query queue. After the specific query
@@ -45,14 +45,14 @@ b) Extracting of filters/conditions found in the user query /user query parsing/
 
 ### Extracting of metadata from assets
 
-Currently this process applicability is restricted to only a specific subset of assets we can <ins>manually extract metadata</ins> from, from <ins>Huggingface datasets</ins> to be exact. Due to this extraction process being very time demanding, we have opted to perform the metadata extraction manually without any use of LLMs for now. 
+Currently, this process applicability is restricted to only a specific subset of assets we can <ins>manually extract metadata</ins> from, from <ins>Huggingface datasets</ins> to be exact. Due to this extraction process being very time demanding, we have opted to perform the metadata extraction manually without any use of LLMs for now.
 
 Since the datasets as an asset type is the most prevalent asset in the AIoD platform, we have decided to apply metadata filtering on said asset, whilst choosing solely Huggingface datasets that share a common metadata structure as it can be used to retrieve a handful of metadata fields to be stored in Milvus database.
 
 ### Extracting of filters from user queries
 
 Since we wish to minimize the costs and increase computational/time efficiency pertaining to serving of an LLM, we have opted to go for a rather small LLM (Llama 3.1 8B). Due to its size, performing more advanced tasks or multiple tasks at once can often lead incorrect results. To mitigate this to a certain degree, we have divided the <ins>user query parsing process into 2-3 LLM steps</ins> that further dissect and scrutinize a user query on different levels of granularity. The LLM steps are:
-- STEP 1: Extraction of natural language conditions from query (extraction of spans representing a condtions/filters each associated with a specific metadata field)
+- STEP 1: Extraction of natural language conditions from query (extraction of spans representing a conditions/filters each associated with a specific metadata field)
 - STEP 2: Analysis and transformation of each natural language condition (a span from user query) to a structure representing the condition performed separately
 - [Optional STEP 3]: Further validation of transformed value against a list of permitted values for a particular metadata field
 
@@ -62,12 +62,12 @@ Unlike the former process, the extraction of metadata from assets, that can be p
 
 # Repo Setup
 
-In this section, we describe the necessary steps to take to set up this repository for either development or deployment purposes. 
+In this section, we describe the necessary steps to take to set up this repository for either development or deployment purposes.
 
 **Moving forward, we assume your working directory is pointed to the `api/` directory.**
 
 ## Environment variables and configs
-Regardless whether you want to further develop this codespace or deploy the service, you need to create `.env.app` file that can be created from the `.env.app.sample` template. 
+Regardless whether you want to further develop this codespace or deploy the service, you need to create `.env.app` file that can be created from the `.env.app.sample` template.
 In this file you find the following ENV variables:
 - `TINYDB_FILEPATH`: A filepath where to store a file-based noSQL database, specifically a JSON file, e.g., `./data/db.json` *(Is overwritten in docker-compose.yml)*
 - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not. *(Is overwritten in docker-compose.yml)*
@@ -79,11 +79,11 @@ In this file you find the following ENV variables:
 - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
 - `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
 - `MILVUS__COLLECTION_PREFIX`: Prefix to use for naming our Milvus collections
-- `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database 
-- `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings ofo the individual chunks of each document or to have only one embedding representing the entire asset.
+- `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database
+- `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings of the individual chunks of each document or to have only one embedding representing the entire asset.
 - `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
 - Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False))
-    - `OLLAMA__URI`: URI of the Ollama server. 
+    - `OLLAMA__URI`: URI of the Ollama server.
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
     - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
     - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
@@ -101,7 +101,7 @@ In this file you find the following ENV variables:
 
 ## Development
 
-For the development purposes we recommend installing the necessary Python packages locally and develop/debug the codespace on the go. 
+For the development purposes we recommend installing the necessary Python packages locally and develop/debug the codespace on the go.
 We don't have any development environment set up utilizing Docker containers.
 
 ### Python Environment
@@ -123,7 +123,7 @@ Perform the following steps to deploy the service:
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
-    - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`": An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform. 
+    - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`": An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
     - `INITIAL_TINYDB_JSON_FILEPATH`: An optional variable representing a filepath to a JSON file containing metadata regarding past performed updates on AIoD and associated executed operations on vector DB. If you wish to utilize already precomputed embeddings and you have set a value for the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` variable, this variable is mandatory to be set as well.
 
     - Milvus credentials to use/initiate services with:
@@ -154,7 +154,7 @@ Perform the following steps to deploy the service:
 
 ### Stop/Delete the application
 If you wish to stop or remove the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop` or `./deploy.sh --remove` respectively.
-        
+
 ### VM preparations
 
 In order for our application to work properly on a host machine, we need to check whether the following software dependencies are met:

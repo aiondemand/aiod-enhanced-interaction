@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Literal, TypeAlias
 
-from app.schemas.asset_metadata.base import SchemaOperations
-from app.schemas.enums import AssetType
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.enums import AssetType
 
 PrimitiveTypes: TypeAlias = str | int | float
 
@@ -31,9 +32,7 @@ class Filter(BaseModel):
     def validate_filter_or_raise(self, asset_type: AssetType) -> None:
         asset_schema = SchemaOperations.get_asset_schema(asset_type)
         if self.field not in SchemaOperations.get_schema_field_names(asset_schema):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid field value '{self.field}'"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid field value '{self.field}'")
 
         for expr in self.expressions:
             validated_value = SchemaOperations.validate_value_against_type(

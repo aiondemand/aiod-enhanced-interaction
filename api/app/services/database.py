@@ -3,16 +3,17 @@ from __future__ import annotations
 import threading
 from typing import Any, Generic, Type, TypeVar
 
-from app.config import settings
-from app.models.asset_collection import AssetCollection
-from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
-from app.schemas.enums import AssetType, QueryStatus
 from pydantic import BaseModel
 from tinydb import Query, TinyDB
 from tinydb.storages import JSONStorage
 from tinydb.table import Table
 from tinydb_serialization import SerializationMiddleware, Serializer
 from tinydb_serialization.serializers import DateTimeSerializer
+
+from app.config import settings
+from app.models.asset_collection import AssetCollection
+from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
+from app.schemas.enums import AssetType, QueryStatus
 
 
 class NoneSerializer(Serializer):
@@ -100,9 +101,7 @@ class Database:
     def search(self, type: Type[T], *args, **kwargs) -> list[T]:
         return self.collections[type].search(*args, **kwargs)
 
-    def get_first_asset_collection_by_type(
-        self, asset_type: AssetType
-    ) -> AssetCollection | None:
+    def get_first_asset_collection_by_type(self, asset_type: AssetType) -> AssetCollection | None:
         rs = self.search(AssetCollection, Query().aiod_asset_type == asset_type)
         if len(rs) == 0:
             return None

@@ -1,7 +1,7 @@
 services:
   # FastAPI service with GPU support
   app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.gpu
     environment:

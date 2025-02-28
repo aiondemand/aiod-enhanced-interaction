@@ -85,9 +85,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         if cls._ALL_VALID_VALUES is None:
             cls._load_all_valid_values()
         valid_values = [
-            val.lower()
-            for val in values
-            if val.lower() in cls.get_field_valid_values("task_types")
+            val.lower() for val in values if val.lower() in cls.get_field_valid_values("task_types")
         ]
         return valid_values
 

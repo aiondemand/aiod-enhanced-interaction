@@ -117,9 +117,7 @@ class HuggingFaceDatasetExtractMetadata:
         return None, None
 
     @classmethod
-    def extract_huggingface_dataset_metadata(
-        cls, obj: dict, asset_type: AssetType
-    ) -> dict:
+    def extract_huggingface_dataset_metadata(cls, obj: dict, asset_type: AssetType) -> dict:
         # For now we only support extracting of metadata information from HuggingFace
         # As other platforms have their metadata more spread out and we would need
         # an LLM to extract the same information that we can currently easily parse
@@ -130,9 +128,7 @@ class HuggingFaceDatasetExtractMetadata:
             return {}
 
         date_published_str = (
-            obj["date_published"] + "Z"
-            if obj.get("date_published", None) is not None
-            else None
+            obj["date_published"] + "Z" if obj.get("date_published", None) is not None else None
         )
 
         distribs = obj.get("distribution", [])
@@ -224,9 +220,7 @@ class ConvertJsonToString:
         keywords = simple_data.get("keyword", None)
 
         string = f"Dataset ID: {simple_data['id']}\n" if include_id else ""
-        string += (
-            f"Platform: {simple_data['platform']}\nAsset name: {simple_data['name']}"
-        )
+        string += f"Platform: {simple_data['platform']}\nAsset name: {simple_data['name']}"
         if description is not None:
             string += f"\nDescription: {description}"
         if keywords is not None:
@@ -357,9 +351,7 @@ class ConvertJsonToString:
                     if new_dist.get("content_size_kb", None) is not None:
                         size_kb = new_dist["content_size_kb"]
                         new_dist["content_size_mb"] = float(f"{(size_kb / 1024):.2f}")
-                        new_dist["content_size_gb"] = float(
-                            f"{(size_kb / 1024**2):.2f}"
-                        )
+                        new_dist["content_size_gb"] = float(f"{(size_kb / 1024**2):.2f}")
                     if new_dist != {}:
                         new_object[field_name].append(new_dist)
 
