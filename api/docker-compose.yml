@@ -4,6 +4,8 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+    labels: 
+      autoheal-label: true
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     env_file:
       - .env.app
@@ -17,8 +19,11 @@ services:
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
     ports:
       - "${APP_HOST_PORT}:80"
+    restart: always
     depends_on:
-      - milvus-standalone
+      milvus-standalone:
+        condition: service_healthy
+        restart: false
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
@@ -26,6 +31,8 @@ services:
   # Milvus services
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.16
+    labels: 
+      autoheal-label: true
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000
@@ -39,9 +46,12 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    restart: always
 
   milvus-minio:
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    labels: 
+      autoheal-label: true
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
@@ -56,9 +66,12 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    restart: always
 
   milvus-standalone:
     image: milvusdb/milvus:v2.5.4
+    labels: 
+      autoheal-label: true
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
@@ -73,12 +86,25 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
-      start_period: 90s
       timeout: 20s
       retries: 3
+    restart: always
     ports:
       - "${MILVUS_HOST_PORT_19530}:19530"
       - "${MILVUS_HOST_PORT_9091}:9091"
     depends_on:
-      - milvus-etcd
-      - milvus-minio
+      milvus-etcd:
+        condition: service_healthy
+        restart: true
+      milvus-minio:
+        condition: service_healthy
+        restart: true
+
+# Service for restarting unhealthy containers
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal-label
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
