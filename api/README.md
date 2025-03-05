@@ -108,7 +108,7 @@ We don't have any development environment set up utilizing Docker containers.
 
 Create a Python v11 environment preferably using conda:
 - `conda create --name aiod-env python=3.11`
-- `conda activate aiod-env; pip install -r requirements-dev.txt`
+- `conda activate aiod-env; pip install .`
 
 To start the application you can either:
 - Use a .vscode launch option called `Debug FastAPI service` if you use VSCode as your IDE
