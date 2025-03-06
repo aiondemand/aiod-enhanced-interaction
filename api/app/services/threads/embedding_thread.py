@@ -161,7 +161,7 @@ def process_aiod_assets_wrapper(
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
             asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
 
-            metadata = [{} for _ in assets_to_add]
+            metadata: list[dict] = [{} for _ in assets_to_add]
             if extract_metadata_function is not None:
                 metadata = [extract_metadata_function(obj) for obj in assets_to_add]
 
@@ -201,7 +201,7 @@ def get_assets_to_add_and_delete(
     newly_added_doc_ids: list[str],
     last_db_sync_datetime: datetime | None,
 ) -> tuple[list[dict] | None, list[str] | None]:
-    mark_recursions = []
+    mark_recursions: list[int] = []
     assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 
     if len(assets) == 0 and len(mark_recursions) == 0:
@@ -247,12 +247,15 @@ def parse_aiod_asset_date(
     none_value: Literal["none", "now", "zero"] = "none",
 ) -> datetime | None:
     string_time = asset.get("aiod_entry", {}).get(field, None)
-    if string_time is None:
+
+    if string_time is not None:
+        return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)
+    else:
         if none_value == "none":
             return None
-        if none_value == "now":
+        elif none_value == "now":
             return datetime.now(tz=timezone.utc)
-        if none_value == "zero":
-            return datetime.fromtimestamp(0, tz=timezone)
-
-    return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)
+        elif none_value == "zero":
+            return datetime.fromtimestamp(0, tz=timezone.utc)
+        else:
+            return None

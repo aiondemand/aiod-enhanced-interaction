@@ -49,7 +49,7 @@ class EmbeddingStore(ABC):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        query_embeddings: list[list[float]] = None,
+        query_embeddings: list[float] | None = None,
     ) -> SearchResults:
         pass
 
@@ -72,14 +72,15 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client = None
+        self.client: MilvusClient | None = None
 
+    @staticmethod
     async def init() -> MilvusEmbeddingStore:
         obj = MilvusEmbeddingStore()
         await obj.init_connection()
         return obj
 
-    async def init_connection(self) -> None:
+    async def init_connection(self) -> bool:
         for _ in range(5):
             try:
                 self.client = MilvusClient(
@@ -174,6 +175,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         loader: DataLoader,
         asset_type: AssetType,
         milvus_batch_size: int = 50,
+        **kwargs,
     ) -> int:
         collection_name = self.get_collection_name(asset_type)
         self._create_collection(asset_type)

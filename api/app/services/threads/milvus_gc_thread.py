@@ -57,7 +57,7 @@ def delete_asset_embeddings(
     # iterate over entirety of AIoD database, store all the doc IDs
     while True:
         assets_to_add, _ = get_assets_to_add_and_delete(
-            url=settings.AIOD.get_assets_url(asset_type),
+            asset_type=asset_type,
             url_params=url_params,
             existing_doc_ids_from_past=[],
             newly_added_doc_ids=[],
@@ -68,7 +68,7 @@ def delete_asset_embeddings(
         all_aiod_doc_ids.extend([str(obj["identifier"]) for obj in assets_to_add])
 
         # during the traversal of AIoD assets, some of them may be deleted in between
-        # which would make us skip some assets if we were to use tradinational
+        # which would make us skip some assets if we were to use traditional
         # pagination without any overlap, hence the need for an overlap
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 

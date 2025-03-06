@@ -274,7 +274,7 @@ class ConvertJsonToString:
             "platform": data["platform"],
             "name": data["name"],
         }
-        description = cls._get_text_like_field(data)
+        description = cls._get_text_like_field(data, "description")
         if description is not None:
             new_object["description"] = description
 
@@ -349,9 +349,9 @@ class ConvertJsonToString:
                     new_dist = {k: dist[k] for k in dist_relevant_fields if k in dist}
 
                     if new_dist.get("content_size_kb", None) is not None:
-                        size_kb = new_dist["content_size_kb"]
-                        new_dist["content_size_mb"] = float(f"{(size_kb / 1024):.2f}")
-                        new_dist["content_size_gb"] = float(f"{(size_kb / 1024**2):.2f}")
+                        size_kb = int(new_dist["content_size_kb"])
+                        new_dist["content_size_mb"] = round(size_kb / 1024, 2)
+                        new_dist["content_size_gb"] = round(size_kb / 1024**2, 2)
                     if new_dist != {}:
                         new_object[field_name].append(new_dist)
 
@@ -370,6 +370,7 @@ class ConvertJsonToString:
 
     @classmethod
     def _get_text_like_field(cls, data: dict, field: str) -> str | None:
+        # TODO: Simplify this logic
         description = data.get(field, None)
         if description is None:
             return None

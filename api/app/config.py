@@ -54,7 +54,7 @@ class OllamaConfig(BaseModel):
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARATED_ASSET_TYPES: str = Field(...)
-    COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON: str = Field(...)
+    COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: str = Field(...)
     WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
@@ -71,7 +71,7 @@ class AIoDConfig(BaseModel):
 
     @field_validator(
         "COMMA_SEPARATED_ASSET_TYPES",
-        "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON",
+        "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION",
         mode="before",
     )
     @classmethod
@@ -92,13 +92,13 @@ class AIoDConfig(BaseModel):
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
 
     @property
-    def ASSET_TYPES(self) -> list[str]:
+    def ASSET_TYPES(self) -> list[AssetType]:
         return self.convert_csv_to_asset_types(self.COMMA_SEPARATED_ASSET_TYPES)
 
     @property
-    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[str]:
+    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[AssetType]:
         types = self.convert_csv_to_asset_types(
-            self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON
+            self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION
         )
 
         if not set(types).issubset(set(self.ASSET_TYPES)):

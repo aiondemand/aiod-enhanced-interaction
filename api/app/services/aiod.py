@@ -62,7 +62,7 @@ def check_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 
 
 
 def _build_aiod_url_queries(url_params: RequestParams) -> dict:
-    def translate_datetime_to_aiod_params(date: datetime) -> str | None:
+    def translate_datetime_to_aiod_params(date: datetime | None = None) -> str | None:
         if date is None:
             return date
         return f"{date.year}-{date.month}-{date.day}"

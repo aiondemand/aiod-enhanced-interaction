@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 from typing import Callable
 
 import numpy as np
@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 
-class EmbeddingModel(ABC):
+class EmbeddingModel(torch.nn.Module, metaclass=ABCMeta):
     @abstractmethod
     def forward(self, texts: list[str]) -> list[torch.Tensor]:
         """
@@ -17,6 +17,7 @@ class EmbeddingModel(ABC):
         Returns a list of tensors representing either entire documents or
         the chunks documents consist of
         """
+        pass
 
     @abstractmethod
     def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
@@ -105,7 +106,7 @@ class SentenceTransformerToHF(torch.nn.Module):
         return [encodings["sentence_embedding"]]
 
 
-class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
+class Basic_EmbeddingModel(EmbeddingModel):
     """
     Class representing models that process the input documents in their entirety
     without needing to divide them into separate chunks.
@@ -173,7 +174,7 @@ class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         return encodings
 
 
-class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
+class Hierarchical_EmbeddingModel(EmbeddingModel):
     """
     Class representing models that process the input documents by firstly individually
     processing their chunks before further accumulating the chunk information to
@@ -240,7 +241,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
 
     def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
         chunk_embeddings = self._first_level_forward(
-            encodings["input_encodings"], encodings["max_num_chunks"]
+            encodings["input_encodings"], int(encodings["max_num_chunks"])
         )
         doc_embeddings = self._second_level_forward(
             chunk_embeddings,
@@ -343,7 +344,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
                 "max_num_chunks": max_chunks,
             }
 
-        # input_encoddings
+        # input_encodings
         transposed_texts = np.array(padded_texts).T.tolist()
         encodings = [
             self.tokenizer(

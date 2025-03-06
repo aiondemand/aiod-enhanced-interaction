@@ -5,7 +5,7 @@ from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-# Rules how to setup these schemas representing asset metadata
+# Rules how to set up these schemas representing asset metadata
 #   1. Each pydantic.Field only contains a default value and a description.
 #      Other arguments are not copied over when creating dynamic schemas.
 #   2. If you wish to apply some additional value constraints, feel free to do so, but
@@ -17,7 +17,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     Extraction of relevant metadata we wish to retrieve from ML assets
     """
 
-    _ALL_VALID_VALUES: ClassVar[list[list[str]] | None] = None
+    _ALL_VALID_VALUES: ClassVar[dict[str, list[str]] | None] = None
     _PATH_TO_VALID_VALUES: ClassVar[Path] = Path("data/valid_metadata_values.json")
 
     date_published: Optional[str] = Field(
@@ -58,7 +58,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     def get_field_valid_values(cls, field: str) -> list[str]:
         if cls._ALL_VALID_VALUES is None:
             cls._load_all_valid_values()
-        return cls._ALL_VALID_VALUES.get(field, None)
+        return cls._ALL_VALID_VALUES.get(field, [])
 
     @classmethod
     def exists_field_valid_values(cls, field: str) -> bool:
@@ -66,21 +66,21 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
             cls._load_all_valid_values()
         return field in cls._ALL_VALID_VALUES.keys()
 
-    @field_validator("date_published", mode="before")
     @classmethod
+    @field_validator("date_published", mode="before")
     def check_date_published(cls, value: str) -> str | None:
         pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
         return value if bool(re.match(pattern, value)) else None
 
-    @field_validator("license", mode="before")
     @classmethod
+    @field_validator("license", mode="before")
     def check_license(cls, value: str) -> str | None:
         if cls._ALL_VALID_VALUES is None:
             cls._load_all_valid_values()
         return value if value in cls.get_field_valid_values("license") else None
 
-    @field_validator("task_types", mode="before")
     @classmethod
+    @field_validator("task_types", mode="before")
     def check_task_types(cls, values: list[str]) -> list[str] | None:
         if cls._ALL_VALID_VALUES is None:
             cls._load_all_valid_values()
@@ -89,7 +89,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
         ]
         return valid_values
 
-    @field_validator("languages", mode="before")
     @classmethod
+    @field_validator("languages", mode="before")
     def check_languages(cls, values: list[str]) -> list[str] | None:
         return [val.lower() for val in values if len(val) == 2]

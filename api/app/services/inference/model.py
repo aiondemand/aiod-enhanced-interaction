@@ -24,9 +24,10 @@ class AiModel:
 
     def __init__(self, device: torch.device = "cpu") -> None:
         self.use_chunking = settings.MILVUS.STORE_CHUNKS
-        self.model = self.load_model(self.use_chunking, device)
+        self.model = AiModel.load_model(self.use_chunking, device)
 
-    def load_model(self, use_chunking: bool, device: torch.device = "cpu") -> EmbeddingModel:
+    @staticmethod
+    def load_model(use_chunking: bool, device: torch.device = "cpu") -> EmbeddingModel:
         transformer = SentenceTransformerToHF(settings.MODEL_LOADPATH, trust_remote_code=True)
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
