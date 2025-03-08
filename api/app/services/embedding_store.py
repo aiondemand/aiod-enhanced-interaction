@@ -49,7 +49,7 @@ class EmbeddingStore(ABC):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        query_embeddings: list[float] | None = None,
+        query_embeddings: list[list[float]] | None = None,
     ) -> SearchResults:
         pass
 
@@ -225,7 +225,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        query_embeddings: list[float] | None = None,
+        query_embeddings: list[list[float]] | None = None,
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 

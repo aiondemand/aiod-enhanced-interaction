@@ -156,12 +156,16 @@ class HuggingFaceDatasetExtractMetadata:
         if len(size_categories) > 0:
             lower_bound, upper_bound = cls.translate_size_category(size_categories)
 
+        languages = [
+            lang for lang in cls.extract_hf_keywords(obj, keyword_type="language") if len(lang) == 2
+        ][:200]
+
         obj_to_return = {
             "date_published": date_published_str,
             "size_in_mb": ds_size,
             "license": license,
             "task_types": task_types,
-            "languages": cls.extract_hf_keywords(obj, keyword_type="language")[:200],
+            "languages": languages,
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound,
         }

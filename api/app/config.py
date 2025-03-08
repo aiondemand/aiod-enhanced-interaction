@@ -10,10 +10,13 @@ from app.schemas.enums import AssetType
 
 class Validators:
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        if value.lower() not in ["true", "false"]:
-            raise ValueError("Invalid value for boolean attribute")
-        return value.lower() == "true"
+    def validate_bool(cls, value: str | bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, str) and value.lower() in ["true", "false"]:
+            return value.lower() == "true"
+        else:
+            raise ValueError("Invalid value for a boolean attribute")
 
 
 class MilvusConfig(BaseModel):
@@ -36,8 +39,8 @@ class MilvusConfig(BaseModel):
 
     @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def str_to_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @property
     def MILVUS_TOKEN(self):
@@ -84,8 +87,8 @@ class AIoDConfig(BaseModel):
 
     @field_validator("TESTING", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def validate_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @property
     def OFFSET_INCREMENT(self) -> int:
@@ -126,8 +129,8 @@ class Settings(BaseSettings):
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def validate_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @field_validator("MODEL_LOADPATH", mode="before")
     @classmethod

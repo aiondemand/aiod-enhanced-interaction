@@ -47,7 +47,7 @@ def fill_query_queue(database: Database) -> None:
         QUERY_QUEUE.put((query.id, type(query)))
 
     logging.info(
-        f"Query queue has been populated with {len(queries_to_process)} " + "queries to process."
+        f"Query queue has been populated with {len(queries_to_process)} queries to process."
     )
 
 
