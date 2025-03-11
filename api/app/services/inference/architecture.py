@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 from typing import Callable
 
 import numpy as np
@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 
-class EmbeddingModel(ABC):
+class EmbeddingModel(torch.nn.Module, metaclass=ABCMeta):
     @abstractmethod
     def forward(self, texts: list[str]) -> list[torch.Tensor]:
         """
@@ -17,6 +17,7 @@ class EmbeddingModel(ABC):
         Returns a list of tensors representing either entire documents or
         the chunks documents consist of
         """
+        pass
 
     @abstractmethod
     def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
@@ -105,10 +106,10 @@ class SentenceTransformerToHF(torch.nn.Module):
         return [encodings["sentence_embedding"]]
 
 
-class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
+class Basic_EmbeddingModel(EmbeddingModel):
     """
     Class representing models that process the input documents in their entirety
-    without needing to divide them into seperate chunks.
+    without needing to divide them into separate chunks.
     """
 
     def __init__(
@@ -127,7 +128,8 @@ class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         documents are computed
         """
         super().__init__()
-        assert pooling in ["mean", "max", "CLS_token", "none"]
+        if not pooling in ["mean", "max", "CLS_token", "none"]:
+            raise ValueError("Invalid value for 'pooling'")
 
         self.transformer = transformer
         self.tokenizer = tokenizer
@@ -172,11 +174,11 @@ class Basic_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         return encodings
 
 
-class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
+class Hierarchical_EmbeddingModel(EmbeddingModel):
     """
     Class representing models that process the input documents by firstly individually
     processing their chunks before further accumulating the chunk information to
-    compute the represenations of the whole documents
+    compute the representations of the whole documents
     """
 
     def __init__(
@@ -184,7 +186,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         input_transformer: PreTrainedModel | SentenceTransformerToHF,
         chunk_transformer: PreTrainedModel | None = None,
         tokenizer: PreTrainedTokenizer | None = None,
-        token_pooling: str = "CLS_token",
+        token_pooling: str = "CLS_token",  # noqa: S107
         chunk_pooling: str = "mean",
         parallel_chunk_processing: bool = True,
         max_supported_chunks: int = -1,
@@ -197,7 +199,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         'input_transformer': First-level transformer (pre-trained and
         imported from HuggingFace) used for processing the document chunks
         'chunk_transformer': Second-level transformer used for processing
-        the chunk represenations and computes the final document embeddings
+        the chunk representations and computes the final document embeddings
         'token_pooling': represents how the chunk representations of the input
         documents are computed
         'chunk_pooling' represents how the document representations of the input
@@ -210,8 +212,10 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         chunks will be truncated
         """
         super().__init__()
-        assert token_pooling in ["mean", "max", "CLS_token", "none"]
-        assert chunk_pooling in ["mean", "max", "none"]
+        if not token_pooling in ["mean", "max", "CLS_token", "none"]:
+            raise ValueError("Invalid value for 'token_pooling'")
+        if not chunk_pooling in ["mean", "max", "none"]:
+            raise ValueError("Invalid value for 'chunk_pooling'")
 
         self.input_transformer = input_transformer
         self.chunk_transformer = chunk_transformer
@@ -237,7 +241,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
 
     def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
         chunk_embeddings = self._first_level_forward(
-            encodings["input_encodings"], encodings["max_num_chunks"]
+            encodings["input_encodings"], int(encodings["max_num_chunks"])
         )
         doc_embeddings = self._second_level_forward(
             chunk_embeddings,
@@ -292,9 +296,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
             chunk_out = chunks_embeddings
             if self.chunk_transformer is not None:
                 chunk_out = self.chunk_transformer(**chunk_encodings)[0]
-            doc_embedding = _pool(
-                chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling
-            )
+            doc_embedding = _pool(chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling)
             return doc_embedding
 
         all_embeddings = torch.zeros(
@@ -314,9 +316,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         chunk_out = all_embeddings
         if self.chunk_transformer is not None:
             chunk_out = self.chunk_transformer(**chunk_encodings)[0]
-        doc_embedding = _pool(
-            chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling
-        )
+        doc_embedding = _pool(chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling)
         return doc_embedding
 
     def preprocess_input(self, texts: list[str]) -> dict:
@@ -326,18 +326,12 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
 
         # apply chunk cap limit
         if self.max_supported_chunks > 0:
-            chunked_texts = [
-                chunks[: self.max_supported_chunks] for chunks in chunked_texts
-            ]
+            chunked_texts = [chunks[: self.max_supported_chunks] for chunks in chunked_texts]
 
         num_chunks = [len(chunks) for chunks in chunked_texts]
         max_chunks = max(num_chunks)
-        padded_texts = [
-            chunks + [""] * (max_chunks - len(chunks)) for chunks in chunked_texts
-        ]
-        chunk_mask = torch.tensor(
-            (np.array(padded_texts) != "").astype("int"), device=self.dev
-        )
+        padded_texts = [chunks + [""] * (max_chunks - len(chunks)) for chunks in chunked_texts]
+        chunk_mask = torch.tensor((np.array(padded_texts) != "").astype("int"), device=self.dev)
 
         if self.parallel_chunk_processing:
             rectangular_texts = np.array(padded_texts).reshape(-1).tolist()
@@ -350,7 +344,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
                 "max_num_chunks": max_chunks,
             }
 
-        # input_encoddings
+        # input_encodings
         transposed_texts = np.array(padded_texts).T.tolist()
         encodings = [
             self.tokenizer(
@@ -368,9 +362,7 @@ class Hierarchical_EmbeddingModel(torch.nn.Module, EmbeddingModel):
         return return_obj
 
 
-def _pool(
-    inp: torch.Tensor, attention_mask: torch.Tensor, pooling_method: str
-) -> torch.Tensor:
+def _pool(inp: torch.Tensor, attention_mask: torch.Tensor, pooling_method: str) -> torch.Tensor:
     """
     Wrapper function for performing a specific pooling method that aggregates values
     from multiple sources and merges them into one representation
@@ -391,21 +383,15 @@ def cls_pooling(hidden_states: torch.Tensor) -> torch.Tensor:
     return hidden_states[:, 0]
 
 
-def mean_pooling(
-    hidden_states: torch.Tensor, attention_mask: torch.Tensor
-) -> torch.Tensor:
+def mean_pooling(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
     """Pooling method: Average all the representations"""
-    input_mask_expanded = (
-        attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-    )
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
     sum_embeddings = torch.sum(hidden_states * input_mask_expanded, dim=1)
     sum_mask = torch.clamp(input_mask_expanded.sum(dim=1), min=1e-9)
     return sum_embeddings / sum_mask
 
 
-def max_pooling(
-    hidden_states: torch.Tensor, attention_mask: torch.Tensor
-) -> torch.Tensor:
+def max_pooling(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
     """Pooling method: Take the max features found in all the representations"""
     masked_hidden_states = (
         hidden_states
@@ -422,8 +408,6 @@ def weighted_sum_pooling(
     dev: torch.device = "cpu",
 ) -> torch.Tensor:
     """Pooling method: Apply a weighted average of all the representations"""
-    input_mask_expanded = (
-        attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-    )
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
     weights_expanded = weights.unsqueeze(-1).expand(hidden_states.size()).to(dev)
     return torch.sum(hidden_states * input_mask_expanded * weights_expanded, dim=1)

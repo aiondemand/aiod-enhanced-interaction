@@ -16,14 +16,14 @@ from data_types import AnnotatedDoc, QueryDatapoint, SemanticSearchResult
 class MetStatus(str, Enum):
     TRUE = "true"
     FALSE = "false"
-    CANT_TELL = "cant tell"
-    
+    CANT_TELL = "cannot tell"
+
 
 class ConditionEvaluation(BaseModel):
     condition: str = Field(..., description="The specific user-defined condition/constraint being evaluated.")
     details: str = Field(..., description="A brief description of how the condition was or was not met.")
     mandatory: bool = Field(..., description="Whether this condition is mandatory. It is usually mandatory unless specified otherwise")
-    met: MetStatus = Field(..., description="Whether the condition was met (true/false/cant tell).")
+    met: MetStatus = Field(..., description="Whether the condition was met (true/false/cannot tell).")
 
 
 class RelevanceExplanation(BaseModel):
@@ -48,13 +48,13 @@ class RelevanceEvaluationMultipleDocsExplicitQueryDoc(BaseModel):
 
 class RelevanceEvaluationMultipleDocs(BaseModel):
     relevances: list[RelevanceEvaluation] = Field(..., description="Evaluation of relevance of each document/asset to an user query.")
-    
+
 
 class LLM_Evaluator:
     system_prompt_one_doc = """
-        You are an expert evaluator tasked with assessing the relevance of machine learning assets 
-        (such as models or datasets) to specific user queries. Each query describes the requirements 
-        and desired properties of an asset. You will be given a query and a corresponding document 
+        You are an expert evaluator tasked with assessing the relevance of machine learning assets
+        (such as models or datasets) to specific user queries. Each query describes the requirements
+        and desired properties of an asset. You will be given a query and a corresponding document
         (a short asset description together with additional metadata) and are asked to provide the following:
 
         1) A detailed explanation structured into the following sections:
@@ -63,8 +63,8 @@ class LLM_Evaluator:
                 - Condition: The specific condition being evaluated.
                 - Details: A brief description of how the condition was or was not met.
                 - Mandatory: Whether the condition is mandatory (by default it is, unless specified otherwise)
-                - Met: Whether the condition was met (true/false/cant tell).
-                
+                - Met: Whether the condition was met (true/false/cannot tell).
+
             - Overall Match: A summary statement of the overall relevance of the document to the query.
 
         2) A relevance rating on a scale from 1 to 5, where:
@@ -75,9 +75,9 @@ class LLM_Evaluator:
             - 5 = Extremely relevant
     """
     system_prompt_multiple_docs = """
-        You are an expert evaluator tasked with assessing the relevance of machine learning assets 
-        (such as models or datasets) to specific user queries. Each query describes the requirements 
-        and desired properties of an asset. For each evaluation, you will be provided with a query 
+        You are an expert evaluator tasked with assessing the relevance of machine learning assets
+        (such as models or datasets) to specific user queries. Each query describes the requirements
+        and desired properties of an asset. For each evaluation, you will be provided with a query
         and a set of documents (each containing a short asset description together with additional metadata).
         You need to provide the following for each document:
 
@@ -87,8 +87,8 @@ class LLM_Evaluator:
                 - Condition: The specific condition being evaluated.
                 - Details: A brief description of how the condition was or was not met.
                 - Mandatory: Whether the condition is mandatory (by default it is, unless specified otherwise)
-                - Met: Whether the condition was met (true/false/cant tell).
-                
+                - Met: Whether the condition was met (true/false/cannot tell).
+
             - Overall Match: A summary statement of the overall relevance of the document to the query.
 
         2) A relevance rating on a scale from 1 to 5, where:
@@ -98,15 +98,15 @@ class LLM_Evaluator:
             - 4 = Very relevant
             - 5 = Extremely relevant
     """
-    
+
     prompt_template_one_doc = """
-        ### Query: 
+        ### Query:
         {query}
-        ### Document: 
+        ### Document:
         {document}
     """
     prompt_template_multiple_docs = """
-        ### Query: 
+        ### Query:
         {query}
         {multiple_documents}
     """
@@ -114,7 +114,7 @@ class LLM_Evaluator:
     @classmethod
     def build_chain(
         cls, llm: BaseLLM | None = None, pydantic_model: Type[BaseModel] | None = None,
-        compare_multiple_documents_to_a_query: bool = False, 
+        compare_multiple_documents_to_a_query: bool = False,
         generating_explicit_query_doc_pairs: bool = False
     ) -> SimpleChain:
         if llm is None:
@@ -133,13 +133,13 @@ class LLM_Evaluator:
             else [cls.system_prompt_one_doc, cls.prompt_template_one_doc]
         )
         return LLM_Chain.build_simple_chain(
-            pydantic_model=pydantic_model, 
-            prompt_templates=prompt_templates, 
+            pydantic_model=pydantic_model,
+            prompt_templates=prompt_templates,
             llm=llm
         )
-    
+
     def __init__(
-        self, chain: SimpleChain | None = None, 
+        self, chain: SimpleChain | None = None,
         num_docs_to_compare_at_the_time: int = 1
     ) -> None:
         if chain is None:
@@ -154,13 +154,13 @@ class LLM_Evaluator:
 
     def evaluate_query_doc_pairs(
         self,
-        query_loader: DataLoader, 
+        query_loader: DataLoader,
         topk_documents: list[SemanticSearchResult],
         text_dirpath: str,
         save_dirpath: str
     ) -> None:
         queries: list[QueryDatapoint] = query_loader.dataset.queries
-        
+
         print(f"...Evaluating relevance of retrieved documents to {len(queries)} queries...")
         with get_openai_callback() as cb:
             for query, topk_doc_ids in tqdm(zip(queries, topk_documents), total=len(queries)):
@@ -184,7 +184,7 @@ class LLM_Evaluator:
                     ]
                     model_predictions = self.calc_doc_relevance(query, doc_group)
                     self.save_doc_relevance(query, doc_ids, model_predictions, save_dirpath)
-                    
+
             # print(cb)
 
     def _group_docs(self, text_dirpath: str, doc_ids: list[str]) -> list[list[str]]:
@@ -194,11 +194,11 @@ class LLM_Evaluator:
             ids = doc_ids[i: i+self.num_docs_to_compare_at_the_time]
             for doc_id in ids:
                 with open(os.path.join(text_dirpath, f"{doc_id}.txt")) as f:
-                    group.append(f.read())            
+                    group.append(f.read())
             groups.append(group)
-                    
+
         return groups
-    
+
     def calc_doc_relevance(
         self, query: QueryDatapoint, docs: list[str]
     ) -> list[dict | None]:
@@ -207,7 +207,7 @@ class LLM_Evaluator:
                 "query": query.text,
                 "document": docs[0]
             })]
-        
+
         multiple_docs_str = self.build_multiple_document_prompt(docs)
         multiple_pred = self({
             "query": query.text,
@@ -219,9 +219,9 @@ class LLM_Evaluator:
             { "explanation": p["explanation"] }
             for p in multiple_pred["relevances"]
         ]
-    
+
     def save_doc_relevance(
-        self, query: QueryDatapoint, doc_ids: list[str], 
+        self, query: QueryDatapoint, doc_ids: list[str],
         predictions: list[dict | None], savedir: str
     ) -> None:
         for doc_id, pred in zip(doc_ids, predictions):
@@ -238,12 +238,12 @@ class LLM_Evaluator:
         string = ""
         for it, doc in enumerate(documents):
             string += string_placeholder.format(doc_it=it+1, doc=doc)
-        
+
         return string
 
     @staticmethod
     def build_query_json_from_llm_eval(
-        dataset: Queries, sem_search: list[SemanticSearchResult], 
+        dataset: Queries, sem_search: list[SemanticSearchResult],
         llm_eval_dirpath: str, savepath: str,
         score_function: Callable[[dict], float] | None = None,
     ) -> None:
@@ -251,7 +251,7 @@ class LLM_Evaluator:
             return
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         json_query_datapoints = []
-        
+
         if score_function is None:
             score_function = lambda obj: obj["explanation"]["relevance_rating"]
         for query_topk_docs in sem_search:
@@ -267,11 +267,11 @@ class LLM_Evaluator:
                 annotated_docs.append(AnnotatedDoc(
                     id=doc_id, score=score_function(data)
                 ))
-                
+
             json_query_datapoints.append(
                 QueryDatapoint(
-                    text=query.text, 
-                    id=query.id, 
+                    text=query.text,
+                    id=query.id,
                     annotated_docs=annotated_docs
                 ).model_dump()
             )
@@ -288,11 +288,11 @@ class LLM_Evaluator:
         required_score = sum([
             f.met == MetStatus.TRUE for f in req_filters
         ]) / len(req_filters)
-        
+
         optional_score = 0
         if len(opt_filters) > 0:
             optional_score = sum([
                 f.met == MetStatus.TRUE for f in opt_filters
             ]) / len(opt_filters)
-        
+
         return required_score + optional_score*(required_score)**2

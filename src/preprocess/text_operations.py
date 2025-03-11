@@ -4,11 +4,11 @@ import re
 from typing import Any
 
 
-class HuggingFaceDatasetExtractMedatada:    
+class HuggingFaceDatasetExtractMedatada:
     @classmethod
     def extract_hf_keywords(cls, asset: dict, keyword_type: str) -> list[str]:
         keywords = [
-            (kw.split(":")[0], kw.split(":")[1]) 
+            (kw.split(":")[0], kw.split(":")[1])
             for kw in asset.get("keyword", [])
             if len(kw.split(":")) == 2
         ]
@@ -17,7 +17,7 @@ class HuggingFaceDatasetExtractMedatada:
             for kw in keywords
             if kw[0] == keyword_type
         ]))
-        
+
     @classmethod
     def strip_unknown(cls, values: list[str]) -> list[str]:
         return [val for val in values if val != "unknown"]
@@ -30,14 +30,14 @@ class HuggingFaceDatasetExtractMedatada:
             if isinstance(val, list) or isinstance(val, str):
                 return len(val) > 0
             return True
-        
+
         return {
             k: v for k, v in obj.items()
             if not_empty(v)
         }
-    
+
     @classmethod
-    def simplify_license(cls, licenses: list[str]) -> str | None:    
+    def simplify_license(cls, licenses: list[str]) -> str | None:
         main_license_prefixes = sorted([
             "mit",
             "apache",
@@ -72,7 +72,7 @@ class HuggingFaceDatasetExtractMedatada:
                 if lic.startswith(prefix):
                     processed_licenses.append(prefix)
                     break
-            
+
         if len(processed_licenses) == 0:
             return None
         return processed_licenses[0]
@@ -81,7 +81,7 @@ class HuggingFaceDatasetExtractMedatada:
     def translate_size_category(cls, size_categories: list[str]) -> tuple[int, int] | tuple[None, None]:
         substr = "<n<"
         units = { "k": 1_000, "m": 1_000_000, "b": 1_000_000_000, "t": 1_000_000_000_000 }
-        
+
         size_categories = [
             cat for cat in size_categories
             if substr in cat or cat in ["n<1k", "n>1t"]
@@ -97,7 +97,7 @@ class HuggingFaceDatasetExtractMedatada:
 
             bound_pattern = r"^(\d+[kmbt])|(\d+)$"
             if (
-                bool(re.match(bound_pattern, lower_str)) and 
+                bool(re.match(bound_pattern, lower_str)) and
                 bool(re.match(bound_pattern, upper_str))
             ):
                 try:
@@ -109,9 +109,9 @@ class HuggingFaceDatasetExtractMedatada:
                     upper_bound = int(upper_str)
                 except:
                     upper_bound = int(upper_str[:-1]) * units[upper_str[-1]]
-            
+
                 return lower_bound, upper_bound
-        
+
         return None, None
 
     @classmethod
@@ -124,8 +124,8 @@ class HuggingFaceDatasetExtractMedatada:
             return {}
 
         date_published_str = (
-            obj["date_published"] + "Z" 
-            if obj.get("date_published", None) is not None 
+            obj["date_published"] + "Z"
+            if obj.get("date_published", None) is not None
             else None
         )
 
@@ -145,14 +145,14 @@ class HuggingFaceDatasetExtractMedatada:
             cls.extract_hf_keywords(obj, keyword_type="task_categories") +
             cls.extract_hf_keywords(obj, keyword_type="task_ids")
         )))
-        
+
         size_categories = cls.strip_unknown(cls.extract_hf_keywords(
             obj, keyword_type="size_categories"
         ))
         lower_bound, upper_bound = None, None
         if len(size_categories) > 0:
             lower_bound, upper_bound = cls.translate_size_category(size_categories)
-        
+
         obj_to_return = {
             "date_published": date_published_str,
             "size_in_mb": ds_size,
@@ -174,16 +174,16 @@ class ConvertJsonToString:
     orig_array_fields = [
         "keyword",
         "alternate_name",
-        "application_area", 
-        "industrial_sector", 
-        "research_area", 
+        "application_area",
+        "industrial_sector",
+        "research_area",
         "scientific_domain"
     ]
     orig_distrib_fields = [
-        "distribution", 
+        "distribution",
         "media"
     ]
-    
+
     new_flat_fields = [
         "year_published",
         "month_published",
@@ -202,14 +202,14 @@ class ConvertJsonToString:
     # "BASIC INFO"
     @classmethod
     def extract_very_basic_info(
-        cls, data: dict, 
-        stringify: bool = False, 
+        cls, data: dict,
+        stringify: bool = False,
         include_id: bool = False
     ) -> str:
         simple_data = cls._extract_very_basic_fields(data)
         if stringify:
             return json.dumps(simple_data)
-        
+
         description = simple_data.get("description", None)
         keywords = simple_data.get("keyword", None)
 
@@ -222,7 +222,7 @@ class ConvertJsonToString:
             string += f"\nKeywords: {key_string}"
 
         return string
-    
+
     # "RELEVANT INFO"
     @classmethod
     def extract_relevant_info(cls, data: dict, stringify: bool = False) -> str:
@@ -231,7 +231,7 @@ class ConvertJsonToString:
             return json.dumps(simple_data)
 
         string = ""
-        
+
         for flat_field in cls.orig_flat_fields + cls.new_flat_fields:
             if flat_field in simple_data:
                 string += f"{flat_field}: {simple_data[flat_field]}\n"
@@ -245,8 +245,8 @@ class ConvertJsonToString:
                     distrib_str_arr = [f"{k}:{v}" for k,v in distrib.items()]
                     string += f"\t{', '.join(distrib_str_arr)}\n"
 
-        return string    
-    
+        return string
+
     @classmethod
     def _extract_very_basic_fields(cls, data: dict) -> dict:
         # extract only name, keyword, description and platform
@@ -264,7 +264,7 @@ class ConvertJsonToString:
             new_object["keyword"] = keywords
 
         return new_object
-            
+
     @classmethod
     def _extract_relevant_fields(cls, data: dict) -> dict:
         # basic fields to copy
@@ -284,41 +284,41 @@ class ConvertJsonToString:
             x = data.get(field_value, None)
             if x is not None and len(x) > 0:
                 new_object[field_value] = x
-        
+
         # description
         description = cls._get_description(data)
         if description is not None:
             new_object["description"] = description
-        
+
         # Distribution type data (fields: distribution, media)
         dist_relevant_fields = [
             "name", "description", "content_size_kb", "encoding_format"
-        ] 
+        ]
         for field_name in cls.orig_distrib_fields:
             field_value = data.get(field_name, None)
             if field_value is not None and len(field_value) > 0:
                 new_object[field_name] = []
-                
+
                 for dist in field_value:
                     new_dist = {
                         k: dist[k]
                         for k in dist_relevant_fields
-                        if k in dist                    
+                        if k in dist
                     }
-                    
+
                     if new_dist.get("content_size_kb", None) is not None:
                         size_kb = new_dist["content_size_kb"]
                         new_dist["content_size_mb"] = float(f"{(size_kb / 1024):.2f}")
                         new_dist["content_size_gb"] = float(f"{(size_kb / 1024**2):.2f}")
                     if new_dist != {}:
                         new_object[field_name].append(new_dist)
-                
+
         # Note
         notes = data.get("note", None)
         if notes is not None and len(notes) > 0:
             new_object["note"] = [
-                note["value"] 
-                for note in notes 
+                note["value"]
+                for note in notes
                 if "value" in note
             ]
 
@@ -334,7 +334,7 @@ class ConvertJsonToString:
         description = data.get("description", None)
         if description is None:
             return None
-        
+
         plain_descr = description.get("plain", None)
         html_descr = description.get("html", None)
 

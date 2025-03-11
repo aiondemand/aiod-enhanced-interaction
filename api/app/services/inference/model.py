@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import torch
-from app.config import settings
 from transformers.utils import logging
+
+from app.config import settings
 
 from .architecture import (
     Basic_EmbeddingModel,
@@ -23,14 +24,11 @@ class AiModel:
 
     def __init__(self, device: torch.device = "cpu") -> None:
         self.use_chunking = settings.MILVUS.STORE_CHUNKS
-        self.model = self.load_model(self.use_chunking, device)
+        self.model = AiModel.load_model(self.use_chunking, device)
 
-    def load_model(
-        self, use_chunking: bool, device: torch.device = "cpu"
-    ) -> EmbeddingModel:
-        transformer = SentenceTransformerToHF(
-            settings.MODEL_LOADPATH, trust_remote_code=True
-        )
+    @staticmethod
+    def load_model(use_chunking: bool, device: torch.device = "cpu") -> EmbeddingModel:
+        transformer = SentenceTransformerToHF(settings.MODEL_LOADPATH, trust_remote_code=True)
         text_splitter = TokenizerTextSplitter(
             transformer.tokenizer, chunk_size=512, chunk_overlap=0.25
         )
@@ -39,7 +37,7 @@ class AiModel:
             model = Hierarchical_EmbeddingModel(
                 transformer,
                 tokenizer=transformer.tokenizer,
-                token_pooling="none",
+                token_pooling="none",  # noqa: S106
                 chunk_pooling="none",
                 max_supported_chunks=11,
                 text_splitter=text_splitter,

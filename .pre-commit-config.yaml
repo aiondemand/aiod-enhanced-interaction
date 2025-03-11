@@ -1,16 +1,38 @@
 repos:
--   repo: https://github.com/psf/black
-    rev: 24.8.0
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0  # Use the ref you want to point at
     hooks:
-    - id: black
-      exclude: src
--   repo: https://github.com/pycqa/flake8
-    rev: 7.1.1
+      - id: no-commit-to-branch
+      - id: check-added-large-files
+      - id: check-illegal-windows-names
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: end-of-file-fixer
+      - id: check-executables-have-shebangs
+      - id: debug-statements
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.4
     hooks:
-    - id: flake8
-      exclude: src
--   repo: https://github.com/pycqa/isort
-    rev: 5.13.0
+      - id: codespell
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.7
     hooks:
-    - id: isort
-      exclude: src
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format
+  # TODO: Add mypy once all related issues are resolved
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: v0.991
+#    hooks:
+#      - id: mypy
+#        name: mypy api
+#        files: api/.*
+#        additional_dependencies:
+#          - pydantic
+#          - types-python-dateutil
+#          - types-pytz
+#          - types-requests
+#          - types-setuptools

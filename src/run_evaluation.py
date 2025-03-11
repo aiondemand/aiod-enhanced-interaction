@@ -16,7 +16,7 @@ from model.retrieval import EmbeddingModel_Pipeline, RAG_Pipeline
 
 
 def precision_evaluation(
-    model_names: list[str], process_text_types: list[str],    
+    model_names: list[str], process_text_types: list[str],
     heuristic_function: bool = False, topk: int = 10, chunk_embeddings: bool = False
 ) -> None:
     client = init()
@@ -31,7 +31,7 @@ def precision_evaluation(
 
     for model_name in model_names:
         for process_text_type in process_text_types:
-            asset_text_dirpath = f"./data/{process_text_type}-texts"        
+            asset_text_dirpath = f"./data/{process_text_type}-texts"
             folder_model_name = (
                 f"{model_name}--CHUNK_EMBEDS--{process_text_type}"
                 if chunk_embeddings
@@ -39,7 +39,7 @@ def precision_evaluation(
             )
 
             retrieval_system = load_retrieval_system(
-                model_name, store, topk, process_text_type, 
+                model_name, store, topk, process_text_type,
                 chunk_embeddings=chunk_embeddings
             )
             pipeline = PrecisionEvaluationPipeline(
@@ -74,7 +74,7 @@ def recall_evaluation(
             )
 
             retrieval_system = load_retrieval_system(
-                model_name, store, topk, process_text_type, 
+                model_name, store, topk, process_text_type,
                 chunk_embeddings=chunk_embeddings
             )
             pipeline = HitRateEvaluationPipeline(
@@ -87,7 +87,7 @@ def recall_evaluation(
                 metrics_dirpath=f"./data/results/hit_rate",
             )
             pipeline.execute()
-    
+
 
 # TODO we should move this somewhere else...
 def load_retrieval_system(
@@ -98,7 +98,7 @@ def load_retrieval_system(
         _, llm_name, embedding_model_name = model_name.split("-")
 
         llm = load_llm(ollama_name=llm_name if llm_name != "gpt_4o" else None)
-        embedding_model = load_embedding_model(embedding_model_name) 
+        embedding_model = load_embedding_model(embedding_model_name)
         collection_name = (
             f"chunk_embeddings-{embedding_model_name}-{process_text_type}-v0"
             if chunk_embeddings
@@ -113,7 +113,7 @@ def load_retrieval_system(
             )
 
         return RAG_Pipeline(
-            embedding_model, 
+            embedding_model,
             embedding_store,
             emb_collection_name=collection_name,
             document_collection_name="datasets",
@@ -137,11 +137,11 @@ def load_retrieval_system(
         )
 
     return EmbeddingModel_Pipeline(
-        embedding_model, embedding_store, topk=topk, 
+        embedding_model, embedding_store, topk=topk,
         emb_collection_name=collection_name
     )
-    
-        
+
+
 def load_embedding_model(model_name: str) -> EmbeddingModel:
     if model_name == "gte_large":
         return ModelSetup._setup_gte_large()
@@ -151,7 +151,7 @@ def load_embedding_model(model_name: str) -> EmbeddingModel:
         return ModelSetup._setup_multilingual_e5_large()
     if model_name == "bge_large":
         return ModelSetup._setup_bge_large()
-    
+
     raise ValueError("Unsupported model for evaluation")
 
 

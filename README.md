@@ -12,15 +12,15 @@ To properly set up this repository to be fully functional you need to perform th
     conda activate <env_name>
     pip install -r requirements.txt
 ```
-2. Create `.env` file based on `.env.sample` file containing all mandatory environment variables our scripts rely on. 
+2. Create `.env` file based on `.env.sample` file containing all mandatory environment variables our scripts rely on.
 Further replace the placeholder values with the correct valid values.
-3. Compute textual representations of the JSON objects and store them locally in the file system. 
+3. Compute textual representations of the JSON objects and store them locally in the file system.
 This can be achieved by executing `setup.py` file.
 ```
     python src/setup.py --collection=<name-of-document-collection> --outdir=<path-to-store-extracted-data> --function=<path-to-function-for-extracting-data>
 ```
 
-You can also create a new function for extracting relevant information out of AIoD objects and use it instead of a default extraction function. 
+You can also create a new function for extracting relevant information out of AIoD objects and use it instead of a default extraction function.
 Your newly provided extraction function needs to adhere to the following function signature: `def func(obj: dict) -> str`
 
 Default values for flags of src/setup.py file:
@@ -38,7 +38,7 @@ In the ChromaDB, vector database, we connect to when working on this project, we
 
 These collections contain the stringified JSONs of specified object types in their metadata attributes, and these collections could be considered as snapshots of AIoD database.
 
-For instance, ChromaDB collection `datasets` contains stringified JSONs of `Dataset` instances that individual end users of this repository can further build upon and create new 
+For instance, ChromaDB collection `datasets` contains stringified JSONs of `Dataset` instances that individual end users of this repository can further build upon and create new
 functions for extracting relevant information and converting it to textual representations. Subsequently, these representations are further fed into embedding models to create embeddings
 representing the textual content of AIoD objects.
 
@@ -49,7 +49,7 @@ We don't perform any semantic search on top of this type of collections.
 ```
 {
     id: doc_id          # original AIoD IDs
-    document: None      # this field is empty 
+    document: None      # this field is empty
     embeddings: [0]     # placeholder, dummy embeddings
     metadata: {
         "json_string": stringified JSONs of AIoD objects
@@ -91,7 +91,7 @@ In this section, we can find descriptions of tasks we want to perform in efforts
 
 ### Semantic search
 
-Based on user specified query, we want to find the assets that are the most similar to the query in an embedding space. 
+Based on user specified query, we want to find the assets that are the most similar to the query in an embedding space.
 The embedding space itself can be built by choosing a specific information extraction function and an embedding model.
 
 To create new embeddings, execute code found in `src/embed.py` file.

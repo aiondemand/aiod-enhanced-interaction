@@ -12,7 +12,7 @@ import utils
 
 
 def store_embeddings_wrapper(
-    model_names: list[str], process_text_types: list[str], 
+    model_names: list[str], process_text_types: list[str],
     chunk_embeddings: bool = False
 ) -> None:
     client = utils.init()
@@ -26,7 +26,7 @@ def store_embeddings_wrapper(
             "chunk_embeddings_{model_name}_{text_type}"
             if chunk_embeddings
             else "embeddings_{model_name}_{text_type}"
-        )   
+        )
 
     loader_kwargs = {
         "num_workers": 1
@@ -47,7 +47,7 @@ def store_embeddings_wrapper(
             loader_kwargs["batch_size"] = 32
         else:
             raise ValueError("Unsupported model for evaluation")
-        
+
         # TODO I reduced the computational requirements...
         loader_kwargs["num_workers"] = 0
         loader_kwargs["batch_size"] = 2
@@ -59,9 +59,9 @@ def store_embeddings_wrapper(
               text_type=process_text_type
             )
             store_embeddings(
-                embedding_model, 
+                embedding_model,
                 client,
-                text_dirpath=text_dirpath, 
+                text_dirpath=text_dirpath,
                 collection_name=collection_name,
                 chunk_embeddings=chunk_embeddings,
                 loader_kwargs=loader_kwargs,
@@ -70,7 +70,7 @@ def store_embeddings_wrapper(
 
 
 def store_embeddings(
-    model: EmbeddingModel, client: VectorDbClient, text_dirpath: str, 
+    model: EmbeddingModel, client: VectorDbClient, text_dirpath: str,
     collection_name: str, chunk_embeddings: bool = False,
     loader_kwargs: dict | None = None, emb_dimensionality: int | None = None
 ) -> None:
@@ -82,7 +82,7 @@ def store_embeddings(
         store = Chroma_EmbeddingStore(client, chunk_embedding_store=chunk_embeddings, verbose=True)
     elif type(client) == MilvusClient:
         store = Milvus_EmbeddingStore(
-            client, emb_dimensionality=emb_dimensionality, 
+            client, emb_dimensionality=emb_dimensionality,
             chunk_embedding_store=chunk_embeddings, verbose=True
         )
     else:
@@ -110,7 +110,7 @@ def store_embeddings(
 
 
 if __name__ == "__main__":
-    process_text_types = ["relevant"] 
+    process_text_types = ["relevant"]
     model_names = ["gte_large_hierarchical"]
 
     store_embeddings_wrapper(model_names, process_text_types, chunk_embeddings=True)

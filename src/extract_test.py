@@ -17,7 +17,7 @@ def save_text_data(json_dirpath: str, savedir: str) -> None:
     os.makedirs(savedir, exist_ok=True)
     with open(json_dirpath) as f:
         json_data = json.load(f)
-    
+
     extracted_texts = [
         ConvertJsonToString.extract_relevant_info(x, stringify=False) for x in json_data
     ]
@@ -28,7 +28,7 @@ def save_text_data(json_dirpath: str, savedir: str) -> None:
             f.write(text)
 
 
-if __name__ == "__main__":        
+if __name__ == "__main__":
     client = utils.init()
 
     json_dirpath = "./temp/data_examples/huggingface.json"
@@ -43,8 +43,8 @@ if __name__ == "__main__":
     loader = ds.build_loader(loader_kwargs={"batch_size": 2, "num_workers": 0})
 
     store = Milvus_EmbeddingStore(
-        client, emb_dimensionality=1024, 
-        chunk_embedding_store=True, 
+        client, emb_dimensionality=1024,
+        chunk_embedding_store=True,
         extract_metadata=True,
         verbose=True
     )
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     llm_chain = LLM_MetadataExtractor.build_chain(llm=load_llm(), parsing_user_query=False)
     llm_extractor = LLM_MetadataExtractor(
         chain=llm_chain,
-        asset_type="dataset", 
+        asset_type="dataset",
         parsing_user_query=False,
     )
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     llm_chain_user_query = LLM_MetadataExtractor.build_chain(llm=load_llm(), parsing_user_query=True)
     extract_conditions_llm = LLM_MetadataExtractor(
         chain=llm_chain_user_query,
-        asset_type="dataset", 
+        asset_type="dataset",
         parsing_user_query=True,
     )
 
@@ -85,4 +85,3 @@ if __name__ == "__main__":
         embedding_model, query_loader, emb_collection_name=collection_name,
         extract_conditions_llm=extract_conditions_llm
     )
-    

@@ -21,17 +21,17 @@ class HideOutput:
         self.devnull = open(os.devnull, 'w')
         sys.stdout = self.devnull
         sys.stderr = self.devnull
-        
+
     def __exit__(self, exc_type, exc_value, traceback):
         sys.stderr = self.stderr
         sys.stdout = self.stdout
         self.devnull.close()
 
 
-def connect_to_chroma() -> ChromaClient:    
+def connect_to_chroma() -> ChromaClient:
     try:
         client = chromadb.HttpClient(
-            host=os.environ.get("CHROMA_HOST"), 
+            host=os.environ.get("CHROMA_HOST"),
             port=os.environ.get("CHROMA_PORT"),
             settings=Settings(
                 chroma_client_auth_provider=CHROMA_CLIENT_AUTH_PROVIDER,
@@ -41,9 +41,9 @@ def connect_to_chroma() -> ChromaClient:
     except Exception as e:
         print("Failed to connect to the ChromaDB.")
         raise e
-    
+
     return client
-    
+
 
 def connect_to_milvus() -> MilvusClient:
     try:
@@ -51,11 +51,11 @@ def connect_to_milvus() -> MilvusClient:
         client = MilvusClient(
             uri=os.environ.get("MILVUS_URI"),
             token=milvus_token
-        ) 
+        )
     except Exception as e:
         print("Failed to connect to the MilvusDB.")
         raise e
-    
+
     return client
 
 
@@ -64,13 +64,13 @@ def get_device() -> torch.device:
 
 
 def init(
-    return_db_client: bool = True, 
+    return_db_client: bool = True,
     vector_db_to_use: Literal["chroma", "milvus", "env"] = "env"
 ) -> None | VectorDbClient:
     """
     Initialize all the env vars and randomness mechanisms for reproducibility reasons
     """
-    os.environ["TOKENIZERS_PARALLELISM"] = "false" 
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.set_float32_matmul_precision('medium')
     no_randomness(seed=0)
@@ -94,7 +94,7 @@ def no_randomness(seed: int = 0) -> None:
 
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark=False
-    
+
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)

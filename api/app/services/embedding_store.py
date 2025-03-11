@@ -7,14 +7,15 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from app.config import settings
-from app.schemas.enums import AssetType
-from app.schemas.search_results import SearchResults
-from app.services.inference.model import AiModel
 from pymilvus import DataType, MilvusClient
 from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from app.config import settings
+from app.schemas.enums import AssetType
+from app.schemas.search_results import SearchResults
+from app.services.inference.model import AiModel
 
 
 class EmbeddingStore(ABC):
@@ -48,7 +49,7 @@ class EmbeddingStore(ABC):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        query_embeddings: list[list[float]] = None,
+        query_embeddings: list[list[float]] | None = None,
     ) -> SearchResults:
         pass
 
@@ -71,14 +72,15 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client = None
+        self.client: MilvusClient | None = None
 
+    @staticmethod
     async def init() -> MilvusEmbeddingStore:
         obj = MilvusEmbeddingStore()
         await obj.init_connection()
         return obj
 
-    async def init_connection(self) -> None:
+    async def init_connection(self) -> bool:
         for _ in range(5):
             try:
                 self.client = MilvusClient(
@@ -86,9 +88,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
                 )
                 return True
             except Exception:
-                logging.warning(
-                    "Failed to connect to Milvus vector database. Retrying..."
-                )
+                logging.warning("Failed to connect to Milvus vector database. Retrying...")
                 await asyncio.sleep(5)
         else:
             err_msg = "Connection to Milvus vector database has not been established"
@@ -116,9 +116,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
                         "date_published", DataType.VARCHAR, max_length=22, nullable=True
                     )
                     schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
-                    schema.add_field(
-                        "license", DataType.VARCHAR, max_length=20, nullable=True
-                    )
+                    schema.add_field("license", DataType.VARCHAR, max_length=20, nullable=True)
 
                     schema.add_field(
                         "task_types",
@@ -136,12 +134,8 @@ class MilvusEmbeddingStore(EmbeddingStore):
                         max_capacity=200,
                         nullable=True,
                     )
-                    schema.add_field(
-                        "datapoints_upper_bound", DataType.INT64, nullable=True
-                    )
-                    schema.add_field(
-                        "datapoints_lower_bound", DataType.INT64, nullable=True
-                    )
+                    schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
+                    schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
             schema.verify()
 
@@ -181,6 +175,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         loader: DataLoader,
         asset_type: AssetType,
         milvus_batch_size: int = 50,
+        **kwargs,
     ) -> int:
         collection_name = self.get_collection_name(asset_type)
         self._create_collection(asset_type)
@@ -206,13 +201,11 @@ class MilvusEmbeddingStore(EmbeddingStore):
             if len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1:
                 data = [
                     {"vector": emb, "doc_id": doc_id, **meta}
-                    for emb, doc_id, meta in zip(
-                        all_embeddings, all_doc_ids, all_metadata
-                    )
+                    for emb, doc_id, meta in zip(all_embeddings, all_doc_ids, all_metadata)
                 ]
-                total_inserted += self.client.insert(
-                    collection_name=collection_name, data=data
-                )["insert_count"]
+                total_inserted += self.client.insert(collection_name=collection_name, data=data)[
+                    "insert_count"
+                ]
 
                 all_embeddings = []
                 all_doc_ids = []
@@ -223,9 +216,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
         collection_name = self.get_collection_name(asset_type)
 
-        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")[
-            "delete_count"
-        ]
+        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")["delete_count"]
 
     def retrieve_topk_document_ids(
         self,
@@ -234,19 +225,17 @@ class MilvusEmbeddingStore(EmbeddingStore):
         query_text: str | None = None,
         topk: int = 10,
         filter: str = "",
-        query_embeddings: list[float] | None = None,
+        query_embeddings: list[list[float]] | None = None,
     ) -> SearchResults:
         collection_name = self.get_collection_name(asset_type)
 
         if self.client.has_collection(collection_name) is False:
-            raise ValueError(f"Collection '{collection_name}' doesnt exist")
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         self.client.load_collection(collection_name)
 
         if query_embeddings is None:
             if query_text is None:
-                raise ValueError(
-                    "Either query_text or precomputed_embedding must be provided."
-                )
+                raise ValueError("Either query_text or precomputed_embedding must be provided.")
             query_embeddings = model.compute_query_embeddings(query_text)
 
         query_results = list(

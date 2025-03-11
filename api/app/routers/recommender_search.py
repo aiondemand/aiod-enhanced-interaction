@@ -1,6 +1,9 @@
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
+
 from app.config import settings
 from app.models.query import RecommenderUserQuery
 from app.routers.sem_search import (
@@ -11,8 +14,6 @@ from app.routers.sem_search import (
 from app.schemas.enums import AssetType
 from app.schemas.query import RecommenderUserQueryResponse
 from app.services.database import Database
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
@@ -23,9 +24,7 @@ async def submit_recommender_query(
     asset_id: int = Query(..., description="Asset ID"),
     asset_type: AssetType = Query(..., description="Asset type"),
     output_asset_type: AssetType = Query(..., description="Output Asset type"),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of similar assets to return"
-    ),
+    topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
 ) -> RedirectResponse:
     query_id = await _submit_recommender_query(
         database, asset_id, asset_type, output_asset_type, topk

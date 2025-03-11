@@ -13,10 +13,10 @@ def parse_function_string(function_str: str) -> Callable[[dict], str]:
     module_names, function_name = (
         str_parts[:-1], str_parts[-1]
     )
-    if len(module_names) == 0: 
+    if len(module_names) == 0:
         # "func"
         return globals()[function_name]
-    
+
     certain_module_names, maybe_class_name = module_names[:-1], module_names[-1]
     if len(certain_module_names) == 0:
         # "(mod|clz).func"
@@ -37,8 +37,8 @@ def parse_function_string(function_str: str) -> Callable[[dict], str]:
             certain_module_names + [maybe_class_name]
         ))
         return getattr(module, function_name)
-    
-    
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--outdir', type=str, default="temp/texts", help='Path to the output directory we want to store processed objects in')
     parser.add_argument(
         '-f', '--function', type=str, default="preprocess.text_operations.ConvertJsonToString.extract_relevant_info",
-        help='Path to a Python function we want to use to process objects and compute textual representations.' + 
+        help='Path to a Python function we want to use to process objects and compute textual representations.' +
         'The function adheres to the following signature: def func(obj: dict) -> str'
     )
     args = parser.parse_args()
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     client = init()
     process_documents_and_store_to_filesystem(
-        client, 
+        client,
         collection_name=args.collection,
         savedir=args.outdir,
         extraction_function=extract_func

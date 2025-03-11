@@ -1,6 +1,9 @@
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, Path, Query
+from fastapi.responses import RedirectResponse
+
 from app.models.query import SimpleUserQuery
 from app.routers.sem_search import (
     get_query_results,
@@ -10,8 +13,6 @@ from app.routers.sem_search import (
 from app.schemas.enums import AssetType
 from app.schemas.query import SimpleUserQueryResponse
 from app.services.database import Database
-from fastapi import APIRouter, Depends, Path, Query
-from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
@@ -19,13 +20,9 @@ router = APIRouter()
 @router.post("")
 async def submit_simple_query(
     database: Annotated[Database, Depends(Database)],
-    search_query: str = Query(
-        ..., max_length=200, min_length=1, description="User search query"
-    ),
+    search_query: str = Query(..., max_length=200, min_length=1, description="User search query"),
     asset_type: AssetType = Query(..., description="Asset type"),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of assets to return"
-    ),
+    topk: int = Query(default=10, gt=0, le=100, description="Number of assets to return"),
 ) -> RedirectResponse:
     query_id = await _sumbit_simple_query(database, search_query, asset_type, topk=topk)
     return RedirectResponse(f"/query/{query_id}/result", status_code=202)

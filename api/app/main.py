@@ -4,6 +4,11 @@ from functools import partial
 from threading import Thread
 from time import sleep
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
@@ -17,10 +22,6 @@ from app.services.threads.milvus_gc_thread import (
     delete_embeddings_of_aiod_assets_wrapper,
 )
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
@@ -37,9 +38,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
-app.include_router(
-    recommender_router.router, prefix="/recommender", tags=["recommender_query"]
-)
+app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
 if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(
         filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
@@ -55,9 +54,7 @@ app.add_middleware(
 
 
 def setup_logger():
-    format_string = (
-        "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
-    )
+    format_string = "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
     logging.basicConfig(
         level=logging.INFO,
         format=format_string,
@@ -82,9 +79,7 @@ def app_init() -> None:
     SCHEDULER.add_job(
         partial(
             threads.run_async_in_thread,
-            target_func=partial(
-                compute_embeddings_for_aiod_assets_wrapper, first_invocation=False
-            ),
+            target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=False),
         ),
         # Warning: We should not set the interval of recurring updates to a smaller
         # timespan than one day, otherwise some assets may be missed
@@ -104,20 +99,22 @@ def app_init() -> None:
     # Immediate computation of AIoD asset embeddings
     global IMMEDIATE_EMB_THREAD
     IMMEDIATE_EMB_THREAD = threads.start_async_thread(
-        target_func=partial(
-            compute_embeddings_for_aiod_assets_wrapper, first_invocation=True
-        )
+        target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=True)
     )
 
 
 def app_shutdown() -> None:
-    QUERY_QUEUE.put((None, None))
-    QUERY_THREAD.join(timeout=5)
-    IMMEDIATE_EMB_THREAD.join(timeout=5)
-    SCHEDULER.shutdown(wait=False)
+    if QUERY_QUEUE:
+        QUERY_QUEUE.put((None, None))
+    if QUERY_THREAD:
+        QUERY_THREAD.join(timeout=5)
+    if IMMEDIATE_EMB_THREAD:
+        IMMEDIATE_EMB_THREAD.join(timeout=5)
+    if SCHEDULER:
+        SCHEDULER.shutdown(wait=False)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, port=8000, host="0.0.0.0")
+    uvicorn.run(app, port=8000, host="localhost")
