@@ -1,5 +1,6 @@
 import gc
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 from functools import partial
@@ -21,6 +22,8 @@ from app.services.inference.text_operations import (
 )
 from torch.utils.data import DataLoader
 
+from api.app.services.resilience import LocalServiceUnavailableException
+
 job_lock = threading.Lock()
 
 
@@ -35,9 +38,17 @@ async def compute_embeddings_for_aiod_assets_wrapper(
                 else "[RECURRING UPDATE] Scheduled task for computing asset embeddings has started"
             )
             logging.info(log_msg)
+
+            model = AiModel(device=AiModel.get_device())
             await compute_embeddings_for_aiod_assets(first_invocation)
             logging.info("Scheduled task for computing asset embeddings has ended.")
         finally:
+            # GPU memory cleanup
+            model.to_device("cpu")
+            del model
+            torch.cuda.empty_cache()
+            gc.collect()
+
             job_lock.release()
     else:
         logging.info(
@@ -45,42 +56,31 @@ async def compute_embeddings_for_aiod_assets_wrapper(
         )
 
 
-async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
-    model = AiModel(device=AiModel.get_device())
+async def compute_embeddings_for_aiod_assets(
+    model: AiModel, first_invocation: bool
+) -> None:
     database = Database()
-    embedding_store = await MilvusEmbeddingStore.init()
+    embedding_store = MilvusEmbeddingStore()
 
-    try:
-        asset_types = settings.AIOD.ASSET_TYPES
-        for asset_type in asset_types:
-            logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
+    asset_types = settings.AIOD.ASSET_TYPES
+    for asset_type in asset_types:
+        asset_collection = fetch_asset_collection(
+            database, asset_type, first_invocation
+        )
+        if asset_collection is None:
+            continue
 
-            asset_collection = database.get_first_asset_collection_by_type(asset_type)
-            if asset_collection is None:
-                # DB setup
-                asset_collection = AssetCollection(aiod_asset_type=asset_type)
-                database.insert(asset_collection)
-            elif asset_collection.last_update.finished and first_invocation is False:
-                # Create a new recurring DB update
-                asset_collection.add_recurring_update()
-                database.upsert(asset_collection)
-            elif asset_collection.last_update.finished:
-                # The last DB update was sucessful, we skip this asset in the
-                # first invocation
-                continue
-            else:
-                # The last DB update has not been finished yet, lets continue with
-                # that one...
-                pass
+        extract_metadata_func = None
+        meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+        if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
+            extract_metadata_func = partial(
+                HuggingFaceDatasetExtractMetadata.extract_huggingface_dataset_metadata,
+                asset_type=asset_type,
+            )
 
-            extract_metadata_func = None
-            meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-            if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
-                extract_metadata_func = partial(
-                    HuggingFaceDatasetExtractMetadata.extract_huggingface_dataset_metadata,
-                    asset_type=asset_type,
-                )
+        logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
+        try:
             process_aiod_assets_wrapper(
                 model=model,
                 stringify_function=partial(
@@ -92,11 +92,45 @@ async def compute_embeddings_for_aiod_assets(first_invocation: bool) -> None:
                 asset_collection=asset_collection,
                 asset_type=asset_type,
             )
-    finally:
-        model.to_device("cpu")
-        del model
-        torch.cuda.empty_cache()
-        gc.collect()
+        except LocalServiceUnavailableException as e:
+            logging.error(e)
+            logging.error(
+                "The above error has been encountered in the embedding thread. "
+                + "Entire Application is being terminated now"
+            )
+            os._exit(1)
+        except Exception as e:
+            # We don't wish to shutdown the application unless Milvus or Ollama is down
+            # If we cannot reach AIoD, we can just skip the embedding process for that day
+            logging.error(e)
+            logging.error(
+                "The above error has been encountered in the embedding thread."
+            )
+
+
+def fetch_asset_collection(
+    database: Database, asset_type: AssetType, first_invocation: bool
+) -> AssetCollection | None:
+    asset_collection = database.get_first_asset_collection_by_type(asset_type)
+
+    if asset_collection is None:
+        # DB setup
+        asset_collection = AssetCollection(aiod_asset_type=asset_type)
+        database.insert(asset_collection)
+    elif asset_collection.last_update.finished and first_invocation is False:
+        # Create a new recurring DB update
+        asset_collection.add_recurring_update()
+        database.upsert(asset_collection)
+    elif asset_collection.last_update.finished:
+        # The last DB update was sucessful, we skip this asset in the
+        # first invocation
+        return None
+    else:
+        # The last DB update has not been finished yet, lets continue with
+        # that one...
+        pass
+
+    return asset_collection
 
 
 def process_aiod_assets_wrapper(

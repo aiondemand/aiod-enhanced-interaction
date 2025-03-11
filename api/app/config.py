@@ -23,6 +23,7 @@ class MilvusConfig(BaseModel):
     BATCH_SIZE: int = Field(500, gt=0)
     STORE_CHUNKS: bool = Field(True)
     EXTRACT_METADATA: bool = Field(False)
+    TIMEOUT: int = Field(60, gt=0)
 
     @field_validator("COLLECTION_PREFIX", mode="before")
     @classmethod
@@ -52,6 +53,7 @@ class OllamaConfig(BaseModel):
     MODEL_NAME: str = Field("llama3.1:8b", max_length=50)
     NUM_PREDICT: int = Field(1_024, gt=0)
     NUM_CTX: int = Field(4_096, gt=0)
+    TIMEOUT: int = Field(60, gt=0)
 
 
 class AIoDConfig(BaseModel):
@@ -125,6 +127,8 @@ class Settings(BaseSettings):
     TINYDB_FILEPATH: Path = Field(...)
     MODEL_LOADPATH: str = Field(...)
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
+    RETRY_RETRIES: int = Field(5, gt=0)
+    RETRY_SLEEP_TIME: int = Field(30, gt=0)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod

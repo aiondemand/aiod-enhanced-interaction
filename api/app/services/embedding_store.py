@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import logging
+import os
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from functools import partial
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,8 @@ from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
-from pymilvus import DataType, MilvusClient
+from app.services.resilience import with_retry_sync
+from pymilvus import DataType, MilvusClient, MilvusUnavailableException
 from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -59,6 +61,21 @@ class EmbeddingStore(ABC):
         pass
 
 
+class MilvusClientResilientWrapper(MilvusClient):
+    def __init__(self, uri: str, token: str | None = None) -> None:
+        super().__init__(uri=uri, token=token)
+        self.timeout = settings.MILVUS.TIMEOUT
+
+    def __getattribute__(self, name: str) -> Any:
+        func = super().__getattribute__(name)
+
+        if not callable(func) or name.startswith("__"):
+            return func
+        return with_retry_sync(exception_cls=MilvusUnavailableException)(
+            partial(func, timeout=self.timeout)
+        )
+
+
 class MilvusEmbeddingStore(EmbeddingStore):
     # TODO
     # In the future we should pass an embedding_dim as an argument
@@ -71,29 +88,14 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client = None
-
-    async def init() -> MilvusEmbeddingStore:
-        obj = MilvusEmbeddingStore()
-        await obj.init_connection()
-        return obj
-
-    async def init_connection(self) -> None:
-        for _ in range(5):
-            try:
-                self.client = MilvusClient(
-                    uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN
-                )
-                return True
-            except Exception:
-                logging.warning(
-                    "Failed to connect to Milvus vector database. Retrying..."
-                )
-                await asyncio.sleep(5)
-        else:
-            err_msg = "Connection to Milvus vector database has not been established"
-            logging.error(err_msg)
-            raise ValueError(err_msg)
+        try:
+            self.client = MilvusClientResilientWrapper(
+                uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN
+            )
+        except MilvusUnavailableException as e:
+            logging.error(e)
+            logging.error("Milvus is unavailable. Application is being terminated now")
+            os._exit(1)
 
     def get_collection_name(self, asset_type: AssetType) -> str:
         return f"{settings.MILVUS.COLLECTION_PREFIX}_{asset_type.value}"
