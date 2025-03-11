@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from functools import partial
@@ -71,7 +70,7 @@ def app_init() -> None:
     Database()
 
     global QUERY_THREAD
-    QUERY_THREAD = threads.start_async_thread(lambda: asyncio.run(search_thread()))
+    QUERY_THREAD = threads.start_async_thread(search_thread)
 
     global SCHEDULER
     SCHEDULER = BackgroundScheduler()
