@@ -1,6 +1,6 @@
 import logging
-import time
-from functools import partial, wraps
+from functools import wraps
+from time import sleep
 from typing import Any, Callable, Type, TypeVar
 
 from app.config import settings
@@ -40,7 +40,9 @@ T = TypeVar("T")
 
 
 def with_retry_sync(
-    exception_cls: Type[ServiceUnavailableException] = ServiceUnavailableException,
+    output_exception_cls: Type[
+        ServiceUnavailableException
+    ] = ServiceUnavailableException,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
@@ -59,33 +61,12 @@ def with_retry_sync(
                         f"Function '{func}' failed (attempt {attempt + 1}/{max_retries}): {str(e)}"
                     )
                     if attempt < max_retries - 1:
-                        time.sleep(sleep_time)
+                        sleep(sleep_time)
 
-            raise exception_cls(
-                f"{exception_cls.__name__}: Service appears to be down or unresponsive after {max_retries} attempts. Last error: {str(last_exception)}"
+            raise output_exception_cls(
+                f"{output_exception_cls.__name__}: Service appears to be down or unresponsive after {max_retries} attempts. Last error: {str(last_exception)}"
             )
 
         return wrapper
 
     return decorator
-
-
-# TODO incorporate it into Ollama and LLM invocations
-class OllamaClientResilientWrapper:
-    def __init__(self, uri: str | None = None) -> None:
-        self.uri = uri
-        self.timeout = settings.OLLAMA.TIMEOUT
-
-    def __getattribute__(self, name: str) -> Any:
-        try:
-            func = super().__getattribute__(name)
-        except AttributeError:
-            return None
-
-        if not callable(func) or name.startswith("__"):
-            return func
-
-        # TODO there may be no timeout argument in the function
-        return with_retry_sync(exception_cls=OllamaUnavailableException)(
-            partial(func, timeout=self.timeout)
-        )

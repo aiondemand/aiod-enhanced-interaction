@@ -9,9 +9,8 @@ from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
 from app.services.aiod import check_aiod_document
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.resilience import MilvusUnavailableException
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
-
-from api.app.services.resilience import MilvusUnavailableException
 
 job_lock = threading.Lock()
 

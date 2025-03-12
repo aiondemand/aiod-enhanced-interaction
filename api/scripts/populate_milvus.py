@@ -1,7 +1,6 @@
 import json
 import os
 from argparse import ArgumentParser
-from time import sleep
 
 import numpy as np
 from pydantic import BaseModel, field_validator
@@ -29,7 +28,6 @@ def populate_database(args: InputArgs) -> None:
     if os.path.exists(args.input_dirpath) is False:
         exit(1)
 
-    sleep(10)  # Headstart for Milvus to fully initialize
     client = MilvusClient(uri=args.uri, user=args.username, password=args.password)
 
     for collection_name in sorted(os.listdir(args.input_dirpath)):

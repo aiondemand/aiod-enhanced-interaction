@@ -2,7 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 from functools import partial
 from threading import Thread
-from time import sleep
 
 from app.config import settings
 from app.routers import filtered_sem_search as filtered_query_router
@@ -36,6 +35,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
+
+@app.get("/health", tags=["healthcheck"])
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(
     recommender_router.router, prefix="/recommender", tags=["recommender_query"]
@@ -66,7 +71,6 @@ def setup_logger():
 
 
 def app_init() -> None:
-    sleep(10)  # Headstart for Milvus to fully initialize
     setup_logger()
 
     # Instantiate singletons before utilizing them in other threads

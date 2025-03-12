@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from ast import literal_eval
@@ -11,6 +12,7 @@ from app.config import settings
 from app.models.filter import Filter
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import AssetType
+from app.services.resilience import OllamaUnavailableException, with_retry_sync
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import (
@@ -22,6 +24,9 @@ from langchain_core.runnables import RunnableLambda, RunnableSequence
 from langchain_ollama import ChatOllama
 from ollama import Client as OllamaClient
 from pydantic import BaseModel, Field, ValidationError, field_validator
+
+# TODO refactor code to consolidate logic of LLM invocations into one service, one class
+# That class then can be extended with the resilience wrapper
 
 
 # Classes pertaining to the first stage of user query parsing
@@ -73,15 +78,20 @@ class PrepareLLM:
         ollama_uri = str(settings.OLLAMA.URI)
         model_name = settings.OLLAMA.MODEL_NAME
 
-        client = OllamaClient(host=ollama_uri)
-        client.pull(model_name)
+        try:
+            client = OllamaClient(host=ollama_uri)
+            client.pull(model_name)
 
-        return ChatOllama(
-            model=model_name,
-            num_predict=settings.OLLAMA.NUM_PREDICT,
-            num_ctx=settings.OLLAMA.NUM_CTX,
-            base_url=ollama_uri,
-        )
+            return ChatOllama(
+                model=model_name,
+                num_predict=settings.OLLAMA.NUM_PREDICT,
+                num_ctx=settings.OLLAMA.NUM_CTX,
+                base_url=ollama_uri,
+            )
+        except Exception as e:
+            logging.error(e)
+            logging.error("Ollama is unavailable. Application is being terminated now")
+            os._exit(1)
 
 
 class LlamaManualFunctionCalling:
@@ -228,6 +238,11 @@ class UserQueryParsing:
     _DEFAULT_PATH_TO_STAGE_1_ = Path(
         "api/data/fewshot_examples/user_query_stage1/datasets.json"
     )
+
+    @staticmethod
+    @with_retry_sync(output_exception_cls=OllamaUnavailableException)
+    def invoke_with_resilience(chain: RunnableSequence, input: dict) -> Any:
+        return chain.invoke(input)
 
     @classmethod
     def get_db_translator_func(
@@ -713,8 +728,12 @@ class UserQueryParsingStages:
         simple_model_schema = cls.prepare_simplified_model_schema_stage_1(asset_schema)
 
         for _ in range(num_retry_attempts):
-            output = chain.invoke(
-                {"query": input["query"], "model_schema": simple_model_schema}
+            output = UserQueryParsing.invoke_with_resilience(
+                chain,
+                input={
+                    "query": input["query"],
+                    "model_schema": simple_model_schema,
+                },
             )
             if output is None:
                 continue
@@ -790,7 +809,7 @@ class UserQueryParsingStages:
         )
 
         for _ in range(num_retry_attempts):
-            output = chain.invoke(input)
+            output = UserQueryParsing.invoke_with_resilience(chain, input)
             if output is None:
                 continue
             if is_valid_wrapper_class(output):
@@ -848,7 +867,7 @@ class UserQueryParsingStages:
         cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
     ) -> dict | None:
         for _ in range(num_retry_attempts):
-            output = chain.invoke(input)
+            output = UserQueryParsing.invoke_with_resilience(chain, input)
             if output is None:
                 continue
             try:

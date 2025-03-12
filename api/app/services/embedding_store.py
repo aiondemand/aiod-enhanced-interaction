@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -64,16 +65,15 @@ class EmbeddingStore(ABC):
 class MilvusClientResilientWrapper(MilvusClient):
     def __init__(self, uri: str, token: str | None = None) -> None:
         super().__init__(uri=uri, token=token)
-        self.timeout = settings.MILVUS.TIMEOUT
 
     def __getattribute__(self, name: str) -> Any:
-        func = super().__getattribute__(name)
+        attr = super().__getattribute__(name)
 
-        if not callable(func) or name.startswith("__"):
-            return func
-        return with_retry_sync(exception_cls=MilvusUnavailableException)(
-            partial(func, timeout=self.timeout)
-        )
+        if not callable(attr) or name.startswith("__"):
+            return attr
+        if "timeout" in inspect.signature(attr).parameters:
+            attr = partial(attr, timeout=settings.MILVUS.TIMEOUT)
+        return with_retry_sync(output_exception_cls=MilvusUnavailableException)(attr)
 
 
 class MilvusEmbeddingStore(EmbeddingStore):
@@ -92,7 +92,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
             self.client = MilvusClientResilientWrapper(
                 uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN
             )
-        except MilvusUnavailableException as e:
+        except Exception as e:
             logging.error(e)
             logging.error("Milvus is unavailable. Application is being terminated now")
             os._exit(1)

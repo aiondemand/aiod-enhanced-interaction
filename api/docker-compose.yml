@@ -19,7 +19,6 @@ services:
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
     ports:
       - "${APP_HOST_PORT}:80"
-    restart: always
     depends_on:
       milvus-standalone:
         condition: service_healthy
@@ -27,7 +26,14 @@ services:
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
-  
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 90s
+    restart: always
+
   # Milvus services
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.16

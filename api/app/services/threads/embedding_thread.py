@@ -20,9 +20,8 @@ from app.services.inference.text_operations import (
     ConvertJsonToString,
     HuggingFaceDatasetExtractMetadata,
 )
+from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
-
-from api.app.services.resilience import LocalServiceUnavailableException
 
 job_lock = threading.Lock()
 
@@ -40,7 +39,7 @@ async def compute_embeddings_for_aiod_assets_wrapper(
             logging.info(log_msg)
 
             model = AiModel(device=AiModel.get_device())
-            await compute_embeddings_for_aiod_assets(first_invocation)
+            await compute_embeddings_for_aiod_assets(model, first_invocation)
             logging.info("Scheduled task for computing asset embeddings has ended.")
         finally:
             # GPU memory cleanup

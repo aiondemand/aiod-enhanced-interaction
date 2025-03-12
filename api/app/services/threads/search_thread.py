@@ -22,9 +22,8 @@ from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
+from app.services.resilience import LocalServiceUnavailableException
 from tinydb import Query
-
-from api.app.services.resilience import LocalServiceUnavailableException
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 

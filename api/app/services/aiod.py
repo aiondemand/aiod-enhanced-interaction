@@ -6,8 +6,12 @@ import requests
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
+from app.services.resilience import AIoDUnavailableException
 from requests import Response
 from requests.exceptions import HTTPError, Timeout
+
+# TODO Represent the AIoD communication as a AsyncClientWrapper (similar to how it's employed in RAIL)
+# once we try to make our app more asynchronous
 
 
 def recursive_aiod_asset_fetch(
@@ -84,25 +88,32 @@ def _build_aiod_url_queries(url_params: RequestParams) -> dict:
 def perform_url_request(
     url: str,
     params: dict | None = None,
-    num_retries: int = 3,
-    connection_timeout_sec: int = 30,
+    num_retries: int | None = None,
+    sleep_time: int | None = None,
 ) -> Response:
     # timeout based on the size of the requested response
     # 1000 assets == additional 1 minute of timeout
-    limit = 0 if params is None else params.get("limit", 0)
-    request_timeout = connection_timeout_sec + int(limit * 0.06)
+    num_retries = num_retries if num_retries is not None else settings.RETRY_RETRIES
+    sleep_time = sleep_time if sleep_time is not None else settings.RETRY_SLEEP_TIME
 
-    for _ in range(num_retries):
+    # TODO later we wish to consolidate this logic with the general decorator found in resilience.py
+    limit = 0 if params is None else params.get("limit", 0)
+    request_timeout = sleep_time + int(limit * 0.06)
+
+    last_exception = None
+    for attempt in range(num_retries):
         try:
             response = requests.get(url, params, timeout=request_timeout)
             response.raise_for_status()
             return response
-        except Timeout:
-            logging.warning("AIoD endpoints are unresponsive. Retrying...")
-            sleep(connection_timeout_sec)
+        except Timeout as e:
+            last_exception = e
+            logging.warning(
+                f"AIoD endpoints are unresponsive. Retrying... (attempt {attempt + 1}/{num_retries}): {str(e)}"
+            )
+            if attempt < num_retries - 1:
+                sleep(sleep_time)
 
-    # This exception will be only raised if we encounter exception
-    # Timeout (ReadTimeout / ConnectionTimeout) consecutively for multiple times
-    err_msg = "We couldn't connect to AIoD API"
-    logging.error(err_msg)
-    raise ValueError(err_msg)
+    raise AIoDUnavailableException(
+        f"{AIoDUnavailableException.__name__}: Service appears to be down or unresponsive after {num_retries} attempts. Last error: {str(last_exception)}"
+    )
