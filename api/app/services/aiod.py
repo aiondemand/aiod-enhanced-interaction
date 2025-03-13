@@ -5,7 +5,7 @@ from time import sleep
 import requests
 from app.config import settings
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 from requests import Response
 from requests.exceptions import HTTPError, Timeout
 

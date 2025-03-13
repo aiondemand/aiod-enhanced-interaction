@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from app.config import settings
 from app.schemas.enums import AssetType
+from app.schemas.params import MilvusSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 from pymilvus import DataType, MilvusClient
@@ -42,13 +43,7 @@ class EmbeddingStore(ABC):
 
     @abstractmethod
     def retrieve_topk_document_ids(
-        self,
-        model: AiModel,
-        asset_type: AssetType,
-        query_text: str | None = None,
-        topk: int = 10,
-        filter: str = "",
-        query_embeddings: list[list[float]] = None,
+        self, search_params: MilvusSearchParams
     ) -> SearchResults:
         pass
 
@@ -228,35 +223,17 @@ class MilvusEmbeddingStore(EmbeddingStore):
         ]
 
     def retrieve_topk_document_ids(
-        self,
-        model: AiModel,
-        asset_type: AssetType,
-        query_text: str | None = None,
-        topk: int = 10,
-        filter: str = "",
-        query_embeddings: list[float] | None = None,
+        self, search_params: MilvusSearchParams
     ) -> SearchResults:
-        collection_name = self.get_collection_name(asset_type)
+        collection_name = self.get_collection_name(search_params.asset_type)
 
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' doesnt exist")
         self.client.load_collection(collection_name)
 
-        if query_embeddings is None:
-            if query_text is None:
-                raise ValueError(
-                    "Either query_text or precomputed_embedding must be provided."
-                )
-            query_embeddings = model.compute_query_embeddings(query_text)
-
         query_results = list(
             self.client.search(
-                collection_name=collection_name,
-                data=query_embeddings,
-                limit=topk * 10 if self.chunk_embedding_store else topk + 1,
-                output_fields=["doc_id"],
-                search_params={"metric_type": "COSINE"},
-                filter=filter,
+                collection_name=collection_name, **search_params.get_params()
             )
         )
 
@@ -271,12 +248,13 @@ class MilvusEmbeddingStore(EmbeddingStore):
         indices = (
             help_df.sort_values(by=["distances"])
             .drop_duplicates(subset=["doc_ids"])
-            .index.values[:topk]
+            .index.values[: search_params.topk]
         )
-        filtered_docs = [doc_ids[idx] for idx in indices]
-        filtered_distances = [distances[idx] for idx in indices]
 
-        return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
+        return SearchResults(
+            doc_ids=[doc_ids[idx] for idx in indices],
+            distances=[distances[idx] for idx in indices],
+        )
 
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
