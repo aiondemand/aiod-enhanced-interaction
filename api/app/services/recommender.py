@@ -13,7 +13,7 @@ def get_precomputed_embeddings_for_recommender(
     model: AiModel,
     embedding_store: EmbeddingStore,
     user_query: RecommenderUserQuery,
-) -> list | None:
+) -> list[list[float]] | None:
     precomputed_embeddings = embedding_store.get_asset_embeddings(
         user_query.asset_id, user_query.asset_type
     )

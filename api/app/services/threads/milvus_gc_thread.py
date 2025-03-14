@@ -18,7 +18,7 @@ job_lock = threading.Lock()
 async def delete_embeddings_of_aiod_assets_wrapper() -> None:
     # Achieving sufficient robustness of the embedding deletion process
     # is not that important in contrast to the process of updating the assets
-    # Thus, theres no need to store metadata information in tinyDB regarding this
+    # Thus, there is no need to store metadata information in tinyDB regarding this
     # process. You should rather view this process as some sort of garbage collector
     # that is run once a month
     # the immediate incorrect embeddings retrieved for a specific user query are dealt
@@ -54,9 +54,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
         finally:
             job_lock.release()
     else:
-        logging.info(
-            "Scheduled task for deleting skipped (previous task is still running)"
-        )
+        logging.info("Scheduled task for deleting skipped (previous task is still running)")
 
 
 def delete_asset_embeddings(
@@ -73,7 +71,7 @@ def delete_asset_embeddings(
     # iterate over entirety of AIoD database, store all the doc IDs
     while True:
         assets_to_add, _ = get_assets_to_add_and_delete(
-            url=settings.AIOD.get_assets_url(asset_type),
+            asset_type=asset_type,
             url_params=url_params,
             existing_doc_ids_from_past=[],
             newly_added_doc_ids=[],
@@ -84,7 +82,7 @@ def delete_asset_embeddings(
         all_aiod_doc_ids.extend([str(obj["identifier"]) for obj in assets_to_add])
 
         # during the traversal of AIoD assets, some of them may be deleted in between
-        # which would make us skip some assets if we were to use tradinational
+        # which would make us skip some assets if we were to use traditional
         # pagination without any overlap, hence the need for an overlap
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 

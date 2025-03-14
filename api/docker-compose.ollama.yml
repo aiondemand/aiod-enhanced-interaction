@@ -9,7 +9,7 @@ services:
         restart: false
   ollama:
     image: ollama/ollama:0.5.4
-    labels: 
+    labels:
       autoheal-label: true
     restart: always
     healthcheck:

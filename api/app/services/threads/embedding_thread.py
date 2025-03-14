@@ -50,22 +50,16 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
             job_lock.release()
     else:
-        logging.info(
-            "Scheduled task for updating skipped (previous task is still running)"
-        )
+        logging.info("Scheduled task for updating skipped (previous task is still running)")
 
 
-async def compute_embeddings_for_aiod_assets(
-    model: AiModel, first_invocation: bool
-) -> None:
+async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: bool) -> None:
     database = Database()
     embedding_store = MilvusEmbeddingStore()
 
     asset_types = settings.AIOD.ASSET_TYPES
     for asset_type in asset_types:
-        asset_collection = fetch_asset_collection(
-            database, asset_type, first_invocation
-        )
+        asset_collection = fetch_asset_collection(database, asset_type, first_invocation)
         if asset_collection is None:
             continue
 
@@ -102,9 +96,7 @@ async def compute_embeddings_for_aiod_assets(
             # We don't wish to shutdown the application unless Milvus or Ollama is down
             # If we cannot reach AIoD, we can just skip the embedding process for that day
             logging.error(e)
-            logging.error(
-                "The above error has been encountered in the embedding thread."
-            )
+            logging.error("The above error has been encountered in the embedding thread.")
 
 
 def fetch_asset_collection(
@@ -121,7 +113,7 @@ def fetch_asset_collection(
         asset_collection.add_recurring_update()
         database.upsert(asset_collection)
     elif asset_collection.last_update.finished:
-        # The last DB update was sucessful, we skip this asset in the
+        # The last DB update was successful, we skip this asset in the
         # first invocation
         return None
     else:
@@ -168,9 +160,7 @@ def process_aiod_assets_wrapper(
         to_time=last_update.to_time,
     )
     if url_params.offset > 0:
-        logging.info(
-            f"\t\tContinue asset embedding process from asset offset={url_params.offset}"
-        )
+        logging.info(f"\t\tContinue asset embedding process from asset offset={url_params.offset}")
 
     while True:
         assets_to_add, asset_ids_to_remove = get_assets_to_add_and_delete(
@@ -186,9 +176,7 @@ def process_aiod_assets_wrapper(
         # Remove embeddings associated with old versions of assets
         num_emb_removed = 0
         if len(asset_ids_to_remove) > 0:
-            num_emb_removed = embedding_store.remove_embeddings(
-                asset_ids_to_remove, asset_type
-            )
+            num_emb_removed = embedding_store.remove_embeddings(asset_ids_to_remove, asset_type)
             existing_doc_ids_from_past = np.array(existing_doc_ids_from_past)[
                 ~np.isin(existing_doc_ids_from_past, asset_ids_to_remove)
             ].tolist()
@@ -200,13 +188,12 @@ def process_aiod_assets_wrapper(
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
             asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
 
-            metadata = [{} for _ in assets_to_add]
+            metadata: list[dict] = [{} for _ in assets_to_add]
             if extract_metadata_function is not None:
                 metadata = [extract_metadata_function(obj) for obj in assets_to_add]
 
             data = [
-                (obj, id, meta)
-                for obj, id, meta in zip(stringified_assets, asset_ids, metadata)
+                (obj, id, meta) for obj, id, meta in zip(stringified_assets, asset_ids, metadata)
             ]
             loader = DataLoader(
                 data,
@@ -222,9 +209,7 @@ def process_aiod_assets_wrapper(
             )
             newly_added_doc_ids += asset_ids
 
-        asset_collection.update(
-            embeddings_added=num_emb_added, embeddings_removed=num_emb_removed
-        )
+        asset_collection.update(embeddings_added=num_emb_added, embeddings_removed=num_emb_removed)
         database.upsert(asset_collection)
 
         # during the traversal of AIoD assets, some of them may be deleted in between
@@ -243,7 +228,7 @@ def get_assets_to_add_and_delete(
     newly_added_doc_ids: list[str],
     last_db_sync_datetime: datetime | None,
 ) -> tuple[list[dict] | None, list[str] | None]:
-    mark_recursions = []
+    mark_recursions: list[int] = []
     assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 
     if len(assets) == 0 and len(mark_recursions) == 0:
@@ -257,14 +242,12 @@ def get_assets_to_add_and_delete(
         return None, None
 
     asset_ids = [str(obj["identifier"]) for obj in assets]
-    modified_dates = np.array(
-        [parse_aiod_asset_date(obj, none_value="now") for obj in assets]
-    )
+    modified_dates = np.array([parse_aiod_asset_date(obj, none_value="now") for obj in assets])
 
     # new assets to store that we have never encountered before
-    new_asset_idx = np.where(
-        ~np.isin(asset_ids, existing_doc_ids_from_past + newly_added_doc_ids)
-    )[0]
+    new_asset_idx = np.where(~np.isin(asset_ids, existing_doc_ids_from_past + newly_added_doc_ids))[
+        0
+    ]
     assets_to_add = [assets[idx] for idx in new_asset_idx]
 
     if last_db_sync_datetime is None:
@@ -277,8 +260,7 @@ def get_assets_to_add_and_delete(
     # overlap...
     # Old assets need to be deleted first, then they're stored in DB yet again
     updated_asset_idx = np.where(
-        (np.isin(asset_ids, existing_doc_ids_from_past))
-        & (modified_dates >= last_db_sync_datetime)
+        (np.isin(asset_ids, existing_doc_ids_from_past)) & (modified_dates >= last_db_sync_datetime)
     )[0]
     asset_ids_to_del = [asset_ids[idx] for idx in updated_asset_idx]
     assets_to_add += [assets[idx] for idx in updated_asset_idx]
@@ -292,12 +274,15 @@ def parse_aiod_asset_date(
     none_value: Literal["none", "now", "zero"] = "none",
 ) -> datetime | None:
     string_time = asset.get("aiod_entry", {}).get(field, None)
-    if string_time is None:
+
+    if string_time is not None:
+        return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)
+    else:
         if none_value == "none":
             return None
-        if none_value == "now":
+        elif none_value == "now":
             return datetime.now(tz=timezone.utc)
-        if none_value == "zero":
-            return datetime.fromtimestamp(0, tz=timezone)
-
-    return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)
+        elif none_value == "zero":
+            return datetime.fromtimestamp(0, tz=timezone.utc)
+        else:
+            return None

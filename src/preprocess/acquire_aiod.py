@@ -15,7 +15,7 @@ import utils
 
 
 def populate_database_with_assets(base_url: str, asset_name: str, savedir: str) -> None:
-    new_collection_name = f"{asset_name}-docs"    
+    new_collection_name = f"{asset_name}-docs"
     chroma_client = utils.init(return_db_client=True)
     collection_names = [col.name for col in chroma_client.list_collections()]
 
@@ -28,32 +28,32 @@ def populate_database_with_assets(base_url: str, asset_name: str, savedir: str) 
 
 def get_aiod_assets(
     base_url: str, asset_name: str, savedir: str, win_size: int = 1_000,
-    starting_offset: int = 0, sleep_duration: int = 3 
+    starting_offset: int = 0, sleep_duration: int = 3
 ) -> None:
     total_number = _perform_request(f"{base_url}/counts/{asset_name}/v1")
     url = f"{base_url}/{asset_name}/v1"
     os.makedirs(savedir, exist_ok=True)
 
     for offset in tqdm(
-        range(starting_offset, total_number, win_size), 
+        range(starting_offset, total_number, win_size),
         total=(total_number - starting_offset) // win_size
     ):
         queries = {
             "schema": "aiod",
             "offset": offset,
             "limit": win_size
-        }  
+        }
         datasets = _perform_request(url, queries)
 
         if (
             (
                 # all but the last request
                 offset + win_size <= total_number and
-                len(datasets) != win_size 
+                len(datasets) != win_size
             ) or
-            (   
-                # last get request 
-                offset + win_size > total_number and 
+            (
+                # last get request
+                offset + win_size > total_number and
                 len(datasets) != total_number % win_size
             )
         ):
@@ -65,7 +65,7 @@ def get_aiod_assets(
 
 
 def _perform_request(
-    url: str, params: dict | None = None, num_retries: int = 3, 
+    url: str, params: dict | None = None, num_retries: int = 3,
     timeout_sleep_duration: int = 60
 ) -> dict | None:
     for _ in range(num_retries):
@@ -73,9 +73,9 @@ def _perform_request(
             return requests.get(url, params, timeout=60).json()
         except requests.exceptions.ConnectTimeout:
             sleep(timeout_sleep_duration)
-    
+
     raise ValueError("We couldn't connect to AIoD API")
-    
+
 
 def dummy_embeddings(texts: str, dim: int = 1) -> list[list[float]]:
     return [np.zeros(dim).tolist() for _ in range(len(texts))]
@@ -88,7 +88,7 @@ def create_document_collection(
     if type(client) == ChromaClient:
         if collection_name in client.list_collections():
             client.delete_collection(name=collection_name)
-        
+
         chroma_collection = client.create_collection(name=collection_name)
     elif type(client) == MilvusClient:
         if client.has_collection(collection_name):
@@ -96,7 +96,7 @@ def create_document_collection(
         client.create_collection(collection_name, dimension=2, auto_id=False)
     else:
         raise ValueError("Invalid DB client")
-    
+
     filenames = sorted(os.listdir(json_dirpath))
     counter, all_meta, all_ids = 0, [], []
     for it, file in tqdm(enumerate(filenames), total=len(filenames)):
@@ -117,7 +117,7 @@ def create_document_collection(
                 )
             elif type(client) == MilvusClient:
                 raise ValueError(
-                    "We dont support this function utilizing Milvus database as there's apparently a hard cap of 2^16 characters for strings." + 
+                    "We dont support this function utilizing Milvus database as there's apparently a hard cap of 2^16 characters for strings." +
                     "Due to this limitation, we are unable to store the stringified JSONs of the assets in the vector database (which is not requested in the first place I assume)"
                 )
                 pass
@@ -142,7 +142,7 @@ def create_document_collection(
             all_ids = []
             counter = 0
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     # base_url = "https://aiod-dev.i3a.es"
     # populate_database_with_assets(base_url, "datasets", "./temp/datasets")
 

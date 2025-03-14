@@ -2,17 +2,21 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urljoin
 
-from app.schemas.enums import AssetType
 from pydantic import AnyUrl, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings
+
+from app.schemas.enums import AssetType
 
 
 class Validators:
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        if value.lower() not in ["true", "false"]:
-            raise ValueError("Invalid value for boolean attribute")
-        return value.lower() == "true"
+    def validate_bool(cls, value: str | bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, str) and value.lower() in ["true", "false"]:
+            return value.lower() == "true"
+        else:
+            raise ValueError("Invalid value for a boolean attribute")
 
 
 class MilvusConfig(BaseModel):
@@ -29,19 +33,15 @@ class MilvusConfig(BaseModel):
     @classmethod
     def valid_collection_name(cls, value: str):
         if not value[0].isalpha() and value[0] != "_":
-            raise ValueError(
-                "Collection name must start with a letter or an underscore."
-            )
+            raise ValueError("Collection name must start with a letter or an underscore.")
         if not all(c.isalnum() or c == "_" for c in value):
-            raise ValueError(
-                "Collection name can only contain letters, numbers, and underscores."
-            )
+            raise ValueError("Collection name can only contain letters, numbers, and underscores.")
         return value
 
     @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def str_to_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @property
     def MILVUS_TOKEN(self):
@@ -59,7 +59,7 @@ class OllamaConfig(BaseModel):
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARATED_ASSET_TYPES: str = Field(...)
-    COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON: str = Field(...)
+    COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: str = Field(...)
     WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
@@ -76,7 +76,7 @@ class AIoDConfig(BaseModel):
 
     @field_validator(
         "COMMA_SEPARATED_ASSET_TYPES",
-        "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON",
+        "COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION",
         mode="before",
     )
     @classmethod
@@ -89,26 +89,27 @@ class AIoDConfig(BaseModel):
 
     @field_validator("TESTING", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def validate_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @property
     def OFFSET_INCREMENT(self) -> int:
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
 
     @property
-    def ASSET_TYPES(self) -> list[str]:
+    def ASSET_TYPES(self) -> list[AssetType]:
         return self.convert_csv_to_asset_types(self.COMMA_SEPARATED_ASSET_TYPES)
 
     @property
-    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[str]:
+    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[AssetType]:
         types = self.convert_csv_to_asset_types(
-            self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTON
+            self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION
         )
 
-        assert set(types).issubset(
-            set(self.ASSET_TYPES)
-        ), "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+        if not set(types).issubset(set(self.ASSET_TYPES)):
+            raise ValueError(
+                "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+            )
         return types
 
     def get_assets_url(self, asset_type: AssetType) -> str:
@@ -132,8 +133,8 @@ class Settings(BaseSettings):
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
-    def str_to_bool(cls, value: str) -> bool:
-        return Validators.str_to_bool(value)
+    def validate_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
     @field_validator("MODEL_LOADPATH", mode="before")
     @classmethod

@@ -8,11 +8,6 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, Type, get_args, get_origin
 
-from app.config import settings
-from app.models.filter import Filter
-from app.schemas.asset_metadata.base import SchemaOperations
-from app.schemas.enums import AssetType
-from app.services.resilience import OllamaUnavailableException, with_retry_sync
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import (
@@ -24,6 +19,12 @@ from langchain_core.runnables import RunnableLambda, RunnableSequence
 from langchain_ollama import ChatOllama
 from ollama import Client as OllamaClient
 from pydantic import BaseModel, Field, ValidationError, field_validator
+
+from app.config import settings
+from app.models.filter import Filter
+from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.enums import AssetType
+from app.services.resilience import OllamaUnavailableException, with_retry_sync
 
 # TODO refactor code to consolidate logic of LLM invocations into one service, one class
 # That class then can be extended with the resilience wrapper
@@ -162,9 +163,7 @@ class LlamaManualFunctionCalling:
             return validated_out
 
     @classmethod
-    def validate_output(
-        cls, output: dict, pydantic_model: Type[BaseModel] | None
-    ) -> bool:
+    def validate_output(cls, output: dict, pydantic_model: Type[BaseModel] | None) -> bool:
         if pydantic_model is not None:
             try:
                 pydantic_model(**output)
@@ -196,15 +195,13 @@ class LlamaManualFunctionCalling:
                 try:
                     return json.loads(args_string)
                 except Exception:
-                    pass
+                    logging.warning(f"Unable to convert LLM string to tool: '{response}'")
 
         return None
 
     @classmethod
     def populate_tool_prompt(cls, pydantic_model: Type[BaseModel]) -> str:
-        tool_schema = cls.transform_simple_pydantic_schema_to_tool_schema(
-            pydantic_model
-        )
+        tool_schema = cls.transform_simple_pydantic_schema_to_tool_schema(pydantic_model)
 
         return cls.tool_prompt_template.format(
             function_name=tool_schema["name"],
@@ -235,9 +232,7 @@ class UserQueryParsing:
     # TODO this current implementation can only work with one asset_type
     # few shot examples... We would need to dynamically assign them on LLM invocation
     # once we know which asset type a specific input is associated with
-    _DEFAULT_PATH_TO_STAGE_1_ = Path(
-        "api/data/fewshot_examples/user_query_stage1/datasets.json"
-    )
+    _DEFAULT_PATH_TO_STAGE_1_ = Path("api/data/fewshot_examples/user_query_stage1/datasets.json")
 
     @staticmethod
     @with_retry_sync(output_exception_cls=OllamaUnavailableException)
@@ -257,9 +252,8 @@ class UserQueryParsing:
         stage_1_fewshot_examples_filepath: str | None = None,
         stage_2_fewshot_examples_dirpath: str | None = None,
     ) -> None:
-        assert db_to_translate in [
-            "milvus"
-        ], f"Invalid db_to_translate argument '{db_to_translate}'"
+        if not db_to_translate in ["milvus"]:
+            raise ValueError(f"Invalid db_to_translate argument '{db_to_translate}'")
         self.translator_func = self.get_db_translator_func(db_to_translate)
 
         if stage_1_fewshot_examples_filepath is None:
@@ -281,16 +275,12 @@ class UserQueryParsing:
             to_add = [
                 item[content_key]
                 for item in new_objects
-                if (
-                    item.get("discard", False)
-                    and item.get(content_key, None) is not None
-                )
+                if (item.get("discard", False) and item.get(content_key, None) is not None)
             ]
             return topic_list + to_add
 
-        assert (
-            asset_type in SchemaOperations.SCHEMA_MAPPING.keys()
-        ), f"Invalid asset_type argument '{asset_type}'"
+        if not asset_type in SchemaOperations.SCHEMA_MAPPING.keys():
+            raise ValueError(f"Invalid asset_type argument '{asset_type}'")
         asset_schema = SchemaOperations.get_asset_schema(asset_type)
 
         stage_1_input = {"query": user_query, "asset_schema": asset_schema}
@@ -305,9 +295,7 @@ class UserQueryParsing:
 
         parsed_conditions = []
         valid_conditions = [
-            cond
-            for cond in out_stage_1["conditions"]
-            if cond.get("discard", False) is False
+            cond for cond in out_stage_1["conditions"] if cond.get("discard", False) is False
         ]
         for nl_cond in valid_conditions:
             input = {
@@ -325,9 +313,7 @@ class UserQueryParsing:
             )
 
             valid_expressions = [
-                expr
-                for expr in out_stage_2["expressions"]
-                if expr.get("discard", False) is False
+                expr for expr in out_stage_2["expressions"] if expr.get("discard", False) is False
             ]
             if len(valid_expressions) > 0:
                 parsed_conditions.append(
@@ -355,9 +341,7 @@ class UserQueryParsing:
         }
 
     @classmethod
-    def milvus_translator(
-        cls, filters: list[Filter], asset_schema: Type[BaseModel]
-    ) -> str:
+    def milvus_translator(cls, filters: list[Filter], asset_schema: Type[BaseModel]) -> str:
         def format_value(val: str | int | float) -> str:
             return f"'{val.lower()}'" if isinstance(val, str) else val
 
@@ -393,9 +377,7 @@ class UserQueryParsing:
                             field=field, op=comp_operator, val=format_value(val)
                         )
                     )
-            condition_strings.append(
-                "(" + f" {log_operator.lower()} ".join(str_expressions) + ")"
-            )
+            condition_strings.append("(" + f" {log_operator.lower()} ".join(str_expressions) + ")")
 
         return " and ".join(condition_strings)
 
@@ -493,9 +475,7 @@ class UserQueryParsingStages:
         cls, field_name: str, asset_schema: Type[BaseModel]
     ) -> Type[BaseModel]:
         def validate_func(cls, value: Any, func: Callable) -> Any:
-            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[
-                field_name
-            ]
+            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[field_name]
 
             if value == "NONE":
                 return value
@@ -557,9 +537,7 @@ class UserQueryParsingStages:
             }
         )
 
-        expression_class = type(
-            f"Expression_{field_name}", (BaseModel,), inner_class_dict
-        )
+        expression_class = type(f"Expression_{field_name}", (BaseModel,), inner_class_dict)
         return type(
             f"UserQuery_Stage2_OutputSchema_{field_name}",
             (BaseModel,),
@@ -613,9 +591,7 @@ class UserQueryParsingStages:
 
         chain_to_use = chain
         if fewshot_examples_dirpath is not None:
-            examples_path = os.path.join(
-                fewshot_examples_dirpath, f"{metadata_field}.json"
-            )
+            examples_path = os.path.join(fewshot_examples_dirpath, f"{metadata_field}.json")
             if os.path.exists(examples_path):
                 with open(examples_path) as f:
                     fewshot_examples = json.load(f)
@@ -647,9 +623,7 @@ class UserQueryParsingStages:
         permitted_values = []
         if asset_schema.exists_field_valid_values(metadata_field):
             permitted_values = asset_schema.get_field_valid_values(metadata_field)
-            field_valid_values = (
-                f"b) List of the only permitted values: {permitted_values}"
-            )
+            field_valid_values = f"b) List of the only permitted values: {permitted_values}"
             curr_validation_step = validation_step
 
         input_variables = {
@@ -657,9 +631,7 @@ class UserQueryParsingStages:
             "field_name": metadata_field,
             "field_description": asset_schema.model_fields[metadata_field].description,
             "field_valid_values": field_valid_values,
-            "system_prompt": LlamaManualFunctionCalling.populate_tool_prompt(
-                dynamic_type
-            ),
+            "system_prompt": LlamaManualFunctionCalling.populate_tool_prompt(dynamic_type),
         }
         return cls._try_invoke_stage_2(
             chain_to_use,
@@ -670,9 +642,7 @@ class UserQueryParsingStages:
         )
 
     @classmethod
-    def prepare_simplified_model_schema_stage_1(
-        cls, asset_schema: Type[BaseModel]
-    ) -> str:
+    def prepare_simplified_model_schema_stage_1(cls, asset_schema: Type[BaseModel]) -> str:
         metadata_field_info = [
             {
                 "name": name,
@@ -690,9 +660,7 @@ class UserQueryParsingStages:
         cls, chain: RunnableSequence, input: dict, num_retry_attempts: int = 5
     ) -> dict | None:
         def exists_conditions_list_in_wrapper_dict(obj: dict) -> bool:
-            return obj.get("conditions", None) is not None and isinstance(
-                obj["conditions"], list
-            )
+            return obj.get("conditions", None) is not None and isinstance(obj["conditions"], list)
 
         def is_valid_wrapper_class(obj: dict, valid_field_names: list[str]) -> bool:
             try:
@@ -761,14 +729,10 @@ class UserQueryParsingStages:
                 # rid of invalid conditions
                 helper_object = deepcopy(output)
                 helper_object["conditions"] = [
-                    cond
-                    for cond in output["conditions"]
-                    if cond.get("discard", False) is False
+                    cond for cond in output["conditions"] if cond.get("discard", False) is False
                 ]
                 if is_valid_wrapper_class(helper_object, valid_field_names):
-                    best_llm_response = UserQuery_Stage1_OutputSchema(
-                        **helper_object
-                    ).model_dump()
+                    best_llm_response = UserQuery_Stage1_OutputSchema(**helper_object).model_dump()
                     max_valid_conditions_count = valid_conditions_count
 
         return best_llm_response
@@ -784,9 +748,7 @@ class UserQueryParsingStages:
         num_retry_attempts: int = 5,
     ) -> dict | None:
         def exists_expressions_list_in_wrapper_dict(obj: dict) -> bool:
-            return obj.get("expressions", None) is not None and isinstance(
-                obj["expressions"], list
-            )
+            return obj.get("expressions", None) is not None and isinstance(obj["expressions"], list)
 
         def is_valid_wrapper_class(obj: dict) -> bool:
             try:
@@ -836,9 +798,9 @@ class UserQueryParsingStages:
                             }
                         )
                         if validated_output is not None:
-                            output["expressions"][i]["processed_value"] = (
-                                validated_output["validated_value"]
-                            )
+                            output["expressions"][i]["processed_value"] = validated_output[
+                                "validated_value"
+                            ]
                             if is_valid_expression_class(output["expressions"][i]):
                                 valid_expressions_count += 1
                                 output["expressions"][i]["discard"] = False
@@ -852,9 +814,7 @@ class UserQueryParsingStages:
                 # rid of invalid expressions
                 helper_object = deepcopy(output)
                 helper_object["expressions"] = [
-                    expr
-                    for expr in output["expressions"]
-                    if expr.get("discard", False) is False
+                    expr for expr in output["expressions"] if expr.get("discard", False) is False
                 ]
                 if is_valid_wrapper_class(helper_object):
                     best_llm_response = wrapper_schema(**helper_object).model_dump()

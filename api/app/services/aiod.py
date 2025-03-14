@@ -3,12 +3,13 @@ from datetime import datetime
 from time import sleep
 
 import requests
+from requests import Response
+from requests.exceptions import HTTPError, Timeout
+
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.request_params import RequestParams
 from app.services.resilience import AIoDUnavailableException
-from requests import Response
-from requests.exceptions import HTTPError, Timeout
 
 # TODO Represent the AIoD communication as a AsyncClientWrapper (similar to how it's employed in RAIL)
 # once we try to make our app more asynchronous
@@ -17,17 +18,17 @@ from requests.exceptions import HTTPError, Timeout
 def recursive_aiod_asset_fetch(
     asset_type: AssetType, url_params: RequestParams, mark_recursions: list[int]
 ) -> list:
-    try:
-        sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
-        url = settings.AIOD.get_assets_url(asset_type)
-        queries = _build_aiod_url_queries(url_params)
+    sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
+    url = settings.AIOD.get_assets_url(asset_type)
+    queries = _build_aiod_url_queries(url_params)
 
+    try:
         response = perform_url_request(url, queries)
         data = response.json()
     except HTTPError as e:
         if e.response.status_code != 500:
             raise e
-        if url_params.limit == 1:
+        elif url_params.limit == 1:
             return []
 
         mark_recursions.append(1)
@@ -49,14 +50,10 @@ def recursive_aiod_asset_fetch(
     return data
 
 
-def get_aiod_document(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> dict | None:
+def get_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 0.1) -> dict | None:
     try:
         sleep(sleep_time)
-        response = perform_url_request(
-            settings.AIOD.get_asset_by_id_url(doc_id, asset_type)
-        )
+        response = perform_url_request(settings.AIOD.get_asset_by_id_url(doc_id, asset_type))
         return response.json()
     except HTTPError as e:
         if e.response.status_code == 404:
@@ -64,14 +61,12 @@ def get_aiod_document(
         raise
 
 
-def check_aiod_document(
-    doc_id: str, asset_type: AssetType, sleep_time: float = 0.1
-) -> bool:
+def check_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 0.1) -> bool:
     return get_aiod_document(doc_id, asset_type, sleep_time) is not None
 
 
 def _build_aiod_url_queries(url_params: RequestParams) -> dict:
-    def translate_datetime_to_aiod_params(date: datetime) -> str | None:
+    def translate_datetime_to_aiod_params(date: datetime | None = None) -> str | None:
         if date is None:
             return date
         return f"{date.year}-{date.month}-{date.day}"

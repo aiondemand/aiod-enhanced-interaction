@@ -29,35 +29,26 @@ QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 
 
 def fill_query_queue(database: Database) -> None:
-    condition = (Query().status == QueryStatus.IN_PROGRESS) | (
-        Query().status == QueryStatus.QUEUED
-    )
+    condition = (Query().status == QueryStatus.IN_PROGRESS) | (Query().status == QueryStatus.QUEUED)
     simple_queries_to_process = database.search(SimpleUserQuery, condition)
     filtered_queries_to_process = database.search(FilteredUserQuery, condition)
     similar_queries_to_process = database.search(RecommenderUserQuery, condition)
 
     if (
-        len(
-            simple_queries_to_process
-            + filtered_queries_to_process
-            + similar_queries_to_process
-        )
+        len(simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process)
         == 0
     ):
         return
 
     queries_to_process = sorted(
-        simple_queries_to_process
-        + filtered_queries_to_process
-        + similar_queries_to_process,
+        simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
     for query in queries_to_process:
         QUERY_QUEUE.put((query.id, type(query)))
 
     logging.info(
-        f"Query queue has been populated with {len(queries_to_process)} "
-        + "queries to process."
+        f"Query queue has been populated with {len(queries_to_process)} queries to process."
     )
 
 
@@ -148,9 +139,7 @@ def retrieve_topk_documents_wrapper(
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
         if user_query.invoke_llm_for_parsing:
             # utilize LLM to automatically extract filters from the user query
-            parsed_query = llm_query_parser(
-                user_query.search_query, user_query.asset_type
-            )
+            parsed_query = llm_query_parser(user_query.search_query, user_query.asset_type)
             meta_filter_str = parsed_query["filter_str"]
             user_query.filters = parsed_query["filters"]
         else:

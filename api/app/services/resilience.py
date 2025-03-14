@@ -40,9 +40,7 @@ T = TypeVar("T")
 
 
 def with_retry_sync(
-    output_exception_cls: Type[
-        ServiceUnavailableException
-    ] = ServiceUnavailableException,
+    output_exception_cls: Type[ServiceUnavailableException] = ServiceUnavailableException,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
