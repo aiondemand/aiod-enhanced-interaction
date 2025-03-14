@@ -15,7 +15,7 @@ class SearchResults(BaseModel):
         if isinstance(other, SearchResults) is False:
             raise TypeError("Invalid object type")
 
-        other = other.filter_out_docs(self.doc_ids)
+        other = other.filter_out_docs_by_ids(self.doc_ids)
 
         all_ids = self.doc_ids + other.doc_ids
         all_distances = self.distances + other.distances
@@ -29,7 +29,7 @@ class SearchResults(BaseModel):
     def __len__(self) -> int:
         return len(self.doc_ids)
 
-    def filter_out_docs(self, doc_ids_to_del: list[str]) -> SearchResults:
+    def filter_out_docs_by_ids(self, doc_ids_to_del: list[str]) -> SearchResults:
         idx_to_keep = np.where(~np.isin(self.doc_ids, doc_ids_to_del))[0]
 
         return SearchResults(

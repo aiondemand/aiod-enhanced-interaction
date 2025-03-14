@@ -10,7 +10,7 @@ import torch
 from app.config import settings
 from app.models.asset_collection import AssetCollection
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
