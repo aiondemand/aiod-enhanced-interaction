@@ -68,6 +68,18 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
         self.client = None
 
+    @property
+    def vector_index_kwargs(self) -> dict:
+        return {
+            "index_type": "HNSW_SQ",
+            "metric_type": "COSINE",
+            "params": {"sq_type": "SQ8"},
+        }
+
+    @property
+    def scalar_index_kwargs(self) -> dict:
+        return {"index_type": "INVERTED"}
+
     async def init() -> MilvusEmbeddingStore:
         obj = MilvusEmbeddingStore()
         await obj.init_connection()
@@ -107,6 +119,9 @@ class MilvusEmbeddingStore(EmbeddingStore):
                     # TODO
                     # Currently this schema reflects some what easily accessible and constant
                     # metadata we can retrieve from HuggingFace
+
+                    # TODO once we have arbitrary metadata fields, we should come up with some
+                    # value restrictions (e.g., string max length, array max capacity, etc.)
                     schema.add_field(
                         "date_published", DataType.VARCHAR, max_length=22, nullable=True
                     )
@@ -141,8 +156,34 @@ class MilvusEmbeddingStore(EmbeddingStore):
             schema.verify()
 
             index_params = IndexParams()
-            index_params.add_index("vector", "", "", metric_type="COSINE")
-            index_params.add_index("doc_id", "", "")
+            index_params = self.client.prepare_index_params()
+
+            index_params.add_index(field_name="vector", **self.vector_index_kwargs)
+            index_params.add_index(field_name="doc_id", **self.scalar_index_kwargs)
+
+            if self.extract_metadata:
+                if asset_type == AssetType.DATASETS:
+                    index_params.add_index(
+                        field_name="date_published", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="size_in_mb", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="license", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="task_types", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="languages", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="datapoints_upper_bound", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="datapoints_lower_bound", **self.scalar_index_kwargs
+                    )
 
             self.client.create_collection(
                 collection_name=collection_name,
