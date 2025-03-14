@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -14,12 +14,18 @@ from tqdm import tqdm
 
 from app.config import settings
 from app.schemas.enums import AssetType
-from app.schemas.params import MilvusSearchParams
+from app.schemas.params import MilvusSearchParams, VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 
+T = TypeVar("T", bound=VectorSearchParams)
+
 
 class EmbeddingStore(ABC):
+    @abstractmethod
+    def create_search_params(self) -> T:
+        pass
+
     @abstractmethod
     def get_collection_name(self, asset_type: AssetType) -> str:
         pass
@@ -43,7 +49,7 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
-    def retrieve_topk_document_ids(self, search_params: MilvusSearchParams) -> SearchResults:
+    def retrieve_topk_document_ids(self, search_params: T) -> SearchResults:
         pass
 
     @abstractmethod
@@ -98,6 +104,9 @@ class MilvusEmbeddingStore(EmbeddingStore):
             err_msg = "Connection to Milvus vector database has not been established"
             logging.error(err_msg)
             raise ValueError(err_msg)
+
+    def create_search_params(self, **kwargs) -> T:
+        return MilvusSearchParams(**kwargs)
 
     def get_collection_name(self, asset_type: AssetType) -> str:
         return f"{settings.MILVUS.COLLECTION_PREFIX}_{asset_type.value}"
@@ -241,7 +250,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
         return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")["delete_count"]
 
-    def retrieve_topk_document_ids(self, search_params: MilvusSearchParams) -> SearchResults:
+    def retrieve_topk_document_ids(self, search_params: T) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
 
         if self.client.has_collection(collection_name) is False:

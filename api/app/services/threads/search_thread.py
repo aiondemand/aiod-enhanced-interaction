@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from queue import Queue
-from typing import Type
+from typing import Type, TypeVar
 
 import numpy as np
 from app.config import settings
@@ -15,7 +15,7 @@ from app.models.query import (
 )
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
-from app.schemas.params import MilvusSearchParams
+from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.aiod import check_aiod_document
 from app.services.database import Database
@@ -24,6 +24,9 @@ from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsin
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from tinydb import Query
+
+T = TypeVar("T", bound=VectorSearchParams)
+
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 
@@ -147,7 +150,7 @@ def prepare_search_parameters(
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-) -> MilvusSearchParams | None:
+) -> T | None:
     # apply metadata filtering
     metadata_filter_str = ""
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -181,13 +184,13 @@ def prepare_search_parameters(
     )
     # ignore the asset itself from the search if necessary
     doc_ids_to_exclude_from_search = (
-        str(user_query.asset_id)
+        [str(user_query.asset_id)]
         if isinstance(user_query, RecommenderUserQuery)
         and user_query.asset_type == user_query.output_asset_type
         else []
     )
 
-    return MilvusSearchParams(
+    return embedding_store.create_search_params(
         data=query_embeddings,
         topk=user_query.topk,
         asset_type=target_asset_type,
@@ -198,7 +201,7 @@ def prepare_search_parameters(
 
 def validate_documents(
     results: SearchResults,
-    search_params: MilvusSearchParams,
+    search_params: T,
     doc_ids_to_remove_from_db: list[str],
 ) -> SearchResults:
     if len(results) == 0:

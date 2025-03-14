@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -23,22 +24,24 @@ class RequestParams(BaseModel):
         return new_obj
 
 
-class DbSearchParams(BaseModel):
-    # TODO create an abstract class
-    pass
-
-
-class MilvusSearchParams(BaseModel):
+class VectorSearchParams(BaseModel, ABC):
     data: list[list[float]]
     topk: int
-    group_by_field: str = "doc_id"
-    output_fields: list[str] = Field(default_factory=lambda: ["doc_id"])
-    search_params: dict = Field(default_factory=lambda: {"metric_type": "COSINE"})
     asset_type: AssetType
 
     # filter related attributes
     metadata_filter: str = ""
     doc_ids_to_exclude: list[str] = Field(default_factory=list)
+
+    @abstractmethod
+    def get_params(self) -> dict:
+        pass
+
+
+class MilvusSearchParams(VectorSearchParams):
+    group_by_field: str = "doc_id"
+    output_fields: list[str] = Field(default_factory=lambda: ["doc_id"])
+    search_params: dict = Field(default_factory=lambda: {"metric_type": "COSINE"})
 
     @property
     def filter(self) -> str:
