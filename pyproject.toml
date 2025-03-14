@@ -9,10 +9,10 @@ authors = [
     { name = "Andrej Ridzik", email = "andrej.ridzik@kinit.sk" }
 ]
 dependencies = [
-    "fastapi==0.112.2",
-    "uvicorn==0.30.6",
+    "fastapi==0.115.11",
+    "uvicorn==0.34.0",
     "numpy==2.2.3",
-    "pydantic==2.8.2",
+    "pydantic==2.10.6",
     "pydantic-settings==2.4.0",
     "tqdm==4.67.1",
     "python-dotenv==1.0.1",
@@ -22,11 +22,10 @@ dependencies = [
     "tinydb==4.8.0",
     "tinydb-serialization==2.1.1",
     "apscheduler==3.10.4",
-    "langchain==0.3.7",
-    "langchain-community==0.3.5",
-    "langchain-core==0.3.15",
-    "langchain-ollama==0.2.0",
-    "ollama==0.3.3",
+    "langchain-core==0.3.45",
+    "langchain-ollama==0.2.3",
+    "ollama==0.4.7",
+    "torch==2.6.0"
 ]
 readme = "README.md"
 
@@ -35,8 +34,7 @@ dev = [
     "black==24.8.0",
     "flake8==7.1.1",
     "isort==5.13.2",
-    "pre-commit==3.3.3",
-    "torch==2.4.0",
+    "pre-commit==3.3.3"
 ]
 
 [tool.ruff]
