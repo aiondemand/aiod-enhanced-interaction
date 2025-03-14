@@ -11,7 +11,7 @@ authors = [
 dependencies = [
     "fastapi==0.112.2",
     "uvicorn==0.30.6",
-    "numpy==1.26.4",
+    "numpy==2.2.3",
     "pydantic==2.8.2",
     "pydantic-settings==2.4.0",
     "tqdm==4.67.1",
