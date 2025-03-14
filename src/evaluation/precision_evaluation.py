@@ -11,13 +11,13 @@ from model.retrieval import RetrievalSystem
 
 class PrecisionEvaluationPipeline:
     def __init__(
-        self, 
+        self,
         retrieval_sytem: RetrievalSystem,
         model_name: str,
         asset_type: Literal["dataset", "model", "publication"],
         generate_queries_dirpath: str,
-        asset_text_dirpath: str, 
-        topk_dirpath: str, 
+        asset_text_dirpath: str,
+        topk_dirpath: str,
         llm_eval_dirpath: str,
         annotated_query_dirpath: str,
         metrics_dirpath: str,
@@ -44,10 +44,10 @@ class PrecisionEvaluationPipeline:
         if multiple_docs is False:
             self.llm_evaluator_num_doct_to_compare_at_the_time = 1
         self.llm_evaluator = LLM_Evaluator(
-            judge_chain, 
+            judge_chain,
             num_docs_to_compare_at_the_time=self.llm_evaluator_num_doct_to_compare_at_the_time
         )
-        
+
         self.model_name = model_name
         self.asset_type = asset_type
         self.generate_queries_dirpath = generate_queries_dirpath
@@ -56,9 +56,9 @@ class PrecisionEvaluationPipeline:
         self.llm_eval_dirpath = llm_eval_dirpath
         self.annotated_query_dirpath = annotated_query_dirpath
         self.metrics_dirpath = metrics_dirpath
-            
+
     def execute(
-        self, 
+        self,
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
@@ -67,36 +67,36 @@ class PrecisionEvaluationPipeline:
         print("===== Generation of generic queries =====")
         self.query_generation.generate(savedir=self.generate_queries_dirpath)
         query_types = self.query_generation.get_query_types()
-    
+
         # all the query types separately
         for query_type in query_types:
             self._inner_pipeline(
                 query_type_list=[query_type],
                 query_type_name=query_type,
-                score_function=score_function, 
+                score_function=score_function,
                 relevance_function=relevance_function
             )
 
         # all the query types grouped together
         self._inner_pipeline(
-            query_type_list=query_types, 
+            query_type_list=query_types,
             query_type_name="all",
-            score_function=score_function, 
+            score_function=score_function,
             relevance_function=relevance_function
         )
 
         print(f"=========== PRECISION EVALUATION FOR '{self.model_name}' CONCLUDED ===========")
 
     def _inner_pipeline(
-        self, 
-        query_type_list: list[str], 
+        self,
+        query_type_list: list[str],
         query_type_name: str,
         score_function: Callable[[dict], float] | None = None,
         relevance_function: Callable[[float], bool] | None = None
     ) -> None:
         print(f"===== Evaluating '{query_type_name}' queries =====")
         query_filepaths = [
-            os.path.join(self.generate_queries_dirpath, f"{path}.json") 
+            os.path.join(self.generate_queries_dirpath, f"{path}.json")
             for path in query_type_list
         ]
         load_topk_dirpaths = [
@@ -107,20 +107,20 @@ class PrecisionEvaluationPipeline:
             os.path.join(self.topk_dirpath, self.model_name, query_type_name)
             if len(query_type_list) == 1
             else None
-        )    
+        )
         llm_eval_dirpath = (
             os.path.join(self.llm_eval_dirpath, query_type_name)
             if len(query_type_list) == 1
             else None
-        )    
+        )
         annot_query_filename = (
-            "llm_scores_queries.json" 
-            if score_function is None 
+            "llm_scores_queries.json"
+            if score_function is None
             else "heuristic_scores_queries.json"
         )
         metrics_filename = (
-            "llm_scores_results.json" 
-            if score_function is None 
+            "llm_scores_results.json"
+            if score_function is None
             else "heuristic_scores_results.json"
         )
         load_annotated_query_savepaths = [
@@ -137,23 +137,23 @@ class PrecisionEvaluationPipeline:
         )
 
         if llm_eval_dirpath is not None:
-            print("=== Retreving top K documents to each query ===")
+            print("=== Retrieving top K documents to each query ===")
             query_loader = Queries(json_paths=query_filepaths).build_loader()
             sem_search_results = self.retrieval_system(
-                query_loader, 
+                query_loader,
                 retrieve_topk_document_ids_func_kwargs={
                     "load_dirpaths": load_topk_dirpaths,
                     "save_dirpath": save_topk_dirpath
                 })
             print("=== Using LLM-as-a-judge principle to evaluate (query, doc) pairs ===")
             self.llm_evaluator.evaluate_query_doc_pairs(
-                query_loader, sem_search_results, 
-                text_dirpath=self.asset_text_dirpath, 
+                query_loader, sem_search_results,
+                text_dirpath=self.asset_text_dirpath,
                 save_dirpath=llm_eval_dirpath
             )
             LLM_Evaluator.build_query_json_from_llm_eval(
-                query_loader.dataset, sem_search_results, 
-                llm_eval_dirpath, 
+                query_loader.dataset, sem_search_results,
+                llm_eval_dirpath,
                 savepath=save_annotated_query_savepath,
                 score_function=score_function
             )
@@ -165,9 +165,9 @@ class PrecisionEvaluationPipeline:
         topk_levels = topk_levels[topk_levels <= self.retrieval_system.topk].tolist()
         eval = RetrievalEvaluation(relevance_func=relevance_function)
         eval.evaluate(
-            self.retrieval_system, 
-            query_loader_with_gt, 
+            self.retrieval_system,
+            query_loader_with_gt,
             load_topk_docs_dirpath=load_topk_dirpaths,
-            metrics_savepath=metrics_savepath, 
+            metrics_savepath=metrics_savepath,
             topk_levels=topk_levels
         )

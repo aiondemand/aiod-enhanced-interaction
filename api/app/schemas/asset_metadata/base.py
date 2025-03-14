@@ -80,9 +80,7 @@ class SchemaOperations:
                 out = func([value])
                 if len(out) > 0:
                     return out[0]
-            raise ValueError(
-                f"Value '{str(value)}' didn't comply with '{field}' validator demands"
-            )
+            raise ValueError(f"Value '{str(value)}' didn't comply with '{field}' validator demands")
 
         value_type = cls.dynamically_create_type_for_a_field_value(asset_schema, field)
         validators = cls.get_field_validators(asset_schema, field)
@@ -90,9 +88,9 @@ class SchemaOperations:
         clazz_dict = {"__annotations__": {"value": value_type}, "value": Field(...)}
         clazz_dict.update(
             {
-                f"validator_{func_name}": field_validator(
-                    "value", mode=decor.info.mode
-                )(partial(validate_func, func=getattr(asset_schema, func_name)))
+                f"validator_{func_name}": field_validator("value", mode=decor.info.mode)(
+                    partial(validate_func, func=getattr(asset_schema, func_name))
+                )
                 for func_name, decor in validators
             }
         )

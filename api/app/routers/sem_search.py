@@ -1,13 +1,14 @@
 from typing import Type
 from uuid import UUID
 
+from fastapi import HTTPException
+
 from app.config import settings
 from app.models.query import BaseUserQuery
 from app.schemas.enums import AssetType
 from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
-from fastapi import HTTPException
 
 
 async def submit_query(user_query: BaseUserQuery, database: Database) -> str:

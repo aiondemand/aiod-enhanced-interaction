@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 from app.models.filter import Filter
 from app.schemas.enums import QueryStatus
-from pydantic import BaseModel
 
 
 class BaseUserQueryResponse(BaseModel):

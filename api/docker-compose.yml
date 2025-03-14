@@ -1,7 +1,7 @@
 services:
   # FastAPI service
   app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
@@ -22,7 +22,7 @@ services:
     volumes:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
-  
+
   # Milvus services
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.16
@@ -68,7 +68,7 @@ services:
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
     volumes:
-      - ./milvus.yaml:/milvus/configs/milvus.yaml 
+      - ./milvus.yaml:/milvus/configs/milvus.yaml
       - ${DATA_DIRPATH}/volumes/milvus:/var/lib/milvus
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]

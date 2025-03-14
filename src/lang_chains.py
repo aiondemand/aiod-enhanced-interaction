@@ -21,9 +21,9 @@ from langchain_openai.chat_models.base import BaseChatOpenAI
 
 class ChainOutputOpts:
     """
-    Class containing relevant attributes that further process the model outuput.
-    In this class we define what parser we use, whether its a JSON parser and 
-    whether we use a special funcion calling tools from OpenAI that has a bit 
+    Class containing relevant attributes that further process the model output.
+    In this class we define what parser we use, whether its a JSON parser and
+    whether we use a special function calling tools from OpenAI that has a bit
     different interface compared to traditional LLMs
     """
     def __init__(
@@ -46,7 +46,7 @@ class ChainOutputOpts:
                 if langchain_parser_class is not None and schema_placeholder_name is not None:
                     print("Warning: We utilize both OpenAI 'bind_tools' functionality as well as explicit definition of schema within the prompt")
                     self.langchain_parser = langchain_parser_class(pydantic_object=pydantic_model)
-            
+
             # we use a simple JsonOutputParser
             else:
                 if pydantic_model is None:
@@ -54,8 +54,8 @@ class ChainOutputOpts:
                 if schema_placeholder_name is None:
                     raise ValueError("You need to define Schema placeholder name for JSON schema utilized in model prompt")
                 self.langchain_parser = langchain_parser_class(pydantic_object=pydantic_model)
-        
-        # we utilize a different parser 
+
+        # we utilize a different parser
         else:
             if langchain_parser_class is None:
                 langchain_parser_class = StrOutputParser()
@@ -71,17 +71,17 @@ class ChainOutputOpts:
         return prompt.partial(**{
             self.schema_placeholder_name: schema
         })
-    
+
     def function_calling_wrapper(
         self, llm: BaseLLM
     ) -> tuple[BaseLLM, BaseOutputParser]:
         if self.utilize_bind_tools is False:
             return llm, self.langchain_parser
-        
+
         schema_name = self.pydantic_model.__name__
         llm_fc = llm.bind_tools([self.pydantic_model], tool_choice=schema_name)
         return llm_fc, JsonOutputKeyToolsParser(key_name=schema_name)
-    
+
 
 class Chain(ABC):
     """
@@ -89,28 +89,28 @@ class Chain(ABC):
 
     We can define the prompt templates, few shot setting and output processing
     defined by the ChainOutputOpts object. Also the 'postprocess_lambda' argument
-    defines the very last step in the chain that should be performed to extract 
+    defines the very last step in the chain that should be performed to extract
     the information we seek to retrieve
     """
     def __init__(
-        self, llm: BaseLLM, 
+        self, llm: BaseLLM,
         prompt_templates: tuple[str, str],
-        fewshot_examples: list[dict[str, str]] | None = None, 
+        fewshot_examples: list[dict[str, str]] | None = None,
         fewshot_prompt_templates: str | None = None,
         chain_output_opts: ChainOutputOpts | None = None,
         postprocess_lambda: Callable[[dict | str], dict | str] | None = None
     ) -> None:
         self.llm = llm
         self.prompt_templates = prompt_templates
-    
+
         if fewshot_examples is None != fewshot_prompt_templates is None:
             raise ValueError(
-                "You need to define both the few-shot examples, " + 
+                "You need to define both the few-shot examples, " +
                 "as well as their corresponding prompt templates"
             )
         self.fewshot_examples = fewshot_examples
         self.fewshot_prompt_templates = fewshot_prompt_templates
-        
+
         self.chain_output_opts = chain_output_opts
         if self.chain_output_opts is None:
             self.chain_output_opts = ChainOutputOpts()
@@ -121,20 +121,20 @@ class Chain(ABC):
 
         self.prompt = build_prompt(
             self.prompt_templates,
-            self.fewshot_examples, 
+            self.fewshot_examples,
             self.fewshot_prompt_templates,
             self.chain_output_opts
         )
-        
+
     @abstractmethod
     def build_chain(self) -> RunnableSequence:
         pass
 
     def invoke(
-        self, 
-        chain: RunnableSequence, 
-        input: dict, 
-        pydantic_model: Type[BaseModel] | None, 
+        self,
+        chain: RunnableSequence,
+        input: dict,
+        pydantic_model: Type[BaseModel] | None,
         num_retry_attempts: int = 3
     ) -> dict | str | None:
         for _ in range(num_retry_attempts):
@@ -152,30 +152,30 @@ class Chain(ABC):
 class TwoStageChain(Chain):
     """
     A class representing Langchain chain that has two stages
-    
-    The first stage usually performs the main task 
-    while the second one is used for purposes such as 
+
+    The first stage usually performs the main task
+    while the second one is used for purposes such as
     self-reflection, explicit information extraction from previous model
     response, ...
     """
     def __init__(
-        self, llm: BaseLLM, 
+        self, llm: BaseLLM,
         prompt_template: tuple[str, str],
         second_prompt_template: str,
-        fewshot_examples: list[dict[str, str]] | None = None, 
+        fewshot_examples: list[dict[str, str]] | None = None,
         fewshot_prompt_templates: str | None = None,
         chain_output_opts: ChainOutputOpts | None = None,
         postprocess_lambda: Callable[[dict | str], dict | str] | None = None
     ) -> None:
         super().__init__(
-            llm, prompt_template, fewshot_examples, 
+            llm, prompt_template, fewshot_examples,
             fewshot_prompt_templates, chain_output_opts,
             postprocess_lambda
         )
         self.second_prompt_template = second_prompt_template
         self.chain = self.build_chain()
 
-    def build_chain(self) -> RunnableSequence:        
+    def build_chain(self) -> RunnableSequence:
         second_stage_prompt = ChatPromptTemplate.from_messages([
             ("ai", "{model_response}"),
             ("human", self.second_prompt_template)
@@ -202,22 +202,22 @@ class TwoStageChain(Chain):
         return super().invoke(
             self.chain, input, self.chain_output_opts.pydantic_model
         )
-    
+
 
 class SimpleChain(Chain):
     """
     A class representing a simple chain consisting of a prompt, an LLM and a parser
     """
     def __init__(
-        self, llm: BaseLLM, 
+        self, llm: BaseLLM,
         prompt_templates: tuple[str, str],
-        fewshot_examples: list[dict[str, str]] | None = None, 
+        fewshot_examples: list[dict[str, str]] | None = None,
         fewshot_prompt_templates: str | None = None,
         chain_output_opts: ChainOutputOpts | None = None,
         postprocess_lambda: Callable[[dict | str], dict | str] = None
     ) -> None:
         super().__init__(
-            llm, prompt_templates, fewshot_examples, 
+            llm, prompt_templates, fewshot_examples,
             fewshot_prompt_templates, chain_output_opts,
             postprocess_lambda
         )
@@ -235,14 +235,14 @@ class SimpleChain(Chain):
 
 def build_prompt(
     prompt_templates: tuple[str, str],
-    fewshot_examples: list[dict[str, str]], 
+    fewshot_examples: list[dict[str, str]],
     fewshot_prompt_templates: tuple[str],
     chain_output_opts: ChainOutputOpts
 ) -> FewShotChatMessagePromptTemplate | ChatPromptTemplate:
     """
     Function for building initial prompts for Langchain chains
 
-    This function also takes into consideration the few-shot setting 
+    This function also takes into consideration the few-shot setting
     when building the prompt that is further fed into the model
     """
     fewshot_prompt = None
@@ -269,14 +269,14 @@ def build_prompt(
             fewshot_prompt,
             ("human", human_prompt_template)
         ]
-    
-    prompt = ChatPromptTemplate.from_messages(chat_messages) 
+
+    prompt = ChatPromptTemplate.from_messages(chat_messages)
     return chain_output_opts.augment_prompt_with_json_schema(prompt)
 
 
 # TODO make it work with dataLoader perhaps -> might be more accessible then...
 def apply_chains_on_files_in_directory(
-    primary_chain: Chain, 
+    primary_chain: Chain,
     dirpath: str, savedir: str,
     format_input_fn: Callable[[str], dict],
     backup_chain: Chain | None = None,
@@ -307,7 +307,7 @@ def apply_chains_on_files_in_directory(
                         raise ValueError("Invalid response format")
                 except:
                     continue
-                
+
                 with open(savepath, "w", encoding="utf-8") as f:
                     json.dump(response, f, ensure_ascii=False)
                 success = True
@@ -326,7 +326,7 @@ class LLM_Chain:
         llm: BaseLLM,
         pydantic_model: Type[BaseModel],
         prompt_templates: tuple[str, str],
-    ) -> SimpleChain:        
+    ) -> SimpleChain:
         postprocess_lambda = None
         utilize_bind_tools = hasattr(llm, "bind_tools")
 
@@ -349,16 +349,16 @@ class LLM_Chain:
             postprocess_lambda=postprocess_lambda
         )
         return chain_wrapper
-    
+
 
 def load_llm(ollama_name: str | None = None, **model_kwargs) -> BaseLLM:
     if ollama_name is not None:
         return ChatOllama(
             model=ollama_name, num_predict=4096, num_ctx=8192, **model_kwargs
         )
-    
+
     azure_environs = [
-        "OPENAI_API_VERSION", "AZURE_OPENAI_ENDPOINT", 
+        "OPENAI_API_VERSION", "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"
     ]
     for env in azure_environs:
@@ -371,5 +371,5 @@ def load_llm(ollama_name: str | None = None, **model_kwargs) -> BaseLLM:
         )
     if os.environ.get("OPENAI_API_KEY", None) is not None:
         return ChatOpenAI(model="gpt-4o", **model_kwargs)
-    
+
     return ChatOllama(model="mistral", num_predict=4096, num_ctx=8192, **model_kwargs)

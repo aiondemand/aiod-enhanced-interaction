@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.schemas.enums import AssetType
 from pydantic import BaseModel, Field
+
+from app.schemas.enums import AssetType
 
 
 class RequestParams(BaseModel):

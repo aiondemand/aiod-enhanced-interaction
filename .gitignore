@@ -191,7 +191,7 @@ db/
 .env.app
 
 # Generated Dockerfile/compose for a particular env var combination
-# These files don't necessarily need to be omitted, 
+# These files don't necessarily need to be omitted,
 # but for the sake of keeping the reposiroty clean we may as well ignore them
 api/Dockerfile.final
 api/docker-compose.final.yml

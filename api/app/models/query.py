@@ -6,6 +6,8 @@ from functools import partial
 from typing import Type
 from uuid import uuid4
 
+from pydantic import BaseModel, Field
+
 from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
@@ -15,7 +17,6 @@ from app.schemas.query import (
     SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
-from pydantic import BaseModel, Field
 
 
 class BaseUserQuery(BaseModel):

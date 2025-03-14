@@ -4,8 +4,8 @@ WORKDIR /code
 
 RUN pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 
-COPY ./requirements.txt .
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+COPY ../pyproject.toml .
+RUN pip install --no-cache-dir --upgrade .
 
 COPY ./app /code/app
 COPY ./data /code/data

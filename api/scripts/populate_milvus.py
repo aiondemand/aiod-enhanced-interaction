@@ -109,9 +109,7 @@ def create_new_collection(
 
         # TODO so far it only works with datasets
         # (the same goes for the Milvus index in the main application)
-        schema.add_field(
-            "date_published", DataType.VARCHAR, max_length=22, nullable=True
-        )
+        schema.add_field("date_published", DataType.VARCHAR, max_length=22, nullable=True)
         schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
         schema.add_field("license", DataType.VARCHAR, max_length=20, nullable=True)
 
@@ -148,12 +146,8 @@ def create_new_collection(
             index_params.add_index(field_name="license", **scalar_index_kwargs)
             index_params.add_index(field_name="task_types", **scalar_index_kwargs)
             index_params.add_index(field_name="languages", **scalar_index_kwargs)
-            index_params.add_index(
-                field_name="datapoints_upper_bound", **scalar_index_kwargs
-            )
-            index_params.add_index(
-                field_name="datapoints_lower_bound", **scalar_index_kwargs
-            )
+            index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
 
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params
@@ -162,9 +156,7 @@ def create_new_collection(
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-        description="Populate database with embeddings from JSON files."
-    )
+    parser = ArgumentParser(description="Populate database with embeddings from JSON files.")
     parser.add_argument(
         "-i",
         "--input_dirpath",

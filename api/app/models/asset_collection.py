@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 from functools import partial
 from uuid import uuid4
 
+from pydantic import BaseModel, Field
+
 from app.config import settings
 from app.schemas.enums import AssetType
-from pydantic import BaseModel, Field
 
 
 class CollectionUpdate(BaseModel):
@@ -56,11 +57,7 @@ class AssetCollection(BaseModel):
 
     @property
     def last_update(self) -> SetupCollectionUpdate | RecurringCollectionUpdate:
-        return (
-            self.setup_update
-            if len(self.recurring_updates) == 0
-            else self.recurring_updates[-1]
-        )
+        return self.setup_update if len(self.recurring_updates) == 0 else self.recurring_updates[-1]
 
     @property
     def num_assets(self) -> int:

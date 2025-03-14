@@ -14,7 +14,7 @@ from data_types import (
 )
 
 
-class RetrievalMetricsAtK(MetricsClassAtK):    
+class RetrievalMetricsAtK(MetricsClassAtK):
     prec: list[float] | float = []
     rec: list[float] | float = []
     AP: list[float] | float = []
@@ -30,12 +30,12 @@ class RetrievalMetricsAtK(MetricsClassAtK):
 
         relevant_docs = [
             doc.id for doc in query_dp.get_relevant_documents(relevance_func)
-        ]        
+        ]
         all_retrieved_docs = query_results.doc_ids
-        
+
         # RETRIEVAL
         self.prec.append(precision_at_k(relevant_docs, all_retrieved_docs, k=k))
-        if compute_precision_only is False: 
+        if compute_precision_only is False:
             self.rec.append(recall_at_k(relevant_docs, all_retrieved_docs, k=k))
             self.AP.append(average_precision_at_k(relevant_docs, all_retrieved_docs, k=k))
 
@@ -87,7 +87,7 @@ class RetrievalMetrics(MetricsClass):
         return metrics_wrapper
 
     def compute_metrics_for_datapoint(
-        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult, 
+        self, query_dp: QueryDatapoint, query_results: SemanticSearchResult,
         compute_precision_only: bool = True,
         relevance_func: Callable[[float], bool] | None = None
     ):
@@ -101,7 +101,7 @@ class RetrievalMetrics(MetricsClass):
     def average_results(self) -> None:
         for k in self.results_in_top.keys():
             self.results_in_top[k].average_results()
-    
+
 
 class SpecificAssetQueriesMetricsAtK(MetricsClassAtK):
     asset_hit_rate: list[float] | float = []
@@ -112,7 +112,7 @@ class SpecificAssetQueriesMetricsAtK(MetricsClassAtK):
     ) -> None:
         gt_doc_id = query_dp.annotated_docs[0].id
         relevant_docs = np.array(query_results.doc_ids)
-        
+
         indices = np.where(relevant_docs[:k] == gt_doc_id)[0]
         if len(indices) == 0:
             self.asset_hit_rate.append(0)
@@ -125,7 +125,7 @@ class SpecificAssetQueriesMetricsAtK(MetricsClassAtK):
             (np.array(self.asset_hit_rate) == 1).sum() / len(self.asset_hit_rate)
         )
         self.asset_position = np.array(self.asset_position).mean()
-    
+
 
 class SpecificAssetQueriesMetrics(MetricsClass):
     results_in_top: dict[str, SpecificAssetQueriesMetricsAtK] = None
@@ -163,15 +163,15 @@ class SpecificAssetQueriesMetrics(MetricsClass):
 
 class RetrievalEvaluation:
     def __init__(
-        self, 
+        self,
         relevance_func: Callable[[float], bool] | None = None,
         verbose: bool = False
     ) -> None:
         self.relevance_func = relevance_func
         self.verbose = verbose
-        
+
     def evaluate(
-        self, 
+        self,
         retrieval_system: RetrievalSystem,
         query_loader: DataLoader,
         load_topk_docs_dirpath: str | None = None,
@@ -195,7 +195,7 @@ class RetrievalEvaluation:
 class SpecificAssetQueriesEvaluation:
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        
+
     def evaluate(
         self,
         retrieval_system: RetrievalSystem,
@@ -213,7 +213,7 @@ class SpecificAssetQueriesEvaluation:
             topk_levels=topk_levels
         )
 
-    
+
 def _generic_evaluation_loop(
     retrieval_system: RetrievalSystem,
     query_loader: DataLoader,
@@ -226,14 +226,14 @@ def _generic_evaluation_loop(
     query_ds: Queries = query_loader.dataset
     if compute_metrics_for_datapoint_func_kwargs is None:
         compute_metrics_for_datapoint_func_kwargs = {}
-    
+
     sem_search_results = retrieval_system(
-        query_loader, 
+        query_loader,
         retrieve_topk_document_ids_func_kwargs={
             "load_dirpaths": load_topk_docs_dirpath
         }
     )
-    
+
     metrics = evaluation_class_type(topk_levels)
     for query, query_results in zip(query_ds, sem_search_results):
         metrics.compute_metrics_for_datapoint(
@@ -277,7 +277,7 @@ def average_precision_at_k(
             precision_sum += precision_at_k(relevant, retrieved, i+1)
 
     avg_precision = (
-        precision_sum / num_relevant_docs 
+        precision_sum / num_relevant_docs
         if num_relevant_docs > 0 else 0
     )
     return avg_precision

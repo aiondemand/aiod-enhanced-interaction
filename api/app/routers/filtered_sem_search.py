@@ -1,6 +1,10 @@
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import APIRouter, Body, Depends, Path, Query
+from fastapi.responses import RedirectResponse
+from pydantic import conlist
+
 from app.models.filter import Filter
 from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
@@ -11,9 +15,6 @@ from app.routers.sem_search import (
 from app.schemas.enums import AssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
-from fastapi import APIRouter, Body, Depends, Path, Query
-from fastapi.responses import RedirectResponse
-from pydantic import conlist
 
 router = APIRouter()
 
@@ -48,13 +49,9 @@ async def submit_filtered_query(
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
     ),
-    topk: int = Query(
-        default=10, gt=0, le=100, description="Number of assets to return"
-    ),
+    topk: int = Query(default=10, gt=0, le=100, description="Number of assets to return"),
 ) -> RedirectResponse:
-    query_id = await _sumbit_filtered_query(
-        database, search_query, asset_type, filters, topk=topk
-    )
+    query_id = await _sumbit_filtered_query(database, search_query, asset_type, filters, topk=topk)
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
 
 
@@ -77,7 +74,8 @@ async def _sumbit_filtered_query(
         search_query, asset_type, database, apply_filtering=True
     )
     if filters:
-        [filter.validate_filter_or_raise(asset_type) for filter in filters]
+        for filter in filters:
+            filter.validate_filter_or_raise(asset_type)
 
     user_query = FilteredUserQuery(
         search_query=search_query.strip(),

@@ -46,8 +46,7 @@ if [ $EXIT_CODE -eq 0 ]; then
   else
     echo "Failed to moved tinydb.json"
   fi
-  
+
 else
   echo "Population of vector DB has encountered some ERRORS."
 fi
-

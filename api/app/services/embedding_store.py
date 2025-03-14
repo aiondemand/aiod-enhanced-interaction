@@ -7,15 +7,16 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
+from pymilvus import DataType, MilvusClient
+from pymilvus.milvus_client import IndexParams
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.params import MilvusSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
-from pymilvus import DataType, MilvusClient
-from pymilvus.milvus_client import IndexParams
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 
 class EmbeddingStore(ABC):
@@ -42,9 +43,7 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
-    def retrieve_topk_document_ids(
-        self, search_params: MilvusSearchParams
-    ) -> SearchResults:
+    def retrieve_topk_document_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         pass
 
     @abstractmethod
@@ -66,7 +65,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client = None
+        self.client: MilvusClient | None = None
 
     @property
     def vector_index_kwargs(self) -> dict:
@@ -85,7 +84,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         await obj.init_connection()
         return obj
 
-    async def init_connection(self) -> None:
+    async def init_connection(self) -> bool:
         for _ in range(5):
             try:
                 self.client = MilvusClient(
@@ -93,9 +92,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
                 )
                 return True
             except Exception:
-                logging.warning(
-                    "Failed to connect to Milvus vector database. Retrying..."
-                )
+                logging.warning("Failed to connect to Milvus vector database. Retrying...")
                 await asyncio.sleep(5)
         else:
             err_msg = "Connection to Milvus vector database has not been established"
@@ -126,9 +123,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
                         "date_published", DataType.VARCHAR, max_length=22, nullable=True
                     )
                     schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
-                    schema.add_field(
-                        "license", DataType.VARCHAR, max_length=20, nullable=True
-                    )
+                    schema.add_field("license", DataType.VARCHAR, max_length=20, nullable=True)
 
                     schema.add_field(
                         "task_types",
@@ -146,12 +141,8 @@ class MilvusEmbeddingStore(EmbeddingStore):
                         max_capacity=200,
                         nullable=True,
                     )
-                    schema.add_field(
-                        "datapoints_upper_bound", DataType.INT64, nullable=True
-                    )
-                    schema.add_field(
-                        "datapoints_lower_bound", DataType.INT64, nullable=True
-                    )
+                    schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
+                    schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
             schema.verify()
 
@@ -163,21 +154,11 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
             if self.extract_metadata:
                 if asset_type == AssetType.DATASETS:
-                    index_params.add_index(
-                        field_name="date_published", **self.scalar_index_kwargs
-                    )
-                    index_params.add_index(
-                        field_name="size_in_mb", **self.scalar_index_kwargs
-                    )
-                    index_params.add_index(
-                        field_name="license", **self.scalar_index_kwargs
-                    )
-                    index_params.add_index(
-                        field_name="task_types", **self.scalar_index_kwargs
-                    )
-                    index_params.add_index(
-                        field_name="languages", **self.scalar_index_kwargs
-                    )
+                    index_params.add_index(field_name="date_published", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="size_in_mb", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="license", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="task_types", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="languages", **self.scalar_index_kwargs)
                     index_params.add_index(
                         field_name="datapoints_upper_bound", **self.scalar_index_kwargs
                     )
@@ -217,6 +198,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
         loader: DataLoader,
         asset_type: AssetType,
         milvus_batch_size: int = 50,
+        **kwargs,
     ) -> int:
         collection_name = self.get_collection_name(asset_type)
         self._create_collection(asset_type)
@@ -242,13 +224,11 @@ class MilvusEmbeddingStore(EmbeddingStore):
             if len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1:
                 data = [
                     {"vector": emb, "doc_id": doc_id, **meta}
-                    for emb, doc_id, meta in zip(
-                        all_embeddings, all_doc_ids, all_metadata
-                    )
+                    for emb, doc_id, meta in zip(all_embeddings, all_doc_ids, all_metadata)
                 ]
-                total_inserted += self.client.insert(
-                    collection_name=collection_name, data=data
-                )["insert_count"]
+                total_inserted += self.client.insert(collection_name=collection_name, data=data)[
+                    "insert_count"
+                ]
 
                 all_embeddings = []
                 all_doc_ids = []
@@ -259,23 +239,17 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
         collection_name = self.get_collection_name(asset_type)
 
-        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")[
-            "delete_count"
-        ]
+        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")["delete_count"]
 
-    def retrieve_topk_document_ids(
-        self, search_params: MilvusSearchParams
-    ) -> SearchResults:
+    def retrieve_topk_document_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
 
         if self.client.has_collection(collection_name) is False:
-            raise ValueError(f"Collection '{collection_name}' doesnt exist")
+            raise ValueError(f"Collection '{collection_name}' does not exist")
         self.client.load_collection(collection_name)
 
         query_results = list(
-            self.client.search(
-                collection_name=collection_name, **search_params.get_params()
-            )
+            self.client.search(collection_name=collection_name, **search_params.get_params())
         )
 
         doc_ids = []

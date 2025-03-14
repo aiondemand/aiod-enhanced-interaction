@@ -5,7 +5,7 @@
             "topic": "time-series datasets about stocks",
             "conditions": [
                 {
-                    "condition": "time-series datasets", 
+                    "condition": "time-series datasets",
                     "field": "task_types",
                     "operator": "NONE"
                 }
@@ -18,17 +18,17 @@
             "topic": "multilingual news datasets",
             "conditions": [
                 {
-                    "condition": "summarization datasets", 
+                    "condition": "summarization datasets",
                     "field": "task_types",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "containing both the French as well as English data", 
+                    "condition": "containing both the French as well as English data",
                     "field": "languages",
                     "operator": "AND"
                 },
                 {
-                    "condition": "can't include any German data nor Slovak data", 
+                    "condition": "can't include any German data nor Slovak data",
                     "field": "languages",
                     "operator": "AND"
                 }
@@ -41,22 +41,22 @@
             "topic": "chocolate datasets in textual or image modality",
             "conditions": [
                 {
-                    "condition": "text-to-image datasets", 
+                    "condition": "text-to-image datasets",
                     "field": "task_types",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "datasets created after January 1, 2022", 
+                    "condition": "datasets created after January 1, 2022",
                     "field": "date_published",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "dataset size smaller than 500 000KB", 
+                    "condition": "dataset size smaller than 500 000KB",
                     "field": "size_in_mb",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "dataset has over 1 million datapoints", 
+                    "condition": "dataset has over 1 million datapoints",
                     "field": "datapoints_lower_bounds",
                     "operator": "NONE"
                 }
@@ -69,17 +69,17 @@
             "topic": "datasets with licenses for unrestricted use",
             "conditions": [
                 {
-                    "condition": "have over 50k datapoints", 
+                    "condition": "have over 50k datapoints",
                     "field": "datapoints_lower_bound",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "have fewer than 100k datapoints", 
+                    "condition": "have fewer than 100k datapoints",
                     "field": "datapoints_upper_bound",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "have MIT or apache-2.0 license", 
+                    "condition": "have MIT or apache-2.0 license",
                     "field": "licenses",
                     "operator": "OR"
                 }
@@ -92,12 +92,12 @@
             "topic": "Multilingual asian datasets",
             "conditions": [
                 {
-                    "condition": "translation datasets", 
+                    "condition": "translation datasets",
                     "field": "task_types",
                     "operator": "NONE"
                 },
                 {
-                    "condition": "Japanese or Chinese datasets", 
+                    "condition": "Japanese or Chinese datasets",
                     "field": "languages",
                     "operator": "OR"
                 }
