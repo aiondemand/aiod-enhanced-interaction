@@ -1,6 +1,6 @@
 # python 3.11.9
 
-datasets==2.19.2
+datasets==3.3.2
 jupyter==1.0.0
 numpy==1.26.4
 pandas==2.2.2
