@@ -75,7 +75,7 @@ services:
     restart: always
 
   milvus-standalone:
-    image: milvusdb/milvus:v2.5.4
+    image: milvusdb/milvus:v2.5.5
     labels:
       autoheal-label: true
     command: ["milvus", "run", "standalone"]
