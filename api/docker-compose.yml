@@ -58,7 +58,7 @@ services:
       retries: 3
 
   milvus-standalone:
-    image: milvusdb/milvus:v2.5.4
+    image: milvusdb/milvus:v2.5.5
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
