@@ -16,7 +16,7 @@ dependencies = [
     "pydantic-settings==2.4.0",
     "tqdm==4.67.1",
     "python-dotenv==1.0.1",
-    "pymilvus==2.5.4",
+    "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
     "tinydb==4.8.0",
