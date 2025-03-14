@@ -45,8 +45,8 @@ def with_retry_sync(
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
-            max_retries = settings.RETRY_RETRIES
-            sleep_time = settings.RETRY_SLEEP_TIME
+            max_retries = settings.CONNECTION_NUM_RETRIES
+            sleep_time = settings.CONNECTION_SLEEP_TIME
 
             last_exception = None
             for attempt in range(max_retries):

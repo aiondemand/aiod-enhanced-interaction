@@ -88,8 +88,8 @@ def perform_url_request(
 ) -> Response:
     # timeout based on the size of the requested response
     # 1000 assets == additional 1 minute of timeout
-    num_retries = num_retries if num_retries is not None else settings.RETRY_RETRIES
-    sleep_time = sleep_time if sleep_time is not None else settings.RETRY_SLEEP_TIME
+    num_retries = num_retries if num_retries is not None else settings.CONNECTION_NUM_RETRIES
+    sleep_time = sleep_time if sleep_time is not None else settings.CONNECTION_SLEEP_TIME
 
     # TODO later we wish to consolidate this logic with the general decorator found in resilience.py
     limit = 0 if params is None else params.get("limit", 0)

@@ -75,6 +75,8 @@ In this file you find the following ENV variables:
     - `Alibaba-NLP/gte-large-en-v1.5`: To download the specific model from the HuggingFace
     - `<PATH_TO_LOCAL_MODEL>`: To load the weights of GTE large model from the local path on your machine / in the container
 - `MODEL_BATCH_SIZE`: Number of assets model can compute embeddings for in parallel
+- `CONNECTION_NUM_RETRIES`: Number of failed retries to perform when attempting to communicate with other services (AIoD, Milvus, Ollama)
+- `CONNECTION_SLEEP_TIME`: Number of seconds to wait in between retries to contact other services
 - `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
 - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
 - `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
@@ -82,11 +84,13 @@ In this file you find the following ENV variables:
 - `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database
 - `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings of the individual chunks of each document or to have only one embedding representing the entire asset.
 - `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
+- `MILVUS__TIMEOUT`: How many seconds to wait for a Milvus blocking request to finish before throwing an error
 - Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False))
     - `OLLAMA__URI`: URI of the Ollama server.
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
     - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
     - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
+    - `OLLAMA__TIMEOUT`: How many seconds to wait for a Ollama blocking request to finish before throwing an error
 - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
