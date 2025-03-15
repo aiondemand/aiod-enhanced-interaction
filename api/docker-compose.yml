@@ -2,8 +2,8 @@ services:
   # FastAPI service
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: .. #TODO change context once the repo is reorganized (we need pyproject.toml to be in the same folder as the dockerfiles)
+      dockerfile: api/Dockerfile
     labels:
       autoheal-label: true
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
@@ -31,7 +31,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 90s
+      start_period: 30s
     restart: always
 
   # Milvus services
