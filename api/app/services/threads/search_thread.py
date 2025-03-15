@@ -16,7 +16,7 @@ from app.models.query import (
 from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
-from app.services.aiod import check_aiod_document
+from app.services.aiod import check_aiod_asset
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
@@ -72,7 +72,7 @@ async def search_thread() -> None:
                 continue
             logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query: BaseUserQuery = database.find_by_id(type=query_type, id=query_id)
+            user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
             if user_query is None:
                 err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
                 logging.error(err_msg)
@@ -82,7 +82,7 @@ async def search_thread() -> None:
             database.upsert(user_query)
 
             try:
-                results = retrieve_topk_documents_wrapper(
+                results = retrieve_topk_assets_wrapper(
                     model,
                     llm_query_parser,
                     embedding_store,
@@ -107,19 +107,19 @@ async def search_thread() -> None:
 
 
 # TODO split the function into smaller pieces
-def retrieve_topk_documents_wrapper(
+def retrieve_topk_assets_wrapper(
     model: AiModel | None,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
     num_search_retries: int = 5,
 ) -> SearchResults:
-    doc_ids_to_exclude_from_search = []
-    doc_ids_to_remove_from_db = []
-    documents_to_return = SearchResults()
-    num_docs_to_retrieve = user_query.topk
-    meta_filter_str = ""
-    precomputed_embeddings = None
+    asset_ids_to_exclude_from_search: list[int] = []
+    asset_ids_to_remove_from_db: list[int] = []
+    assets_to_return = SearchResults()
+    num_assets_to_retrieve = user_query.topk
+    meta_filter_str: str = ""
+    precomputed_embeddings: list[list[float]] | None = None
 
     # apply metadata filtering
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -137,7 +137,7 @@ def retrieve_topk_documents_wrapper(
     elif isinstance(user_query, RecommenderUserQuery):
         # Ignore the asset itself from the search
         if user_query.asset_type == user_query.output_asset_type:
-            doc_ids_to_exclude_from_search.append(str(user_query.asset_id))
+            asset_ids_to_exclude_from_search.append(user_query.asset_id)
 
         precomputed_embeddings = get_precomputed_embeddings_for_recommender(
             model, embedding_store, user_query
@@ -153,50 +153,49 @@ def retrieve_topk_documents_wrapper(
     )
 
     for _ in range(num_search_retries):
-        filter_str = f"doc_id not in {doc_ids_to_exclude_from_search}"
+        filter_str = f"asset_id not in {asset_ids_to_exclude_from_search}"
         if len(meta_filter_str) > 0:
             filter_str = f"({meta_filter_str}) and ({filter_str})"
 
         search_query = getattr(user_query, "search_query", "")
-        results = embedding_store.retrieve_topk_document_ids(
+        results = embedding_store.retrieve_topk_asset_ids(
             model=model,
             query_text=search_query,
             asset_type=target_asset_type,
-            topk=num_docs_to_retrieve,
+            topk=num_assets_to_retrieve,
             filter=filter_str,
             query_embeddings=precomputed_embeddings,
         )
 
-        doc_ids_to_exclude_from_search.extend(results.doc_ids)
+        asset_ids_to_exclude_from_search.extend(results.asset_ids)
         if len(results) == 0:
             break
 
-        # check what documents are still valid
+        # check what assets are still valid
         exists_mask = np.array(
             [
-                check_aiod_document(
-                    doc_id,
+                check_aiod_asset(
+                    asset_id,
                     target_asset_type,
                     sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
                 )
-                for doc_id in results.doc_ids
+                for asset_id in results.asset_ids
             ]
         )
-        doc_ids_to_del = [results.doc_ids[idx] for idx in np.where(~exists_mask)[0]]
-        doc_ids_to_remove_from_db.extend(doc_ids_to_del)
+        asset_ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
+        asset_ids_to_remove_from_db.extend(asset_ids_to_del)
 
-        # perform another Milvus extraction if we dont have sufficient amount of
-        # documents as a response
-        documents_to_return += results.filter_out_docs(doc_ids_to_del)
-        num_docs_to_retrieve = user_query.topk - len(documents_to_return.doc_ids)
-        if num_docs_to_retrieve == 0:
+        # perform another Milvus extraction if we dont have sufficient amount of assets as a response
+        assets_to_return += results.filter_out_assets(asset_ids_to_del)
+        num_assets_to_retrieve = user_query.topk - len(assets_to_return.asset_ids)
+        if num_assets_to_retrieve == 0:
             break
 
-    # delete invalid documents from Milvus => lazy delete
-    if len(doc_ids_to_remove_from_db) > 0:
-        embedding_store.remove_embeddings(doc_ids_to_remove_from_db, target_asset_type)
+    # delete invalid assets from Milvus => lazy delete
+    if len(asset_ids_to_remove_from_db) > 0:
+        embedding_store.remove_embeddings(asset_ids_to_remove_from_db, target_asset_type)
         logging.info(
-            f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({target_asset_type.value}) have been deleted"
+            f"[LAZY DELETE] {len(asset_ids_to_remove_from_db)} assets ({target_asset_type.value}) have been deleted"
         )
 
-    return documents_to_return
+    return assets_to_return

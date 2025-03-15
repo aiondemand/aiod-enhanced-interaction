@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -30,7 +29,7 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
-    def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
+    def remove_embeddings(self, asset_ids: list[int], asset_type: AssetType) -> int:
         pass
 
     @abstractmethod
@@ -38,11 +37,11 @@ class EmbeddingStore(ABC):
         pass
 
     @abstractmethod
-    def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
+    def get_all_asset_ids(self, asset_type: AssetType) -> list[int]:
         pass
 
     @abstractmethod
-    def retrieve_topk_document_ids(
+    def retrieve_topk_asset_ids(
         self,
         model: AiModel,
         asset_type: AssetType,
@@ -105,7 +104,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
             schema = self.client.create_schema(auto_id=True)
             schema.add_field("id", DataType.INT64, is_primary=True)
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
-            schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
+            schema.add_field("asset_id", DataType.INT64)
 
             if self.extract_metadata:
                 if asset_type == AssetType.DATASETS:
@@ -141,7 +140,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
             index_params = IndexParams()
             index_params.add_index("vector", "", "", metric_type="COSINE")
-            index_params.add_index("doc_id", "", "")
+            index_params.add_index("asset_id", "", "")
 
             self.client.create_collection(
                 collection_name=collection_name,
@@ -152,7 +151,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def exists_collection(self, asset_type: AssetType) -> bool:
         return self.client.has_collection(self.get_collection_name(asset_type))
 
-    def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
+    def get_all_asset_ids(self, asset_type: AssetType) -> list[str]:
         collection_name = self.get_collection_name(asset_type)
 
         if self.client.has_collection(collection_name) is False:
@@ -163,11 +162,11 @@ class MilvusEmbeddingStore(EmbeddingStore):
             self.client.query(
                 collection_name=collection_name,
                 filter="id > 0",
-                output_fields=["doc_id"],
+                output_fields=["asset_id"],
             )
         )
-        all_doc_ids = [str(x["doc_id"]) for x in data]
-        return np.unique(np.array(all_doc_ids)).tolist()
+        all_asset_ids = [x["asset_id"] for x in data]
+        return np.unique(np.array(all_asset_ids)).tolist()
 
     def store_embeddings(
         self,
@@ -180,45 +179,47 @@ class MilvusEmbeddingStore(EmbeddingStore):
         collection_name = self.get_collection_name(asset_type)
         self._create_collection(asset_type)
 
-        all_embeddings = []
-        all_doc_ids = []
-        all_metadata = []
+        all_embeddings: list[list[float]] = []
+        all_asset_ids: list[int] = []
+        all_metadata: list[dict] = []
 
         total_inserted = 0
-        for it, (texts, doc_ids, docs_metadata) in tqdm(
+        for it, (texts, asset_ids, assets_metadata) in tqdm(
             enumerate(loader), total=len(loader), disable=self.verbose is False
         ):
-            chunks_embeddings_of_multiple_docs = model.compute_asset_embeddings(texts)
-            for chunk_embeds_of_a_doc, doc_id, meta in zip(
-                chunks_embeddings_of_multiple_docs, doc_ids, docs_metadata
+            chunks_embeddings_of_multiple_assets = model.compute_asset_embeddings(texts)
+            for chunk_embeds_of_an_asset, asset_id, meta in zip(
+                chunks_embeddings_of_multiple_assets, asset_ids, assets_metadata
             ):
                 all_embeddings.extend(
-                    [chunk_emb for chunk_emb in chunk_embeds_of_a_doc.cpu().numpy()]
+                    [chunk_emb for chunk_emb in chunk_embeds_of_an_asset.cpu().numpy()]
                 )
-                all_doc_ids.extend([doc_id] * len(chunk_embeds_of_a_doc))
-                all_metadata.extend([meta] * len(chunk_embeds_of_a_doc))
+                all_asset_ids.extend([asset_id] * len(chunk_embeds_of_an_asset))
+                all_metadata.extend([meta] * len(chunk_embeds_of_an_asset))
 
             if len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1:
                 data = [
-                    {"vector": emb, "doc_id": doc_id, **meta}
-                    for emb, doc_id, meta in zip(all_embeddings, all_doc_ids, all_metadata)
+                    {"vector": emb, "asset_id": asset_id, **meta}
+                    for emb, asset_id, meta in zip(all_embeddings, all_asset_ids, all_metadata)
                 ]
                 total_inserted += self.client.insert(collection_name=collection_name, data=data)[
                     "insert_count"
                 ]
 
                 all_embeddings = []
-                all_doc_ids = []
+                all_asset_ids = []
                 all_metadata = []
 
         return total_inserted
 
-    def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
+    def remove_embeddings(self, asset_ids: list[int], asset_type: AssetType) -> int:
         collection_name = self.get_collection_name(asset_type)
 
-        return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")["delete_count"]
+        return self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
+            "delete_count"
+        ]
 
-    def retrieve_topk_document_ids(
+    def retrieve_topk_asset_ids(
         self,
         model: AiModel,
         asset_type: AssetType,
@@ -243,39 +244,39 @@ class MilvusEmbeddingStore(EmbeddingStore):
                 collection_name=collection_name,
                 data=query_embeddings,
                 limit=topk * 10 if self.chunk_embedding_store else topk + 1,
-                output_fields=["doc_id"],
+                output_fields=["asset_id"],
                 search_params={"metric_type": "COSINE"},
                 filter=filter,
             )
         )
 
-        doc_ids = []
-        distances = []
+        asset_ids: list[int] = []
+        distances: list[float] = []
         for results in query_results:
-            doc_ids.extend([match["entity"]["doc_id"] for match in results])
+            asset_ids.extend([match["entity"]["asset_id"] for match in results])
             distances.extend([1 - match["distance"] for match in results])
 
-        help_df = pd.DataFrame(data=[doc_ids, distances]).T
-        help_df.columns = ["doc_ids", "distances"]
+        help_df = pd.DataFrame(data=[asset_ids, distances]).T
+        help_df.columns = ["asset_ids", "distances"]
         indices = (
             help_df.sort_values(by=["distances"])
-            .drop_duplicates(subset=["doc_ids"])
+            .drop_duplicates(subset=["asset_ids"])
             .index.values[:topk]
         )
-        filtered_docs = [doc_ids[idx] for idx in indices]
+        filtered_assets = [asset_ids[idx] for idx in indices]
         filtered_distances = [distances[idx] for idx in indices]
 
-        return SearchResults(doc_ids=filtered_docs, distances=filtered_distances)
+        return SearchResults(asset_ids=filtered_assets, distances=filtered_distances)
 
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
-    ) -> Optional[List[List[float]]]:
+    ) -> list[list[float]] | None:
         collection_name = self.get_collection_name(asset_type)
 
         try:
             data = self.client.query(
                 collection_name=collection_name,
-                filter=f'doc_id == "{asset_id}"',
+                filter=f"asset_id == {asset_id}",
                 output_fields=["vector"],
             )
             if not data:
@@ -284,5 +285,5 @@ class MilvusEmbeddingStore(EmbeddingStore):
             embeddings = [item["vector"] for item in data]
             return embeddings
         except Exception as e:
-            logging.error(f"Failed to retrieve embeddings for doc_id '{asset_id}': {e}")
+            logging.error(f"Failed to retrieve embeddings for asset_id '{asset_id}': {e}")
             return None

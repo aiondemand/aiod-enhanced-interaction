@@ -53,7 +53,7 @@ class TokenizerTextSplitter:
     def __call__(self, text: str) -> list[str]:
         tokens = self.tokenizer.tokenize(text)
 
-        chunks = []
+        chunks: list[str] = []
         start_idx = 0
         while True:
             end_idx = min(start_idx + self.chunk_size, len(tokens))
@@ -272,7 +272,7 @@ class Hierarchical_EmbeddingModel(EmbeddingModel):
             out = out.reshape(out.shape[0] // max_num_chunks, max_num_chunks, -1)
             return out
 
-        chunk_embeddings = []
+        chunk_embeddings: list[torch.Tensor] = []
         for inp in input_encodings:
             out = self.input_transformer(**inp)[0]
             chunk_embeddings.append(

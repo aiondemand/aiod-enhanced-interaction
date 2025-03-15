@@ -65,7 +65,7 @@ class HuggingFaceDatasetExtractMetadata:
         )
         openrail_license = "openrail"
 
-        processed_licenses = []
+        processed_licenses: list[str] = []
         for lic in licenses:
             if openrail_license in lic:
                 processed_licenses.append(openrail_license)
@@ -242,8 +242,11 @@ class ConvertJsonToString:
         if stringify:
             return json.dumps(simple_data)
 
-        string = ""
-        flat_fields, array_fields, distrib_fields = [], [], []
+        string: str = ""
+        flat_fields: list[str] = []
+        array_fields: list[str] = []
+        distrib_fields: list[str] = []
+
         for k, v in simple_data.items():
             if k in cls.orig_distrib_fields:
                 distrib_fields.append(k)

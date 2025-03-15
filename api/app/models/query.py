@@ -40,10 +40,10 @@ class BaseUserQuery(BaseModel):
         if self.status != QueryStatus.COMPLETED:
             return response_model(**self.model_dump())
 
-        doc_ids = self.result_set.doc_ids
+        asset_ids = self.result_set.asset_ids
         return response_model(
-            returned_doc_count=len(doc_ids),
-            result_doc_ids=doc_ids,
+            returned_asset_count=len(asset_ids),
+            result_asset_ids=asset_ids,
             **self.model_dump(),
         )
 
