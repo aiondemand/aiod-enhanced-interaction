@@ -68,6 +68,12 @@ def populate_collection(
         with open(path) as f:
             data = json.load(f)
 
+        # if we work with an older version of exported data (containing 'doc_id' field), we need
+        # to firstly convert it to 'asset_field'
+        if len(data) > 0 and "doc_id" in data[0]:
+            for i in range(len(data)):
+                data[i]["asset_id"] = int(data[i].pop("doc_id"))
+
         data = [d for d in data if d["asset_id"] not in unique_asset_ids]
         if len(data) == 0:
             continue
