@@ -135,23 +135,14 @@ class LlamaManualFunctionCalling:
             | RunnableLambda(self.convert_llm_string_output_to_tool)
         )
 
-    def __call__(
-        self, input: dict | list[dict], as_batch: bool = False
-    ) -> dict | None | list[dict | None]:
+    def __call__(self, input: dict) -> dict | None:
         if self.call_function is not None:
-            return self.call_function(self.chain, input)  # TODO MYPY
+            return self.call_function(self.chain, input)
+        out = self.chain.invoke(input)
 
-        if as_batch is False:
-            out = self.chain.invoke(input)
-            if self.validate_output(out, self.pydantic_model):
-                return out
-            return None
-        else:
-            out = self.chain.batch(input)
-            validated_out = [
-                o if self.validate_output(o, self.pydantic_model) else None for o in out
-            ]
-            return validated_out
+        if self.validate_output(out, self.pydantic_model):
+            return out
+        return None
 
     @classmethod
     def validate_output(cls, output: dict, pydantic_model: Type[BaseModel] | None) -> bool:
@@ -319,13 +310,13 @@ class UserQueryParsing:
                 )
 
         topic = " ".join(topic_list)
-        parsed_conditions = [Filter(**cond) for cond in parsed_conditions]  # TODO MYPY
-        filter_string = self.milvus_translator(parsed_conditions, asset_schema)
+        filters = [Filter(**cond) for cond in parsed_conditions]
+        filter_string = self.translator_func(filters, asset_schema)
 
         return {
             "topic": topic,
             "filter_str": filter_string,
-            "filters": parsed_conditions,
+            "filters": filters,
         }
 
     @classmethod
@@ -531,7 +522,7 @@ class UserQueryParsingStages:
             (BaseModel,),
             {
                 "__annotations__": {
-                    "expressions": list[expression_class],  # TODO MYPY
+                    "expressions": list[expression_class],  # type: ignore[valid-type]
                     "logical_operator": Literal["AND", "OR"],
                 },
                 "__doc__": f"Parsing of one condition pertaining to metadata field '{field_name}'. Condition comprises one or more expressions used to for filtering purposes",
@@ -631,16 +622,20 @@ class UserQueryParsingStages:
 
     @classmethod
     def prepare_simplified_model_schema_stage_1(cls, asset_schema: Type[BaseModel]) -> str:
-        metadata_field_info = [
-            {
-                "name": name,
-                "description": field.description,
-                "type": cls._translate_primitive_type_to_str(
-                    cls._get_inner_most_primitive_type(field.annotation)  # TODO MYPY
-                ),
-            }
-            for name, field in asset_schema.model_fields.items()
-        ]
+        metadata_field_info = []
+        for name, field in asset_schema.model_fields.items():
+            if field.annotation is None:
+                raise ValueError(f"Field {name} has no annotation")
+            metadata_field_info.append(
+                {
+                    "name": name,
+                    "description": field.description,
+                    "type": cls._translate_primitive_type_to_str(
+                        cls._get_inner_most_primitive_type(field.annotation)
+                    ),
+                }
+            )
+
         return json.dumps(metadata_field_info)
 
     @classmethod
