@@ -107,11 +107,11 @@ def process_aiod_assets_wrapper(
     asset_type: AssetType,
 ) -> None:
     existing_doc_ids_from_past = embedding_store.get_all_document_ids(asset_type)
-    newly_added_doc_ids = []
+    newly_added_doc_ids: list[str] = []
 
     last_update = asset_collection.last_update
-    last_db_sync_datetime: datetime = getattr(last_update, "from_time", None)
-    query_from_time = last_db_sync_datetime
+    last_db_sync_datetime: datetime | None = getattr(last_update, "from_time", None)
+    query_from_time: datetime | None = last_db_sync_datetime
 
     last_db_sync_datetime = (
         last_db_sync_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -143,7 +143,7 @@ def process_aiod_assets_wrapper(
             newly_added_doc_ids=newly_added_doc_ids,
             last_db_sync_datetime=last_db_sync_datetime,
         )
-        if assets_to_add is None:
+        if assets_to_add is None or asset_ids_to_remove is None:
             break
 
         # Remove embeddings associated with old versions of assets

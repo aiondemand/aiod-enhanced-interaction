@@ -1,17 +1,16 @@
+from abc import ABC
 from datetime import datetime, timezone
 from functools import partial
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.config import settings
+from app.models.db_entity import DatabaseEntity
 from app.schemas.enums import AssetType
 
 
-class CollectionUpdate(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
+class CollectionUpdate(DatabaseEntity, ABC):
     embeddings_added: int = 0
     aiod_asset_offset: int = 0
     finished: bool = False
@@ -43,11 +42,8 @@ class RecurringCollectionUpdate(CollectionUpdate):
         super().update(embeddings_added)
 
 
-class AssetCollection(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
+class AssetCollection(DatabaseEntity):
     aiod_asset_type: AssetType
-    created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     setup_update: SetupCollectionUpdate = SetupCollectionUpdate()
     recurring_updates: list[RecurringCollectionUpdate] = []
 

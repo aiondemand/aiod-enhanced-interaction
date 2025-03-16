@@ -39,6 +39,7 @@ class AiModel:
                 tokenizer=transformer.tokenizer,
                 token_pooling="none",  # noqa: S106
                 chunk_pooling="none",
+                parallel_chunk_processing=True,
                 max_supported_chunks=11,
                 text_splitter=text_splitter,
                 dev=device,
@@ -58,7 +59,7 @@ class AiModel:
 
     @torch.no_grad()
     def compute_asset_embeddings(self, assets: list[str]) -> list[torch.Tensor]:
-        chunks_embeddings_of_multiple_docs = self.model(assets)
+        chunks_embeddings_of_multiple_docs = self.model.forward(assets)
         if self.use_chunking is False:
             chunks_embeddings_of_multiple_docs = [
                 emb[None] for emb in chunks_embeddings_of_multiple_docs
@@ -67,7 +68,7 @@ class AiModel:
 
     @torch.no_grad()
     def compute_query_embeddings(self, query: str) -> list[list[float]]:
-        embedding = self.model(query)[0]
+        embedding = self.model.forward(query)[0]
 
         if self.use_chunking is False:
             embedding = embedding[None]

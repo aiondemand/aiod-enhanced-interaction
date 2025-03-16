@@ -72,8 +72,6 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client: MilvusClient | None = None
-
     @staticmethod
     async def init() -> MilvusEmbeddingStore:
         obj = MilvusEmbeddingStore()
