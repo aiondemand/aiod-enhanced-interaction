@@ -74,9 +74,7 @@ async def search_thread() -> None:
                 continue
             logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query: BaseUserQuery | None = database.find_by_id(
-                type=query_type, id=query_id
-            )  # TODO MYPY
+            user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
             if user_query is None:
                 err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
                 logging.error(err_msg)

@@ -267,7 +267,7 @@ class UserQueryParsing:
         if out_stage_1 is None:
             return {"topic": user_query, "filter_str": "", "conditions": []}
 
-        topic_list = [out_stage_1["topic"]]  # TODO MYPY
+        topic_list = [out_stage_1["topic"]]
         topic_list = expand_topic_query(
             topic_list, out_stage_1["conditions"], content_key="condition"
         )
@@ -777,7 +777,7 @@ class UserQueryParsingStages:
                         if validated_output is not None:
                             output["expressions"][i]["processed_value"] = validated_output[
                                 "validated_value"
-                            ]  # TODO MYPY
+                            ]
                             if is_valid_expression_class(output["expressions"][i]):
                                 valid_expressions_count += 1
                                 output["expressions"][i]["discard"] = False
