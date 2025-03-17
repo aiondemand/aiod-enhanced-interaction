@@ -2,7 +2,7 @@
 
 datasets==3.3.2
 jupyter==1.0.0
-numpy==2.2.3
+numpy==2.2.4
 pandas==2.2.2
 python-dotenv==1.0.1
 sentence-transformers==3.0.1
