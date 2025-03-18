@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 
@@ -8,6 +9,7 @@ from app.schemas.enums import AssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import check_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.resilience import MilvusUnavailableException
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
 
 job_lock = threading.Lock()
@@ -26,8 +28,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
             logging.info(
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
             )
-
-            embedding_store = await MilvusEmbeddingStore.init()
+            embedding_store = MilvusEmbeddingStore()
             to_time = datetime.now(tz=timezone.utc)
 
             for asset_type in settings.AIOD.ASSET_TYPES:
@@ -36,6 +37,19 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
 
             logging.info(
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has ended."
+            )
+        except MilvusUnavailableException as e:
+            logging.error(e)
+            logging.error(
+                "The above error has been encountered in the Milvus garbage collection thread. "
+                + "Entire Application is being terminated now"
+            )
+            os._exit(1)
+        except Exception as e:
+            # No need to shutdown the application unless Milvus is down
+            logging.error(e)
+            logging.error(
+                "The above error has been encountered in the Milvus garbage collection thread."
             )
         finally:
             job_lock.release()

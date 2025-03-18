@@ -1,5 +1,8 @@
 FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
+# install curl for health-checking
+RUN apt-get update && apt-get install -y curl
+
 WORKDIR /code
 
 # We cannot access files in parent directory .. (outside of defined context)

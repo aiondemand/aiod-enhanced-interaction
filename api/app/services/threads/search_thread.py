@@ -23,6 +23,7 @@ from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
+from app.services.resilience import LocalServiceUnavailableException
 from tinydb import Query
 
 # SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
@@ -57,60 +58,70 @@ def fill_query_queue(database: Database) -> None:
     )
 
 
-# TODO make this function less ugly...
 async def search_thread() -> None:
-    try:
-        # Singleton - already instantiated
-        database = Database()
-        fill_query_queue(database)
+    # Singleton - already instantialized
+    database = Database()
+    fill_query_queue(database)
 
-        model = AiModel("cpu")
-        embedding_store = await MilvusEmbeddingStore.init()
+    model = AiModel("cpu")
+    embedding_store = MilvusEmbeddingStore()
 
-        llm_query_parser = None
-        if settings.PERFORM_LLM_QUERY_PARSING:
-            llm_query_parser = UserQueryParsing(llm=PrepareLLM.setup_ollama_llm())
+    llm_query_parser = None
+    if settings.PERFORM_LLM_QUERY_PARSING:
+        llm_query_parser = UserQueryParsing(llm=PrepareLLM.setup_ollama_llm())
 
-        while True:
-            query_id, query_type = QUERY_QUEUE.get()
-            if query_id is None or query_type is None:
-                return
-            if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
-                continue
-            logging.info(f"Searching relevant assets for query ID: {query_id}")
+    while True:
+        query_id, query_type = QUERY_QUEUE.get()
+        if query_id is None or query_type is None:
+            break
 
-            user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
-            if user_query is None:
-                err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
-                logging.error(err_msg)
-                continue
+        user_query = fetch_user_query(query_id, query_type, database)
+        if user_query is None:
+            continue
+        logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query.update_status(QueryStatus.IN_PROGRESS)
+        try:
+            results = search_assets_wrapper(
+                model,
+                llm_query_parser,
+                embedding_store,
+                user_query,
+            )
+            user_query.result_set = results
+            user_query.update_status(QueryStatus.COMPLETED)
             database.upsert(user_query)
+        except LocalServiceUnavailableException as e:
+            logging.error(e)
+            logging.error(
+                "The above error has been encountered in the embedding thread. "
+                + "Entire Application is being terminated now"
+            )
+            os._exit(1)
+        except Exception as e:
+            user_query.update_status(QueryStatus.FAILED)
+            database.upsert(user_query)
+            logging.error(e)
+            logging.error(
+                f"The above error has been encountered in the query processing thread while processing query ID: {query_id}"
+            )
 
-            try:
-                results = search_assets_wrapper(
-                    model,
-                    llm_query_parser,
-                    embedding_store,
-                    user_query,
-                )
 
-                user_query.result_set = results
-                user_query.update_status(QueryStatus.COMPLETED)
-                database.upsert(user_query)
-            except Exception as e:
-                user_query.update_status(QueryStatus.FAILED)
-                database.upsert(user_query)
-                logging.error(e)
-                logging.error(f"Error encountered while processing query ID: {query_id}")
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "The above error has been encountered in the query processing thread. "
-            + "Entire Application is being terminated now"
-        )
-        os._exit(1)
+def fetch_user_query(
+    query_id: str, query_type: Type[BaseUserQuery], database: Database
+) -> BaseUserQuery | None:
+    if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
+        return None
+
+    user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
+    if user_query is None:
+        err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
+        logging.error(err_msg)
+        return None
+    else:
+        user_query.update_status(QueryStatus.IN_PROGRESS)
+        database.upsert(user_query)
+
+        return user_query
 
 
 def search_assets_wrapper(
