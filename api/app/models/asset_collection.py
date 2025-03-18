@@ -1,9 +1,6 @@
 from abc import ABC
 from datetime import datetime, timezone
-from functools import partial
-from uuid import uuid4
 
-from pydantic import Field
 
 from app.config import settings
 from app.models.db_entity import DatabaseEntity

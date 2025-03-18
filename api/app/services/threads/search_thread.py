@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from queue import Queue
-from typing import Type, TypeVar
+from typing import Type
 
 import numpy as np
 from app.config import settings

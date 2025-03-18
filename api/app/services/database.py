@@ -3,7 +3,6 @@ from __future__ import annotations
 import threading
 from typing import Any, Generic, Type, TypeVar
 
-from pydantic import BaseModel
 from tinydb import Query, TinyDB
 from tinydb.storages import JSONStorage
 from tinydb.table import Table
