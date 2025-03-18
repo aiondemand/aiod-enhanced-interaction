@@ -7,6 +7,7 @@ from app.schemas.asset_metadata.dataset_metadata import (
 from app.schemas.enums import AssetType
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic._internal._decorators import Decorator, FieldValidatorDecoratorInfo
+from pydantic.fields import FieldInfo
 
 
 class SchemaOperations:

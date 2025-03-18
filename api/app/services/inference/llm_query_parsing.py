@@ -6,7 +6,7 @@ from ast import literal_eval
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Type, get_args, get_origin
+from typing import Any, Callable, Literal, Optional, Type, get_args, get_origin
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
@@ -460,8 +460,16 @@ class UserQueryParsingStages:
     def _create_dynamic_stage2_schema(
         cls, field_name: str, asset_schema: Type[BaseModel]
     ) -> Type[BaseModel]:
-        def validate_func(cls, value: Any, func: Callable) -> Any:
+        # TODO incorporate
+        def none_field_validator(cls, value: Any) -> Any:
+            if value == "NONE":
+                return None
+            return value
+
+        def orig_field_validator_wrapper(cls, value: Any, func: Callable) -> Any:
             is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[field_name]
+
+            # TODO modify this field validator wrapper...
 
             if value == "NONE":
                 return value
@@ -478,14 +486,17 @@ class UserQueryParsingStages:
 
         original_field = asset_schema.model_fields[field_name]
         validators = SchemaOperations.get_field_validators(asset_schema, field_name)
+        new_field = deepcopy(original_field)
+
+        new_field.annotation = Optional[
+            SchemaOperations.dynamically_create_type_for_a_field_value(asset_schema, field_name)
+        ]
+        new_field.description = f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."
 
         inner_class_dict = {
             "__annotations__": {
                 "raw_value": str,
-                "processed_value": SchemaOperations.dynamically_create_type_for_a_field_value(
-                    asset_schema, field_name
-                )
-                | Literal["NONE"],
+                "processed_value": new_field.annotation,
                 "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
                 "discard": bool,
             },
@@ -496,10 +507,7 @@ class UserQueryParsingStages:
                 ...,
                 description=f"The value used to compare to metadata field '{field_name}' in its raw state, extracted from the natural language condition",
             ),
-            "processed_value": Field(
-                ...,
-                description=f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}.",
-            ),
+            "processed_value": new_field,
             "comparison_operator": Field(
                 ...,
                 description=f"The comparison operator that determines how the value should be compared to the metadata field '{field_name}'.",
@@ -509,13 +517,24 @@ class UserQueryParsingStages:
                 description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'",
             ),
         }
+
+        # TODO check validators whether they work correctly
+        # field validator to convert NONE to None
         inner_class_dict.update(
             {
+                "validate_processed_value_NONE": field_validator("processed_value", mode="before")(
+                    none_field_validator
+                ),
+            }
+        )
+        inner_class_dict.update(
+            {
+                # wrapping original field validators in 'orig_field_validator_wrapper' function
                 f"validate_processed_value_{func_name}": field_validator(
                     "processed_value", mode=decor.info.mode
                 )(
                     partial(
-                        validate_func,
+                        orig_field_validator_wrapper,
                         func=getattr(asset_schema, func_name),
                     )
                 )

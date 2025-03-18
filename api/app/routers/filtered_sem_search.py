@@ -1,10 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Path, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 from pydantic import conlist
 
+from app.config import settings
 from app.models.filter import Filter
 from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
@@ -61,6 +62,52 @@ async def get_filtered_query_result(
     query_id: UUID = Path(..., description="Valid query ID"),
 ) -> FilteredUserQueryResponse:
     return await get_query_results(query_id, database, FilteredUserQuery)
+
+
+@router.get("/schemas/get_fields")
+async def get_fields_to_filter_by(
+    asset_type: AssetType = Query(
+        AssetType.DATASETS,
+        description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
+    ),
+) -> dict:
+    if asset_type not in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
+        raise HTTPException(
+            status_code=404,
+            detail=f"We currently do not support asset type '{asset_type.value}'",
+        )
+
+    # TODO return a list of fields that can be filtered by for a given asset type
+    # I suppose we can add their their respective types as well...
+
+    # TODO problem -> How am I supposed to depict value restrictions for a field, if they're guarded by field_validator decorators only?
+
+    # TODO start off with a simple list of fields without their respective types
+
+    raise NotImplementedError
+
+
+@router.get("/schemas/get_filter_schema")
+async def get_filter_schema(
+    asset_type: AssetType = Query(
+        AssetType.DATASETS,
+        description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
+    ),
+    field_name: str = Query(..., description="Name of the field we wish to filter assets by"),
+) -> dict:
+    if asset_type not in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
+        raise HTTPException(
+            status_code=404,
+            detail=f"We currently do not support asset type '{asset_type.value}'",
+        )
+
+    # TODO initial checks
+    # 1. check if asset_type is supported
+    # 2. check if field_name is supported
+
+    # TODO create Pydantic class for an asset-specific filter, and then do .model_dump() to get the schema spec
+
+    raise NotImplementedError
 
 
 async def _sumbit_filtered_query(
