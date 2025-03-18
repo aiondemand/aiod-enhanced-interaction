@@ -14,7 +14,7 @@ class RequestParams(BaseModel):
     from_time: datetime | None = None
     to_time: datetime | None = None
 
-    def new_page(self, offset: int | None, limit: int | None) -> RequestParams:
+    def new_page(self, offset: int | None = None, limit: int | None = None) -> RequestParams:
         new_obj = RequestParams(**self.model_dump())
 
         if offset is not None:
@@ -35,7 +35,7 @@ class VectorSearchParams(BaseModel, ABC):
 
     @abstractmethod
     def get_params(self) -> dict:
-        pass
+        raise NotImplementedError
 
 
 class MilvusSearchParams(VectorSearchParams):

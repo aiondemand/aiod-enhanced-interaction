@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from functools import partial
-from typing import Type
-from uuid import uuid4
+from typing import Generic, Type, TypeVar
 
-from pydantic import BaseModel, Field
-
+from app.models.db_entity import DatabaseEntity
 from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
 from app.schemas.query import (
@@ -18,52 +15,47 @@ from app.schemas.query import (
 )
 from app.schemas.search_results import SearchResults
 
+Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
-class BaseUserQuery(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
 
+class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
     asset_type: AssetType
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
-
-    created_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
-    updated_at: datetime = Field(default_factory=partial(datetime.now, tz=timezone.utc))
     result_set: SearchResults | None = None
 
     def update_status(self, status: QueryStatus) -> None:
         self.status = status
         self.updated_at = datetime.now(tz=timezone.utc)
 
-    def _map_to_response(
-        self, response_model: Type[BaseUserQueryResponse]
-    ) -> BaseUserQueryResponse:
+    def _add_results_kwargs(self) -> dict:
         if self.status != QueryStatus.COMPLETED:
-            return response_model(**self.model_dump())
-
-        doc_ids = self.result_set.doc_ids
-        return response_model(
-            returned_doc_count=len(doc_ids),
-            result_doc_ids=doc_ids,
-            **self.model_dump(),
-        )
+            return {}
+        elif self.result_set is not None:
+            return {
+                "returned_doc_count": len(self.result_set),
+                "result_doc_ids": self.result_set.doc_ids,
+            }
+        else:
+            raise ValueError("SearchResults are not available for this completed query")
 
     @staticmethod
     def sort_function_to_populate_queue(query: BaseUserQuery) -> tuple[bool, float]:
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
-    def map_to_response(self) -> BaseUserQueryResponse:
+    def map_to_response(self) -> Response:
         raise NotImplementedError
 
 
-class SimpleUserQuery(BaseUserQuery):
+class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
     search_query: str
 
     def map_to_response(self) -> SimpleUserQueryResponse:
-        return self._map_to_response(SimpleUserQueryResponse)
+        return SimpleUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
 
 
-class FilteredUserQuery(BaseUserQuery):
+class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
     search_query: str
     filters: list[Filter] | None = None
 
@@ -72,12 +64,12 @@ class FilteredUserQuery(BaseUserQuery):
         return self.filters is None
 
     def map_to_response(self) -> FilteredUserQueryResponse:
-        return self._map_to_response(FilteredUserQueryResponse)
+        return FilteredUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
 
 
-class RecommenderUserQuery(BaseUserQuery):
+class RecommenderUserQuery(BaseUserQuery[RecommenderUserQueryResponse]):
     asset_id: int
     output_asset_type: AssetType
 
     def map_to_response(self) -> RecommenderUserQueryResponse:
-        return self._map_to_response(RecommenderUserQueryResponse)
+        return RecommenderUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())

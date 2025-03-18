@@ -300,10 +300,10 @@ class ConvertJsonToString:
         elif asset_type == AssetType.SERVICES:
             flat_fields.extend(cls.service_flat_fields)
 
-        for field_value in flat_fields:
-            x = data.get(field_value, None)
+        for field_name in flat_fields:
+            x = data.get(field_name, None)
             if x is not None:
-                new_object[field_value] = x
+                new_object[field_name] = x
 
         if new_object.get("date_published", None) is not None:
             dt = datetime.fromisoformat(new_object["date_published"])
@@ -314,10 +314,10 @@ class ConvertJsonToString:
         array_fields = cls.orig_array_fields
         if asset_type == AssetType.EDUCATIONAL_RESOURCES:
             array_fields.extend(cls.educational_array_fields)
-        for field_value in array_fields:
-            x = data.get(field_value, None)
+        for field_name in array_fields:
+            x = data.get(field_name, None)
             if x is not None and len(x) > 0:
-                new_object[field_value] = x
+                new_object[field_name] = x
 
         # description & content
         for field in ["description", "content"]:
@@ -345,12 +345,12 @@ class ConvertJsonToString:
                 ]
             )
         for field_name in cls.orig_distrib_fields:
-            field_value = data.get(field_name, None)
-            if field_value is not None and len(field_value) > 0:
+            distrib_list = data.get(field_name, None)
+            if distrib_list is not None and len(distrib_list) > 0:
                 new_object[field_name] = []
 
-                for dist in field_value:
-                    new_dist = {k: dist[k] for k in dist_relevant_fields if k in dist}
+                for distrib in distrib_list:
+                    new_dist = {k: distrib[k] for k in dist_relevant_fields if k in distrib}
 
                     if new_dist.get("content_size_kb", None) is not None:
                         size_kb = int(new_dist["content_size_kb"])

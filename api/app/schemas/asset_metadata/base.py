@@ -25,6 +25,8 @@ class SchemaOperations:
         cls, asset_schema: Type[BaseModel], field_name: str
     ) -> Type:
         original_field = asset_schema.model_fields[field_name]
+        if original_field.annotation is None:
+            raise ValueError(f"Field '{field_name}' has no annotation")
 
         return cls.strip_list_type(cls.strip_optional_type(original_field.annotation))
 

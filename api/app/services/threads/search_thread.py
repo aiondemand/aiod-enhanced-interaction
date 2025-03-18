@@ -33,9 +33,11 @@ QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
 
 def fill_query_queue(database: Database) -> None:
     condition = (Query().status == QueryStatus.IN_PROGRESS) | (Query().status == QueryStatus.QUEUED)
-    simple_queries_to_process = database.search(SimpleUserQuery, condition)
-    filtered_queries_to_process = database.search(FilteredUserQuery, condition)
-    similar_queries_to_process = database.search(RecommenderUserQuery, condition)
+    simple_queries_to_process: list[BaseUserQuery] = database.search(SimpleUserQuery, condition)
+    filtered_queries_to_process: list[BaseUserQuery] = database.search(FilteredUserQuery, condition)
+    similar_queries_to_process: list[BaseUserQuery] = database.search(
+        RecommenderUserQuery, condition
+    )
 
     if (
         len(simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process)
@@ -43,7 +45,7 @@ def fill_query_queue(database: Database) -> None:
     ):
         return
 
-    queries_to_process = sorted(
+    queries_to_process: list[BaseUserQuery] = sorted(
         simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
@@ -71,13 +73,13 @@ async def search_thread() -> None:
 
         while True:
             query_id, query_type = QUERY_QUEUE.get()
-            if query_id is None:
+            if query_id is None or query_type is None:
                 return
             if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
                 continue
             logging.info(f"Searching relevant assets for query ID: {query_id}")
 
-            user_query: BaseUserQuery = database.find_by_id(type=query_type, id=query_id)
+            user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
             if user_query is None:
                 err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
                 logging.error(err_msg)
@@ -112,7 +114,7 @@ async def search_thread() -> None:
 
 
 def search_documents_wrapper(
-    model: AiModel | None,
+    model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
@@ -146,7 +148,7 @@ def search_documents_wrapper(
 
 
 def prepare_search_parameters(
-    model: AiModel | None,
+    model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
@@ -159,11 +161,11 @@ def prepare_search_parameters(
             parsed_query = llm_query_parser(user_query.search_query, user_query.asset_type)
             metadata_filter_str = parsed_query["filter_str"]
             user_query.filters = parsed_query["filters"]
-        else:
+        elif user_query.filters is not None:
             # user manually defined filters
             metadata_filter_str = llm_query_parser.translator_func(
-                filters=user_query.filters,
-                asset_schema=SchemaOperations.get_asset_schema(user_query.asset_type),
+                user_query.filters,
+                SchemaOperations.get_asset_schema(user_query.asset_type),
             )
 
     # compute query embedding
@@ -173,8 +175,10 @@ def prepare_search_parameters(
         )
         if query_embeddings is None:
             return None
-    else:
+    elif isinstance(user_query, (SimpleUserQuery, FilteredUserQuery)):
         query_embeddings = model.compute_query_embeddings(user_query.search_query)
+    else:
+        raise ValueError("We don't support other types of user queries yet")
 
     # select asset type to search for
     target_asset_type = (

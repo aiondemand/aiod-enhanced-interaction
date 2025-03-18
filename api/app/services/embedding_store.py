@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, TypeVar
+from typing import Generic, List, Optional, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -18,48 +18,48 @@ from app.schemas.params import MilvusSearchParams, VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 
-T = TypeVar("T", bound=VectorSearchParams)
+SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
 
-class EmbeddingStore(ABC):
+class EmbeddingStore(Generic[SearchParams], ABC):
     @abstractmethod
-    def create_search_params(self) -> T:
-        pass
+    def create_search_params(self, **kwargs) -> SearchParams:
+        raise NotImplementedError
 
     @abstractmethod
     def get_collection_name(self, asset_type: AssetType) -> str:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def store_embeddings(
         self, model: AiModel, loader: DataLoader, asset_type: AssetType, **kwargs
     ) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def exists_collection(self, asset_type: AssetType) -> bool:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    def retrieve_topk_document_ids(self, search_params: T) -> SearchResults:
-        pass
+    def retrieve_topk_document_ids(self, search_params: SearchParams) -> SearchResults:
+        raise NotImplementedError
 
     @abstractmethod
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
     ) -> list[list[float]] | None:
-        pass
+        raise NotImplementedError
 
 
-class MilvusEmbeddingStore(EmbeddingStore):
+class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
     # TODO
     # In the future we should pass an embedding_dim as an argument
     def __init__(
@@ -70,8 +70,6 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.extract_metadata = settings.MILVUS.EXTRACT_METADATA
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
-
-        self.client: MilvusClient | None = None
 
     @property
     def vector_index_kwargs(self) -> dict:
@@ -85,6 +83,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def scalar_index_kwargs(self) -> dict:
         return {"index_type": "INVERTED"}
 
+    @staticmethod
     async def init() -> MilvusEmbeddingStore:
         obj = MilvusEmbeddingStore()
         await obj.init_connection()
@@ -105,7 +104,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
             logging.error(err_msg)
             raise ValueError(err_msg)
 
-    def create_search_params(self, **kwargs) -> T:
+    def create_search_params(self, **kwargs) -> MilvusSearchParams:
         return MilvusSearchParams(**kwargs)
 
     def get_collection_name(self, asset_type: AssetType) -> str:
@@ -251,7 +250,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
         return self.client.delete(collection_name, filter=f"doc_id in {doc_ids}")["delete_count"]
 
-    def retrieve_topk_document_ids(self, search_params: T) -> SearchResults:
+    def retrieve_topk_document_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
 
         if self.client.has_collection(collection_name) is False:
