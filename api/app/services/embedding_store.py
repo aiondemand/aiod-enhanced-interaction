@@ -128,6 +128,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
 
                     # TODO once we have arbitrary metadata fields, we should come up with some
                     # value restrictions (e.g., string max length, array max capacity, etc.)
+                    # This will be done under the issue #21 (https://github.com/aiondemand/aiod-enhanced-interaction/issues/21)
                     schema.add_field(
                         "date_published", DataType.VARCHAR, max_length=22, nullable=True
                     )
