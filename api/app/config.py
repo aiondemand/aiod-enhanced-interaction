@@ -115,8 +115,8 @@ class AIoDConfig(BaseModel):
     def get_assets_url(self, asset_type: AssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/v1")
 
-    def get_asset_by_id_url(self, doc_id: str, asset_type: AssetType) -> str:
-        return urljoin(str(self.URL), f"{asset_type.value}/v1/{doc_id}")
+    def get_asset_by_id_url(self, asset_id: int, asset_type: AssetType) -> str:
+        return urljoin(str(self.URL), f"{asset_type.value}/v1/{asset_id}")
 
 
 class Settings(BaseSettings):

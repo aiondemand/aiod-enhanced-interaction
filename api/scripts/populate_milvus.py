@@ -35,18 +35,18 @@ def populate_database(args: InputArgs) -> None:
         populate_collection(client, collection_name, path, args.metadata)
 
 
-def get_all_doc_ids(client: MilvusClient, collection_name: str) -> set[str]:
+def get_all_asset_ids(client: MilvusClient, collection_name: str) -> set[str]:
     client.load_collection(collection_name)
 
     data = list(
         client.query(
             collection_name=collection_name,
             filter="id > 0",
-            output_fields=["doc_id"],
+            output_fields=["asset_id"],
         )
     )
-    all_doc_ids = [str(x["doc_id"]) for x in data]
-    return set(np.unique(np.array(all_doc_ids)).tolist())
+    all_asset_ids = [x["asset_id"] for x in data]
+    return set(np.unique(np.array(all_asset_ids)).tolist())
 
 
 def populate_collection(
@@ -55,10 +55,10 @@ def populate_collection(
     json_dirpath: str,
     extract_metadata: bool,
 ) -> None:
-    unique_doc_ids = set()
+    unique_asset_ids = set()
     newly_created_col = create_new_collection(client, collection_name, extract_metadata)
     if newly_created_col is False:
-        unique_doc_ids = get_all_doc_ids(client, collection_name)
+        unique_asset_ids = get_all_asset_ids(client, collection_name)
 
     print(f"Populating collection: {collection_name}")
     for file in tqdm(os.listdir(json_dirpath)):
@@ -66,7 +66,13 @@ def populate_collection(
         with open(path) as f:
             data = json.load(f)
 
-        data = [d for d in data if d["doc_id"] not in unique_doc_ids]
+        # if we work with an older version of exported data (containing 'doc_id' field), we need
+        # to firstly convert it to 'asset_field'
+        if len(data) > 0 and "doc_id" in data[0]:
+            for i in range(len(data)):
+                data[i]["asset_id"] = int(data[i].pop("doc_id"))
+
+        data = [d for d in data if d["asset_id"] not in unique_asset_ids]
         if len(data) == 0:
             continue
 
@@ -75,12 +81,12 @@ def populate_collection(
 
             # remove irrelevant fields from the data pertaining to metadata
             if extract_metadata is False:
-                fields_to_del = set(data[i].keys()) - {"doc_id", "vector"}
+                fields_to_del = set(data[i].keys()) - {"asset_id", "vector"}
                 for field in fields_to_del:
                     data[i].pop(field)
 
         client.insert(collection_name=collection_name, data=data)
-        unique_doc_ids.update(d["doc_id"] for d in data)
+        unique_asset_ids.update(d["asset_id"] for d in data)
 
 
 def create_new_collection(
@@ -89,10 +95,17 @@ def create_new_collection(
     if client.has_collection(collection_name):
         return False
 
+    vector_index_kwargs = {
+        "index_type": "HNSW_SQ",
+        "metric_type": "COSINE",
+        "params": {"sq_type": "SQ8"},
+    }
+    scalar_index_kwargs = {"index_type": "INVERTED"}
+
     schema = client.create_schema(auto_id=True)
     schema.add_field("id", DataType.INT64, is_primary=True)
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
-    schema.add_field("doc_id", DataType.VARCHAR, max_length=20)
+    schema.add_field("asset_id", DataType.INT64)
 
     if extract_metadata and collection_name.endswith("_datasets"):
         # TODO for now this is a duplicate code to the index creation process found
@@ -123,11 +136,22 @@ def create_new_collection(
         schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
         schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
-    schema.verify()
+        schema.verify()
 
-    index_params = IndexParams()
-    index_params.add_index("vector", "", "", metric_type="COSINE")
-    index_params.add_index("doc_id", "", "")
+        index_params = IndexParams()
+        index_params = client.prepare_index_params()
+
+        index_params.add_index(field_name="vector", **vector_index_kwargs)
+        index_params.add_index(field_name="asset_id", **scalar_index_kwargs)
+
+        if extract_metadata and collection_name.endswith("_datasets"):
+            index_params.add_index(field_name="date_published", **scalar_index_kwargs)
+            index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
+            index_params.add_index(field_name="license", **scalar_index_kwargs)
+            index_params.add_index(field_name="task_types", **scalar_index_kwargs)
+            index_params.add_index(field_name="languages", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
 
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params

@@ -1,15 +1,34 @@
-from abc import ABCMeta, abstractmethod
-from typing import Callable
+from abc import ABC, abstractmethod
+from typing import Callable, Generic, Literal, TypeVar
 
 import numpy as np
 import torch
+from pydantic import BaseModel, ConfigDict
 from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 
-class EmbeddingModel(torch.nn.Module, metaclass=ABCMeta):
+class PreprocessedInput(BaseModel, ABC):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class BasicPreprocessedInput(PreprocessedInput):
+    input_encodings: dict[str, torch.Tensor]
+
+
+class HierarchicalPreprocessedInput(PreprocessedInput):
+    all_chunk_input_encodings: dict[str, torch.Tensor] | None = None
+    separate_chunk_input_encodings: list[dict[str, torch.Tensor]] | None = None
+    chunk_attn_mask: torch.Tensor
+    num_chunks: int
+
+
+GenericPreprocessedInput = TypeVar("GenericPreprocessedInput", bound=PreprocessedInput)
+
+
+class EmbeddingModel(torch.nn.Module, Generic[GenericPreprocessedInput], ABC):
     @abstractmethod
-    def forward(self, texts: list[str]) -> list[torch.Tensor]:
+    def forward(self, texts: list[str] | str) -> list[torch.Tensor]:
         """
         Main endpoint that wraps the logic of two functions
         'preprocess_input' and '_forward'
@@ -17,23 +36,23 @@ class EmbeddingModel(torch.nn.Module, metaclass=ABCMeta):
         Returns a list of tensors representing either entire documents or
         the chunks documents consist of
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
+    def _forward(self, encodings: GenericPreprocessedInput) -> list[torch.Tensor]:
         """
         Function called to perform a model forward pass on a input data
         that is represented by the 'encodings' argument
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    def preprocess_input(self, texts: list[str]) -> dict:
+    def preprocess_input(self, texts: list[str]) -> GenericPreprocessedInput:
         """
         Function to process a batch of data and return it a format that is
         further fed into a model
         """
-        pass
+        raise NotImplementedError
 
 
 class TokenizerTextSplitter:
@@ -52,16 +71,19 @@ class TokenizerTextSplitter:
 
     def __call__(self, text: str) -> list[str]:
         tokens = self.tokenizer.tokenize(text)
+        tokens_with_special_tokens = self.tokenizer.tokenize(text, add_special_tokens=True)
+        num_special_tokens = len(tokens_with_special_tokens) - len(tokens)
+        actual_chunk_size = self.chunk_size - num_special_tokens
 
-        chunks = []
+        chunks: list[str] = []
         start_idx = 0
         while True:
-            end_idx = min(start_idx + self.chunk_size, len(tokens))
+            end_idx = min(start_idx + actual_chunk_size, len(tokens))
             chunk_tokens = tokens[start_idx:end_idx]
             chunk_text = self.tokenizer.convert_tokens_to_string(chunk_tokens)
             chunks.append(chunk_text)
 
-            start_idx = end_idx - int(self.chunk_size * self.chunk_overlap)
+            start_idx = end_idx - int(actual_chunk_size * self.chunk_overlap)
             if end_idx == len(tokens):
                 break
 
@@ -106,7 +128,7 @@ class SentenceTransformerToHF(torch.nn.Module):
         return [encodings["sentence_embedding"]]
 
 
-class Basic_EmbeddingModel(EmbeddingModel):
+class Basic_EmbeddingModel(EmbeddingModel[BasicPreprocessedInput]):
     """
     Class representing models that process the input documents in their entirety
     without needing to divide them into separate chunks.
@@ -116,7 +138,7 @@ class Basic_EmbeddingModel(EmbeddingModel):
         self,
         transformer: PreTrainedModel | SentenceTransformerToHF,
         tokenizer: PreTrainedTokenizer,
-        pooling: str = "max",
+        pooling: Literal["mean", "max", "CLS_token", "none"] = "max",
         document_max_length: int = -1,
         global_attention_mask: bool = False,
         preprocess_text_fn: Callable[[str], str] | None = None,
@@ -140,16 +162,21 @@ class Basic_EmbeddingModel(EmbeddingModel):
 
         self.dev = dev
 
-    def forward(self, texts: list[str]) -> list[torch.Tensor]:
+    def forward(self, texts: list[str] | str) -> list[torch.Tensor]:
+        if isinstance(texts, str):
+            texts = [texts]
+
         encoding = self.preprocess_input(texts)
         return self._forward(encoding)
 
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
-        out = self.transformer(**encodings)[0]
-        out = _pool(out, encodings["attention_mask"], self.pooling)
+    def _forward(self, encodings: BasicPreprocessedInput) -> list[torch.Tensor]:
+        inp = encodings.input_encodings
+
+        out = self.transformer(**inp)[0]
+        out = _pool(out, inp["attention_mask"], self.pooling)
         return [emb for emb in out]
 
-    def preprocess_input(self, texts: list[str]) -> dict:
+    def preprocess_input(self, texts: list[str]) -> BasicPreprocessedInput:
         if self.preprocess_text_fn is not None:
             texts = [self.preprocess_text_fn(t) for t in texts]
 
@@ -171,10 +198,11 @@ class Basic_EmbeddingModel(EmbeddingModel):
                 encodings["attention_mask"], device=self.dev
             )
             encodings["global_attention_mask"][:, 0] = 1
-        return encodings
+
+        return BasicPreprocessedInput(input_encodings=encodings)
 
 
-class Hierarchical_EmbeddingModel(EmbeddingModel):
+class Hierarchical_EmbeddingModel(EmbeddingModel[HierarchicalPreprocessedInput]):
     """
     Class representing models that process the input documents by firstly individually
     processing their chunks before further accumulating the chunk information to
@@ -184,10 +212,10 @@ class Hierarchical_EmbeddingModel(EmbeddingModel):
     def __init__(
         self,
         input_transformer: PreTrainedModel | SentenceTransformerToHF,
+        tokenizer: PreTrainedTokenizer,
         chunk_transformer: PreTrainedModel | None = None,
-        tokenizer: PreTrainedTokenizer | None = None,
-        token_pooling: str = "CLS_token",  # noqa: S107
-        chunk_pooling: str = "mean",
+        token_pooling: Literal["mean", "max", "CLS_token", "none"] = "CLS_token",  # noqa: S107
+        chunk_pooling: Literal["mean", "max", "none"] = "mean",
         parallel_chunk_processing: bool = True,
         max_supported_chunks: int = -1,
         text_splitter: TokenizerTextSplitter | None = None,
@@ -235,91 +263,93 @@ class Hierarchical_EmbeddingModel(EmbeddingModel):
 
         self.dev = dev
 
-    def forward(self, texts: list[str]) -> list[torch.Tensor]:
-        encoding = self.preprocess_input(texts)
-        return self._forward(encoding)
+    def forward(self, texts: list[str] | str) -> list[torch.Tensor]:
+        if isinstance(texts, str):
+            texts = [texts]
 
-    def _forward(self, encodings: dict[str, torch.Tensor]) -> list[torch.Tensor]:
-        chunk_embeddings = self._first_level_forward(
-            encodings["input_encodings"], int(encodings["max_num_chunks"])
-        )
+        inner_input = self.preprocess_input(texts)
+        return self._forward(inner_input)
+
+    def _forward(self, inner_input: HierarchicalPreprocessedInput) -> list[torch.Tensor]:
+        chunk_embeddings = self._first_level_forward(inner_input)
         doc_embeddings = self._second_level_forward(
             chunk_embeddings,
-            encodings["chunk_attn_mask"],
+            inner_input.chunk_attn_mask,
         )
-        doc_embeddings = [emb for emb in doc_embeddings]
 
-        # get rid of padding chunks if there exists
+        # get rid of padding chunks if we wish to return all the chunk embeddings
         if self.chunk_pooling == "none":
             doc_embeddings = [
                 emb[chunk_mask.to(torch.bool)]
-                for emb, chunk_mask in zip(doc_embeddings, encodings["chunk_attn_mask"])
+                for emb, chunk_mask in zip(doc_embeddings, inner_input.chunk_attn_mask)
             ]
 
         return doc_embeddings
 
     def _first_level_forward(
-        self, input_encodings: list[dict] | dict, max_num_chunks: int
+        self, inner_input: HierarchicalPreprocessedInput
     ) -> list[torch.Tensor]:
         """Function representing a forward pass of the first-level transformer"""
-        if self.parallel_chunk_processing:
-            out = self.input_transformer(**input_encodings)[0]
+        if self.parallel_chunk_processing and inner_input.all_chunk_input_encodings is not None:
+            encodings = inner_input.all_chunk_input_encodings
+            num_chunks = inner_input.num_chunks
+
+            out = self.input_transformer(**encodings)[0]
             out = _pool(
                 out,
-                input_encodings["attention_mask"],
+                encodings["attention_mask"],
                 pooling_method=self.token_pooling,
             )
-            out = out.reshape(out.shape[0] // max_num_chunks, max_num_chunks, -1)
-            return out
+            out = out.reshape(out.shape[0] // num_chunks, num_chunks, -1)
+            return [o for o in out]
 
-        chunk_embeddings = []
-        for inp in input_encodings:
-            out = self.input_transformer(**inp)[0]
-            chunk_embeddings.append(
-                _pool(
-                    out,
-                    inp["attention_mask"],
-                    pooling_method=self.token_pooling,
+        if (
+            self.parallel_chunk_processing is False
+            and inner_input.separate_chunk_input_encodings is not None
+        ):
+            chunk_embeddings: list[torch.Tensor] = []
+            for inp in inner_input.separate_chunk_input_encodings:
+                out = self.input_transformer(**inp)[0]
+                chunk_embeddings.append(
+                    _pool(
+                        out,
+                        inp["attention_mask"],
+                        pooling_method=self.token_pooling,
+                    )
                 )
-            )
-        return chunk_embeddings
+
+            chunk_mask = inner_input.chunk_attn_mask
+            padded_chunk_embeddings = torch.zeros(
+                chunk_mask.shape[0],
+                chunk_mask.shape[1],
+                chunk_embeddings[0].shape[-1],
+            ).to(self.dev)
+
+            for chunk_it in range(len(chunk_embeddings)):
+                indices = torch.where(chunk_mask[:, chunk_it] != 0)[0]
+                padded_chunk_embeddings[indices, chunk_it] = chunk_embeddings[chunk_it]
+
+            return [emb for emb in padded_chunk_embeddings]
+
+        else:
+            raise ValueError("Invalid input")
 
     def _second_level_forward(
         self, chunks_embeddings: list[torch.Tensor], chunk_attn_mask: torch.Tensor
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Function representing a forward pass of the second-level transformer"""
-        if self.parallel_chunk_processing:
-            chunk_encodings = {
-                "inputs_embeds": chunks_embeddings,
-                "attention_mask": chunk_attn_mask,
-            }
-            chunk_out = chunks_embeddings
-            if self.chunk_transformer is not None:
-                chunk_out = self.chunk_transformer(**chunk_encodings)[0]
-            doc_embedding = _pool(chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling)
-            return doc_embedding
-
-        all_embeddings = torch.zeros(
-            chunk_attn_mask.shape[0],
-            chunk_attn_mask.shape[1],
-            chunks_embeddings[-1].shape[-1],
-        ).to(self.dev)
-
-        for chunk_it in range(len(chunks_embeddings)):
-            indices = torch.where(chunk_attn_mask[:, chunk_it] != 0)[0]
-            all_embeddings[indices, chunk_it] = chunks_embeddings[chunk_it]
+        chunk_out = torch.stack(chunks_embeddings)
         chunk_encodings = {
-            "inputs_embeds": all_embeddings,
+            "inputs_embeds": chunk_out,
             "attention_mask": chunk_attn_mask,
         }
 
-        chunk_out = all_embeddings
         if self.chunk_transformer is not None:
             chunk_out = self.chunk_transformer(**chunk_encodings)[0]
-        doc_embedding = _pool(chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling)
-        return doc_embedding
+        doc_embeddings = _pool(chunk_out, chunk_attn_mask, pooling_method=self.chunk_pooling)
+        return [emb for emb in doc_embeddings]
 
-    def preprocess_input(self, texts: list[str]) -> dict:
+    def preprocess_input(self, texts: list[str]) -> HierarchicalPreprocessedInput:
         if self.preprocess_text_fn is not None:
             texts = [self.preprocess_text_fn(t) for t in texts]
         chunked_texts = [self.text_splitter(t) for t in texts]
@@ -338,11 +368,18 @@ class Hierarchical_EmbeddingModel(EmbeddingModel):
             encoding = self.tokenizer(
                 rectangular_texts, return_tensors="pt", truncation=True, padding=True
             ).to(self.dev)
-            return {
-                "input_encodings": encoding,
-                "chunk_attn_mask": chunk_mask,
-                "max_num_chunks": max_chunks,
-            }
+
+            # Zero out encodings for empty strings
+            empty_indices = np.where(np.array(rectangular_texts) == "")[0]
+            if len(empty_indices) > 0:
+                encoding["input_ids"][empty_indices] = 0
+                encoding["attention_mask"][empty_indices] = 0
+
+            return HierarchicalPreprocessedInput(
+                all_chunk_input_encodings=encoding,
+                chunk_attn_mask=chunk_mask,
+                num_chunks=max_chunks,
+            )
 
         # input_encodings
         transposed_texts = np.array(padded_texts).T.tolist()
@@ -355,14 +392,18 @@ class Hierarchical_EmbeddingModel(EmbeddingModel):
             ).to(self.dev)
             for chunks_of_docs in transposed_texts
         ]
-        return_obj = {
-            "input_encodings": encodings,
-            "chunk_attn_mask": chunk_mask,
-        }
-        return return_obj
+        return HierarchicalPreprocessedInput(
+            separate_chunk_input_encodings=encodings,
+            chunk_attn_mask=chunk_mask,
+            num_chunks=max_chunks,
+        )
 
 
-def _pool(inp: torch.Tensor, attention_mask: torch.Tensor, pooling_method: str) -> torch.Tensor:
+def _pool(
+    inp: torch.Tensor,
+    attention_mask: torch.Tensor,
+    pooling_method: Literal["mean", "max", "CLS_token", "none"],
+) -> torch.Tensor:
     """
     Wrapper function for performing a specific pooling method that aggregates values
     from multiple sources and merges them into one representation
@@ -375,7 +416,8 @@ def _pool(inp: torch.Tensor, attention_mask: torch.Tensor, pooling_method: str) 
         return cls_pooling(inp)
     if pooling_method == "none":
         return inp
-    return None
+
+    raise ValueError("Invalid pooling method")
 
 
 def cls_pooling(hidden_states: torch.Tensor) -> torch.Tensor:

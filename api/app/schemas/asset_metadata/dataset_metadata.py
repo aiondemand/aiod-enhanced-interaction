@@ -17,8 +17,15 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     Extraction of relevant metadata we wish to retrieve from ML assets
     """
 
-    _ALL_VALID_VALUES: ClassVar[dict[str, list[str]] | None] = None
-    _PATH_TO_VALID_VALUES: ClassVar[Path] = Path("data/valid_metadata_values.json")
+    @staticmethod
+    def _load_all_valid_values(path: Path) -> dict[str, list[str]]:
+        with open(path) as f:
+            valid_values = json.load(f)
+        return valid_values
+
+    _ALL_VALID_VALUES: ClassVar[dict[str, list[str]]] = _load_all_valid_values(
+        Path("data/valid_metadata_values.json")
+    )
 
     date_published: Optional[str] = Field(
         None,
@@ -50,20 +57,11 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     )
 
     @classmethod
-    def _load_all_valid_values(cls) -> None:
-        with open(cls._PATH_TO_VALID_VALUES) as f:
-            cls._ALL_VALID_VALUES = json.load(f)
-
-    @classmethod
     def get_field_valid_values(cls, field: str) -> list[str]:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
         return cls._ALL_VALID_VALUES.get(field, [])
 
     @classmethod
     def exists_field_valid_values(cls, field: str) -> bool:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
         return field in cls._ALL_VALID_VALUES.keys()
 
     @classmethod
@@ -75,15 +73,11 @@ class HuggingFaceDatasetMetadataTemplate(BaseModel):
     @classmethod
     @field_validator("license", mode="before")
     def check_license(cls, value: str) -> str | None:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
         return value if value in cls.get_field_valid_values("license") else None
 
     @classmethod
     @field_validator("task_types", mode="before")
     def check_task_types(cls, values: list[str]) -> list[str] | None:
-        if cls._ALL_VALID_VALUES is None:
-            cls._load_all_valid_values()
         valid_values = [
             val.lower() for val in values if val.lower() in cls.get_field_valid_values("task_types")
         ]

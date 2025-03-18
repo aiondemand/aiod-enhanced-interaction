@@ -12,6 +12,7 @@ from tinydb_serialization.serializers import DateTimeSerializer
 
 from app.config import settings
 from app.models.asset_collection import AssetCollection
+from app.models.db_entity import DatabaseEntity
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.schemas.enums import AssetType, QueryStatus
 
@@ -34,7 +35,7 @@ class QueryStatusSerializer(Serializer):
     def encode(self, obj) -> str:
         return obj.value
 
-    def decode(self, s) -> None:
+    def decode(self, s) -> QueryStatus:
         return QueryStatus(s)
 
 
@@ -44,11 +45,11 @@ class AssetTypeSerializer(Serializer):
     def encode(self, obj) -> str:
         return obj.value
 
-    def decode(self, s) -> None:
+    def decode(self, s) -> AssetType:
         return AssetType(s)
 
 
-T = TypeVar("T", bound=BaseModel)
+DbEntity = TypeVar("DbEntity", bound=DatabaseEntity)
 
 
 class Database:
@@ -71,7 +72,7 @@ class Database:
         self.db = TinyDB(settings.TINYDB_FILEPATH, storage=serialization)
         self.db_lock = threading.Lock()
 
-        self.collections = {
+        self.collections: dict[Type[DatabaseEntity], MyCollection] = {
             SimpleUserQuery: MyCollection[SimpleUserQuery](
                 self.db.table("simple_queries"), self.db_lock
             ),
@@ -86,20 +87,20 @@ class Database:
             ),
         }
 
-    def insert(self, obj: BaseModel) -> Any:
+    def insert(self, obj: DatabaseEntity) -> Any:
         return self.collections[type(obj)].insert(obj)
 
-    def upsert(self, obj: BaseModel) -> Any:
+    def upsert(self, obj: DatabaseEntity) -> Any:
         return self.collections[type(obj)].upsert(obj)
 
-    def find_by_id(self, type: Type[T], id: str) -> T | None:
-        return self.collections[type].find_by_id(id)
+    def find_by_id(self, type: Type[DbEntity], id: str) -> DbEntity | None:
+        return self.collections[type].find_by_id(type, id)
 
-    def delete(self, type: Type[T], *args, **kwargs) -> Any:
+    def delete(self, type: Type[DbEntity], *args, **kwargs) -> Any:
         return self.collections[type].delete(*args, **kwargs)
 
-    def search(self, type: Type[T], *args, **kwargs) -> list[T]:
-        return self.collections[type].search(*args, **kwargs)
+    def search(self, type: Type[DbEntity], *args, **kwargs) -> list[DbEntity]:
+        return self.collections[type].search(type, *args, **kwargs)
 
     def get_first_asset_collection_by_type(self, asset_type: AssetType) -> AssetCollection | None:
         rs = self.search(AssetCollection, Query().aiod_asset_type == asset_type)
@@ -108,31 +109,29 @@ class Database:
         return rs[0]
 
 
-class MyCollection(Generic[T]):
+class MyCollection(Generic[DbEntity]):
     def __init__(self, table: Table, db_lock: threading.Lock) -> None:
         self.table = table
         self.db_lock = db_lock
 
-    def insert(self, object: T) -> Any:
+    def insert(self, object: DbEntity) -> Any:
         with self.db_lock:
             return self.table.insert(object.model_dump())
 
-    def upsert(self, object: T) -> Any:
+    def upsert(self, object: DbEntity) -> Any:
         with self.db_lock:
             return self.table.upsert(object.model_dump(), Query().id == object.id)
 
-    def find_by_id(self, id: str) -> T | None:
+    def find_by_id(self, type: Type[DbEntity], id: str) -> DbEntity | None:
         obj = self.table.get(Query().id == id)
         if obj is None:
             return None
-        T_type = self.__orig_class__.__args__[0]
-        return T_type(**obj)
+        return type(**obj)
 
     def delete(self, *args, **kwargs):
         with self.db_lock:
             return self.table.remove(*args, **kwargs)
 
-    def search(self, *args, **kwargs) -> list[T]:
+    def search(self, type: Type[DbEntity], *args, **kwargs) -> list[DbEntity]:
         results = self.table.search(*args, **kwargs)
-        T_type = self.__orig_class__.__args__[0]
-        return [T_type(**res) for res in results]
+        return [type(**res) for res in results]

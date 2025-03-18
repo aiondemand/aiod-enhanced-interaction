@@ -44,7 +44,7 @@ async def submit_filtered_query(
         AssetType.DATASETS,
         description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
     ),
-    filters: conlist(Filter, max_length=5) | None = Body(
+    filters: conlist(Filter, max_length=5) | None = Body(  # type: ignore[valid-type]
         None,
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
