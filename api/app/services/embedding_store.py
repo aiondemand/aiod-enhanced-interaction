@@ -21,25 +21,25 @@ from app.services.inference.model import AiModel
 class EmbeddingStore(ABC):
     @abstractmethod
     def get_collection_name(self, asset_type: AssetType) -> str:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def store_embeddings(
         self, model: AiModel, loader: DataLoader, asset_type: AssetType, **kwargs
     ) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def remove_embeddings(self, doc_ids: list[str], asset_type: AssetType) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def exists_collection(self, asset_type: AssetType) -> bool:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_all_document_ids(self, asset_type: AssetType) -> list[str]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def retrieve_topk_document_ids(
@@ -51,13 +51,13 @@ class EmbeddingStore(ABC):
         filter: str = "",
         query_embeddings: list[list[float]] | None = None,
     ) -> SearchResults:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
     ) -> list[list[float]] | None:
-        pass
+        raise NotImplementedError
 
 
 class MilvusEmbeddingStore(EmbeddingStore):

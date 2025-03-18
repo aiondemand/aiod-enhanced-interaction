@@ -36,7 +36,7 @@ class EmbeddingModel(torch.nn.Module, Generic[GenericPreprocessedInput], ABC):
         Returns a list of tensors representing either entire documents or
         the chunks documents consist of
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _forward(self, encodings: GenericPreprocessedInput) -> list[torch.Tensor]:
@@ -44,7 +44,7 @@ class EmbeddingModel(torch.nn.Module, Generic[GenericPreprocessedInput], ABC):
         Function called to perform a model forward pass on a input data
         that is represented by the 'encodings' argument
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def preprocess_input(self, texts: list[str]) -> GenericPreprocessedInput:
@@ -52,7 +52,7 @@ class EmbeddingModel(torch.nn.Module, Generic[GenericPreprocessedInput], ABC):
         Function to process a batch of data and return it a format that is
         further fed into a model
         """
-        pass
+        raise NotImplementedError
 
 
 class TokenizerTextSplitter:

@@ -17,10 +17,6 @@ from app.schemas.search_results import SearchResults
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
-# TODO change this slightly so that we don't have _map_to_response function in the base class
-# but we simply override map_to_response... Or if you really want to, we can extract common
-# functionality into such function, but we shouldn't really convert it to its final Pydantic class
-
 
 class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
     asset_type: AssetType
@@ -49,7 +45,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
 
     @abstractmethod
     def map_to_response(self) -> Response:
-        pass
+        raise NotImplementedError
 
 
 class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
