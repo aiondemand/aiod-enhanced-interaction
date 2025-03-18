@@ -12,7 +12,7 @@ class SearchResults(BaseModel):
         if isinstance(other, SearchResults) is False:
             raise TypeError("Invalid object type")
 
-        other = other.filter_out_assets(self.asset_ids)
+        other = other.filter_out_assets_by_id(self.asset_ids)
 
         all_ids = self.asset_ids + other.asset_ids
         all_distances = self.distances + other.distances
@@ -26,7 +26,7 @@ class SearchResults(BaseModel):
     def __len__(self) -> int:
         return len(self.asset_ids)
 
-    def filter_out_assets(self, asset_ids_to_del: list[int]) -> SearchResults:
+    def filter_out_assets_by_id(self, asset_ids_to_del: list[int]) -> SearchResults:
         idx_to_keep = np.where(~np.isin(self.asset_ids, asset_ids_to_del))[0]
 
         return SearchResults(

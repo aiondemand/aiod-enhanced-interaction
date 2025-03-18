@@ -24,7 +24,7 @@ def get_precomputed_embeddings_for_recommender(
         asset_obj = get_aiod_asset(user_query.asset_id, user_query.asset_type)
         if asset_obj is None:
             # TODO we should pass the information to the user that the asset_id they provided is invalid
-            # For now, current implementation returns an empty list of similar documents to a non-existing asset
+            # For now, current implementation returns an empty list of similar assets to a non-existing asset
             logging.error(
                 f"Asset with id '{user_query.asset_id}' ({user_query.asset_type.value}) not found in AIoD platform."
             )

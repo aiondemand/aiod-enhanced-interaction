@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -13,53 +14,52 @@ from tqdm import tqdm
 
 from app.config import settings
 from app.schemas.enums import AssetType
+from app.schemas.params import MilvusSearchParams, VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
 
+SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
-class EmbeddingStore(ABC):
+
+class EmbeddingStore(Generic[SearchParams], ABC):
+    @abstractmethod
+    def create_search_params(self, **kwargs) -> SearchParams:
+        raise NotImplementedError
+
     @abstractmethod
     def get_collection_name(self, asset_type: AssetType) -> str:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def store_embeddings(
         self, model: AiModel, loader: DataLoader, asset_type: AssetType, **kwargs
     ) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def remove_embeddings(self, asset_ids: list[int], asset_type: AssetType) -> int:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def exists_collection(self, asset_type: AssetType) -> bool:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_all_asset_ids(self, asset_type: AssetType) -> list[int]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    def retrieve_topk_asset_ids(
-        self,
-        model: AiModel,
-        asset_type: AssetType,
-        query_text: str | None = None,
-        topk: int = 10,
-        filter: str = "",
-        query_embeddings: list[list[float]] | None = None,
-    ) -> SearchResults:
-        pass
+    def retrieve_topk_asset_ids(self, search_params: SearchParams) -> SearchResults:
+        raise NotImplementedError
 
     @abstractmethod
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType
     ) -> list[list[float]] | None:
-        pass
+        raise NotImplementedError
 
 
-class MilvusEmbeddingStore(EmbeddingStore):
+class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
     # TODO
     # In the future we should pass an embedding_dim as an argument
     def __init__(
@@ -71,7 +71,17 @@ class MilvusEmbeddingStore(EmbeddingStore):
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
 
-        self.client: MilvusClient | None = None
+    @property
+    def vector_index_kwargs(self) -> dict:
+        return {
+            "index_type": "HNSW_SQ",
+            "metric_type": "COSINE",
+            "params": {"sq_type": "SQ8"},
+        }
+
+    @property
+    def scalar_index_kwargs(self) -> dict:
+        return {"index_type": "INVERTED"}
 
     @staticmethod
     async def init() -> MilvusEmbeddingStore:
@@ -94,6 +104,9 @@ class MilvusEmbeddingStore(EmbeddingStore):
             logging.error(err_msg)
             raise ValueError(err_msg)
 
+    def create_search_params(self, **kwargs) -> MilvusSearchParams:
+        return MilvusSearchParams(**kwargs)
+
     def get_collection_name(self, asset_type: AssetType) -> str:
         return f"{settings.MILVUS.COLLECTION_PREFIX}_{asset_type.value}"
 
@@ -111,6 +124,10 @@ class MilvusEmbeddingStore(EmbeddingStore):
                     # TODO
                     # Currently this schema reflects some what easily accessible and constant
                     # metadata we can retrieve from HuggingFace
+
+                    # TODO once we have arbitrary metadata fields, we should come up with some
+                    # value restrictions (e.g., string max length, array max capacity, etc.)
+                    # This will be done under the issue #21 (https://github.com/aiondemand/aiod-enhanced-interaction/issues/21)
                     schema.add_field(
                         "date_published", DataType.VARCHAR, max_length=22, nullable=True
                     )
@@ -139,8 +156,24 @@ class MilvusEmbeddingStore(EmbeddingStore):
             schema.verify()
 
             index_params = IndexParams()
-            index_params.add_index("vector", "", "", metric_type="COSINE")
-            index_params.add_index("asset_id", "", "")
+            index_params = self.client.prepare_index_params()
+
+            index_params.add_index(field_name="vector", **self.vector_index_kwargs)
+            index_params.add_index(field_name="asset_id", **self.scalar_index_kwargs)
+
+            if self.extract_metadata:
+                if asset_type == AssetType.DATASETS:
+                    index_params.add_index(field_name="date_published", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="size_in_mb", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="license", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="task_types", **self.scalar_index_kwargs)
+                    index_params.add_index(field_name="languages", **self.scalar_index_kwargs)
+                    index_params.add_index(
+                        field_name="datapoints_upper_bound", **self.scalar_index_kwargs
+                    )
+                    index_params.add_index(
+                        field_name="datapoints_lower_bound", **self.scalar_index_kwargs
+                    )
 
             self.client.create_collection(
                 collection_name=collection_name,
@@ -151,7 +184,7 @@ class MilvusEmbeddingStore(EmbeddingStore):
     def exists_collection(self, asset_type: AssetType) -> bool:
         return self.client.has_collection(self.get_collection_name(asset_type))
 
-    def get_all_asset_ids(self, asset_type: AssetType) -> list[str]:
+    def get_all_asset_ids(self, asset_type: AssetType) -> list[int]:
         collection_name = self.get_collection_name(asset_type)
 
         if self.client.has_collection(collection_name) is False:
@@ -219,35 +252,15 @@ class MilvusEmbeddingStore(EmbeddingStore):
             "delete_count"
         ]
 
-    def retrieve_topk_asset_ids(
-        self,
-        model: AiModel,
-        asset_type: AssetType,
-        query_text: str | None = None,
-        topk: int = 10,
-        filter: str = "",
-        query_embeddings: list[list[float]] | None = None,
-    ) -> SearchResults:
-        collection_name = self.get_collection_name(asset_type)
+    def retrieve_topk_asset_ids(self, search_params: MilvusSearchParams) -> SearchResults:
+        collection_name = self.get_collection_name(search_params.asset_type)
 
         if self.client.has_collection(collection_name) is False:
             raise ValueError(f"Collection '{collection_name}' does not exist")
         self.client.load_collection(collection_name)
 
-        if query_embeddings is None:
-            if query_text is None:
-                raise ValueError("Either query_text or precomputed_embedding must be provided.")
-            query_embeddings = model.compute_query_embeddings(query_text)
-
         query_results = list(
-            self.client.search(
-                collection_name=collection_name,
-                data=query_embeddings,
-                limit=topk * 10 if self.chunk_embedding_store else topk + 1,
-                output_fields=["asset_id"],
-                search_params={"metric_type": "COSINE"},
-                filter=filter,
-            )
+            self.client.search(collection_name=collection_name, **search_params.get_params())
         )
 
         asset_ids: list[int] = []
@@ -261,12 +274,13 @@ class MilvusEmbeddingStore(EmbeddingStore):
         indices = (
             help_df.sort_values(by=["distances"])
             .drop_duplicates(subset=["asset_ids"])
-            .index.values[:topk]
+            .index.values[: search_params.topk]
         )
-        filtered_assets = [asset_ids[idx] for idx in indices]
-        filtered_distances = [distances[idx] for idx in indices]
 
-        return SearchResults(asset_ids=filtered_assets, distances=filtered_distances)
+        return SearchResults(
+            asset_ids=[asset_ids[idx] for idx in indices],
+            distances=[distances[idx] for idx in indices],
+        )
 
     def get_asset_embeddings(
         self, asset_id: int, asset_type: AssetType

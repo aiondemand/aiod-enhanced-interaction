@@ -110,7 +110,7 @@ class LlamaManualFunctionCalling:
         llm: ChatOllama,
         pydantic_model: Type[BaseModel] | None,
         chat_prompt_no_system: ChatPromptTemplate,
-        call_function: Callable[[RunnableSequence, dict], dict | None] = None,
+        call_function: Callable[[RunnableSequence, dict], dict | None] | None = None,
     ) -> None:
         self.pydantic_model = pydantic_model
         self.call_function = call_function
@@ -135,23 +135,14 @@ class LlamaManualFunctionCalling:
             | RunnableLambda(self.convert_llm_string_output_to_tool)
         )
 
-    def __call__(
-        self, input: dict | list[dict], as_batch: bool = False
-    ) -> dict | None | list[dict | None]:
+    def __call__(self, input: dict) -> dict | None:
         if self.call_function is not None:
             return self.call_function(self.chain, input)
+        out = self.chain.invoke(input)
 
-        if as_batch is False:
-            out = self.chain.invoke(input)
-            if self.validate_output(out, self.pydantic_model):
-                return out
-            return None
-        else:
-            out = self.chain.batch(input)
-            validated_out = [
-                o if self.validate_output(o, self.pydantic_model) else None for o in out
-            ]
-            return validated_out
+        if self.validate_output(out, self.pydantic_model):
+            return out
+        return None
 
     @classmethod
     def validate_output(cls, output: dict, pydantic_model: Type[BaseModel] | None) -> bool:
@@ -164,8 +155,8 @@ class LlamaManualFunctionCalling:
 
     @classmethod
     def transform_fewshot_examples(
-        cls, pydantic_model: Type[BaseModel], examples: list[dict]
-    ) -> str:
+        cls, pydantic_model: Type[BaseModel], examples: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
         return [
             {
                 "input": ex["input"],
@@ -223,27 +214,29 @@ class UserQueryParsing:
     # TODO this current implementation can only work with one asset_type
     # few shot examples... We would need to dynamically assign them on LLM invocation
     # once we know which asset type a specific input is associated with
-    _DEFAULT_PATH_TO_STAGE_1_ = Path("api/data/fewshot_examples/user_query_stage1/datasets.json")
+    _DEFAULT_PATH_TO_STAGE_1_FEWSHOTS = Path(
+        "api/data/fewshot_examples/user_query_stage1/datasets.json"
+    )
 
     @classmethod
     def get_db_translator_func(
         cls, technology: str
-    ) -> Callable[[list[dict], Type[BaseModel]], str]:
-        return getattr(cls, cls.DB_TRANSLATOR_FUNCS[technology], None)
+    ) -> Callable[[list[Filter], Type[BaseModel]], str]:
+        return getattr(cls, cls.DB_TRANSLATOR_FUNCS[technology])
 
     def __init__(
         self,
         llm: BaseChatModel,
         db_to_translate: Literal["milvus"] = "milvus",
-        stage_1_fewshot_examples_filepath: str | None = None,
-        stage_2_fewshot_examples_dirpath: str | None = None,
+        stage_1_fewshot_examples_filepath: Path | None = None,
+        stage_2_fewshot_examples_dirpath: Path | None = None,
     ) -> None:
         if not db_to_translate in ["milvus"]:
             raise ValueError(f"Invalid db_to_translate argument '{db_to_translate}'")
         self.translator_func = self.get_db_translator_func(db_to_translate)
 
         if stage_1_fewshot_examples_filepath is None:
-            stage_1_fewshot_examples_filepath = self._DEFAULT_PATH_TO_STAGE_1_
+            stage_1_fewshot_examples_filepath = self._DEFAULT_PATH_TO_STAGE_1_FEWSHOTS
 
         self.stage_pipe_1 = UserQueryParsingStages.init_stage_1(
             llm=llm, fewshot_examples_path=stage_1_fewshot_examples_filepath
@@ -317,19 +310,19 @@ class UserQueryParsing:
                 )
 
         topic = " ".join(topic_list)
-        parsed_conditions = [Filter(**cond) for cond in parsed_conditions]
-        filter_string = self.milvus_translator(parsed_conditions, asset_schema)
+        filters = [Filter(**cond) for cond in parsed_conditions]
+        filter_string = self.translator_func(filters, asset_schema)
 
         return {
             "topic": topic,
             "filter_str": filter_string,
-            "filters": parsed_conditions,
+            "filters": filters,
         }
 
     @classmethod
     def milvus_translator(cls, filters: list[Filter], asset_schema: Type[BaseModel]) -> str:
         def format_value(val: str | int | float) -> str:
-            return f"'{val.lower()}'" if isinstance(val, str) else val
+            return f"'{val.lower()}'" if isinstance(val, str) else str(val)
 
         simple_expression_template = "({field} {op} {val})"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
@@ -529,7 +522,7 @@ class UserQueryParsingStages:
             (BaseModel,),
             {
                 "__annotations__": {
-                    "expressions": list[expression_class],
+                    "expressions": list[expression_class],  # type: ignore[valid-type]
                     "logical_operator": Literal["AND", "OR"],
                 },
                 "__doc__": f"Parsing of one condition pertaining to metadata field '{field_name}'. Condition comprises one or more expressions used to for filtering purposes",
@@ -568,7 +561,7 @@ class UserQueryParsingStages:
         cls,
         chain: RunnableSequence,
         input: dict,
-        fewshot_examples_dirpath: str | None = None,
+        fewshot_examples_dirpath: Path | None = None,
         validation_step: LlamaManualFunctionCalling | None = None,
     ) -> dict | None:
         metadata_field = input["field"]
@@ -577,9 +570,9 @@ class UserQueryParsingStages:
 
         chain_to_use = chain
         if fewshot_examples_dirpath is not None:
-            examples_path = os.path.join(fewshot_examples_dirpath, f"{metadata_field}.json")
-            if os.path.exists(examples_path):
-                with open(examples_path) as f:
+            examples_path = fewshot_examples_dirpath / f"{metadata_field}.json"
+            if examples_path.exists():
+                with examples_path.open() as f:
                     fewshot_examples = json.load(f)
                 if len(fewshot_examples) > 0:
                     example_prompt = ChatPromptTemplate.from_messages(
@@ -629,16 +622,20 @@ class UserQueryParsingStages:
 
     @classmethod
     def prepare_simplified_model_schema_stage_1(cls, asset_schema: Type[BaseModel]) -> str:
-        metadata_field_info = [
-            {
-                "name": name,
-                "description": field.description,
-                "type": cls._translate_primitive_type_to_str(
-                    cls._get_inner_most_primitive_type(field.annotation)
-                ),
-            }
-            for name, field in asset_schema.model_fields.items()
-        ]
+        metadata_field_info = []
+        for name, field in asset_schema.model_fields.items():
+            if field.annotation is None:
+                raise ValueError(f"Field {name} has no annotation")
+            metadata_field_info.append(
+                {
+                    "name": name,
+                    "description": field.description,
+                    "type": cls._translate_primitive_type_to_str(
+                        cls._get_inner_most_primitive_type(field.annotation)
+                    ),
+                }
+            )
+
         return json.dumps(metadata_field_info)
 
     @classmethod
@@ -821,7 +818,7 @@ class UserQueryParsingStages:
     def init_stage_1(
         cls,
         llm: BaseChatModel,
-        fewshot_examples_path: str | None = None,
+        fewshot_examples_path: Path | None = None,
     ) -> LlamaManualFunctionCalling:
         pydantic_model = UserQuery_Stage1_OutputSchema
 
@@ -829,8 +826,8 @@ class UserQueryParsingStages:
             cls.task_instructions_stage1,
         )
         fewshot_prompt = ("user", "")
-        if fewshot_examples_path is not None and os.path.exists(fewshot_examples_path):
-            with open(fewshot_examples_path) as f:
+        if fewshot_examples_path is not None and fewshot_examples_path.exists():
+            with fewshot_examples_path.open() as f:
                 fewshot_examples = json.load(f)
             if len(fewshot_examples) > 0:
                 example_prompt = ChatPromptTemplate.from_messages(
@@ -864,7 +861,7 @@ class UserQueryParsingStages:
     def init_stage_2(
         cls,
         llm: BaseChatModel,
-        fewshot_examples_dirpath: str | None = None,
+        fewshot_examples_dirpath: Path | None = None,
         validation_step: LlamaManualFunctionCalling | None = None,
     ) -> LlamaManualFunctionCalling:
         chat_prompt_no_system = ChatPromptTemplate.from_messages(

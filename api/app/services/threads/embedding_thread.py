@@ -10,7 +10,7 @@ import torch
 from app.config import settings
 from app.models.asset_collection import AssetCollection
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
@@ -110,8 +110,8 @@ def process_aiod_assets_wrapper(
     newly_added_asset_ids: list[int] = []
 
     last_update = asset_collection.last_update
-    last_db_sync_datetime: datetime = getattr(last_update, "from_time", None)
-    query_from_time = last_db_sync_datetime
+    last_db_sync_datetime: datetime | None = getattr(last_update, "from_time", None)
+    query_from_time: datetime | None = last_db_sync_datetime
 
     last_db_sync_datetime = (
         last_db_sync_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -143,7 +143,7 @@ def process_aiod_assets_wrapper(
             newly_added_asset_ids=newly_added_asset_ids,
             last_db_sync_datetime=last_db_sync_datetime,
         )
-        if assets_to_add is None:
+        if assets_to_add is None or asset_ids_to_remove is None:
             break
 
         # Remove embeddings associated with old versions of assets

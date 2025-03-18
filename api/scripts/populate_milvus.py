@@ -68,6 +68,12 @@ def populate_collection(
         with open(path) as f:
             data = json.load(f)
 
+        # if we work with an older version of exported data (containing 'doc_id' field), we need
+        # to firstly convert it to 'asset_field'
+        if len(data) > 0 and "doc_id" in data[0]:
+            for i in range(len(data)):
+                data[i]["asset_id"] = int(data[i].pop("doc_id"))
+
         data = [d for d in data if d["asset_id"] not in unique_asset_ids]
         if len(data) == 0:
             continue
@@ -90,6 +96,13 @@ def create_new_collection(
 ) -> bool:
     if client.has_collection(collection_name):
         return False
+
+    vector_index_kwargs = {
+        "index_type": "HNSW_SQ",
+        "metric_type": "COSINE",
+        "params": {"sq_type": "SQ8"},
+    }
+    scalar_index_kwargs = {"index_type": "INVERTED"}
 
     schema = client.create_schema(auto_id=True)
     schema.add_field("id", DataType.INT64, is_primary=True)
@@ -125,11 +138,22 @@ def create_new_collection(
         schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
         schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
-    schema.verify()
+        schema.verify()
 
-    index_params = IndexParams()
-    index_params.add_index("vector", "", "", metric_type="COSINE")
-    index_params.add_index("asset_id", "", "")
+        index_params = IndexParams()
+        index_params = client.prepare_index_params()
+
+        index_params.add_index(field_name="vector", **vector_index_kwargs)
+        index_params.add_index(field_name="asset_id", **scalar_index_kwargs)
+
+        if extract_metadata and collection_name.endswith("_datasets"):
+            index_params.add_index(field_name="date_published", **scalar_index_kwargs)
+            index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
+            index_params.add_index(field_name="license", **scalar_index_kwargs)
+            index_params.add_index(field_name="task_types", **scalar_index_kwargs)
+            index_params.add_index(field_name="languages", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
 
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params
