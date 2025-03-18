@@ -75,7 +75,7 @@ class TokenizerTextSplitter:
         num_special_tokens = len(tokens_with_special_tokens) - len(tokens)
         actual_chunk_size = self.chunk_size - num_special_tokens
 
-        chunks = []
+        chunks: list[str] = []
         start_idx = 0
         while True:
             end_idx = min(start_idx + actual_chunk_size, len(tokens))
@@ -307,7 +307,7 @@ class Hierarchical_EmbeddingModel(EmbeddingModel[HierarchicalPreprocessedInput])
             self.parallel_chunk_processing is False
             and inner_input.separate_chunk_input_encodings is not None
         ):
-            chunk_embeddings = []
+            chunk_embeddings: list[torch.Tensor] = []
             for inp in inner_input.separate_chunk_input_encodings:
                 out = self.input_transformer(**inp)[0]
                 chunk_embeddings.append(

@@ -17,7 +17,7 @@ from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import SearchResults
-from app.services.aiod import check_aiod_document
+from app.services.aiod import check_aiod_asset
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
@@ -25,7 +25,7 @@ from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from tinydb import Query
 
-T = TypeVar("T", bound=VectorSearchParams)
+# SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
@@ -89,7 +89,7 @@ async def search_thread() -> None:
             database.upsert(user_query)
 
             try:
-                results = search_documents_wrapper(
+                results = search_assets_wrapper(
                     model,
                     llm_query_parser,
                     embedding_store,
@@ -113,38 +113,38 @@ async def search_thread() -> None:
         os._exit(1)
 
 
-def search_documents_wrapper(
+def search_assets_wrapper(
     model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
     num_search_retries: int = 5,
 ) -> SearchResults:
-    doc_ids_to_remove_from_db: list[str] = []
-    all_documents_to_return = SearchResults()
-
     search_params = prepare_search_parameters(model, llm_query_parser, embedding_store, user_query)
     if search_params is None:
-        return all_documents_to_return
+        return SearchResults()
+
+    asset_ids_to_remove_from_db: list[int] = []
+    all_assets_to_return = SearchResults()
 
     for _ in range(num_search_retries):
-        new_results = embedding_store.retrieve_topk_document_ids(search_params)
-        all_documents_to_return = all_documents_to_return + validate_documents(
-            new_results, search_params, doc_ids_to_remove_from_db
+        new_results = embedding_store.retrieve_topk_asset_ids(search_params)
+        all_assets_to_return = all_assets_to_return + validate_assets(
+            new_results, search_params, asset_ids_to_remove_from_db
         )
 
-        search_params.topk = user_query.topk - len(all_documents_to_return)
+        search_params.topk = user_query.topk - len(all_assets_to_return)
         if search_params.topk == 0 or len(new_results) == 0:
             break
 
-    # delete invalid documents from Milvus => lazy delete
-    if len(doc_ids_to_remove_from_db) > 0:
-        embedding_store.remove_embeddings(doc_ids_to_remove_from_db, search_params.asset_type)
+    # delete invalid assets from Milvus => lazy delete
+    if len(asset_ids_to_remove_from_db) > 0:
+        embedding_store.remove_embeddings(asset_ids_to_remove_from_db, search_params.asset_type)
         logging.info(
-            f"[LAZY DELETE] {len(doc_ids_to_remove_from_db)} assets ({search_params.asset_type.value}) have been deleted"
+            f"[LAZY DELETE] {len(asset_ids_to_remove_from_db)} assets ({search_params.asset_type.value}) have been deleted"
         )
 
-    return all_documents_to_return
+    return all_assets_to_return
 
 
 def prepare_search_parameters(
@@ -152,7 +152,7 @@ def prepare_search_parameters(
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-) -> T | None:
+) -> VectorSearchParams | None:
     # apply metadata filtering
     metadata_filter_str = ""
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -187,8 +187,8 @@ def prepare_search_parameters(
         else user_query.asset_type
     )
     # ignore the asset itself from the search if necessary
-    doc_ids_to_exclude_from_search = (
-        [str(user_query.asset_id)]
+    asset_ids_to_exclude_from_search = (
+        [user_query.asset_id]
         if isinstance(user_query, RecommenderUserQuery)
         and user_query.asset_type == user_query.output_asset_type
         else []
@@ -199,32 +199,32 @@ def prepare_search_parameters(
         topk=user_query.topk,
         asset_type=target_asset_type,
         metadata_filter=metadata_filter_str,
-        doc_ids_to_exclude=doc_ids_to_exclude_from_search,
+        asset_ids_to_exclude=asset_ids_to_exclude_from_search,
     )
 
 
-def validate_documents(
+def validate_assets(
     results: SearchResults,
-    search_params: T,
-    doc_ids_to_remove_from_db: list[str],
+    search_params: VectorSearchParams,
+    asset_ids_to_remove_from_db: list[int],
 ) -> SearchResults:
     if len(results) == 0:
         return results
 
-    # check what documents are still valid
+    # check what assets are still valid
     exists_mask = np.array(
         [
-            check_aiod_document(
-                doc_id,
+            check_aiod_asset(
+                asset_id,
                 search_params.asset_type,
                 sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
             )
-            for doc_id in results.doc_ids
+            for asset_id in results.asset_ids
         ]
     )
 
-    doc_ids_to_del = [results.doc_ids[idx] for idx in np.where(~exists_mask)[0]]
-    search_params.doc_ids_to_exclude.extend(results.doc_ids)
-    doc_ids_to_remove_from_db.extend(doc_ids_to_del)
+    asset_ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
+    search_params.asset_ids_to_exclude.extend(asset_ids_to_del)
+    asset_ids_to_remove_from_db.extend(asset_ids_to_del)
 
-    return results.filter_out_docs_by_ids(doc_ids_to_del)
+    return results.filter_out_assets_by_id(asset_ids_to_del)

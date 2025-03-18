@@ -6,7 +6,7 @@ import numpy as np
 from app.config import settings
 from app.schemas.enums import AssetType
 from app.schemas.params import RequestParams
-from app.services.aiod import check_aiod_document
+from app.services.aiod import check_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
 
@@ -46,26 +46,26 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
 def delete_asset_embeddings(
     embedding_store: EmbeddingStore, asset_type: AssetType, to_time: datetime
 ) -> None:
-    all_aiod_doc_ids = []
+    all_aiod_asset_ids: list[int] = []
     url_params = RequestParams(
         offset=0,
         limit=settings.AIOD.WINDOW_SIZE,
         to_time=to_time,
     )
-    milvus_doc_ids = embedding_store.get_all_document_ids(asset_type)
+    milvus_asset_ids = embedding_store.get_all_asset_ids(asset_type)
 
-    # iterate over entirety of AIoD database, store all the doc IDs
+    # iterate over entirety of AIoD database, store all the asset IDs
     while True:
         assets_to_add, _ = get_assets_to_add_and_delete(
             asset_type=asset_type,
             url_params=url_params,
-            existing_doc_ids_from_past=[],
-            newly_added_doc_ids=[],
+            existing_asset_ids_from_past=[],
+            newly_added_asset_ids=[],
             last_db_sync_datetime=None,
         )
         if assets_to_add is None:
             break
-        all_aiod_doc_ids.extend([str(obj["identifier"]) for obj in assets_to_add])
+        all_aiod_asset_ids.extend([obj["identifier"] for obj in assets_to_add])
 
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use traditional
@@ -74,8 +74,8 @@ def delete_asset_embeddings(
 
     # Compare AIoD assets to Milvus assets, the set diff assets
     # are candidates for deletion; each candidate is explicitly checked against AIoD
-    candidates_idx = np.where(~np.isin(milvus_doc_ids, all_aiod_doc_ids))[0]
-    candidates_for_del = [milvus_doc_ids[idx] for idx in candidates_idx]
+    candidates_idx = np.where(~np.isin(milvus_asset_ids, all_aiod_asset_ids))[0]
+    candidates_for_del = [milvus_asset_ids[idx] for idx in candidates_idx]
 
     if len(candidates_for_del) > 0:
         logging.info(
@@ -85,7 +85,7 @@ def delete_asset_embeddings(
     ids_to_really_delete = [
         id
         for id in candidates_for_del
-        if check_aiod_document(
+        if check_aiod_asset(
             id, asset_type, sleep_time=settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC
         )
         is False

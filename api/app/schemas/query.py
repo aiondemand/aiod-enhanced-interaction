@@ -12,8 +12,8 @@ class BaseUserQueryResponse(BaseModel, ABC):
     asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
     topk: int
-    returned_doc_count: int = -1
-    result_doc_ids: list[str] | None = None
+    returned_asset_count: int = -1
+    result_asset_ids: list[int] | None = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):

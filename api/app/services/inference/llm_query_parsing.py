@@ -272,7 +272,7 @@ class UserQueryParsing:
             topic_list, out_stage_1["conditions"], content_key="condition"
         )
 
-        parsed_conditions = []
+        parsed_conditions: list[dict] = []
         valid_conditions = [
             cond for cond in out_stage_1["conditions"] if cond.get("discard", False) is False
         ]
@@ -328,12 +328,12 @@ class UserQueryParsing:
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
         list_fields_mask = SchemaOperations.get_list_fields_mask(asset_schema)
 
-        condition_strings = []
+        condition_strings: list[str] = []
         for cond in filters:
             field = cond.field
             log_operator = cond.logical_operator
 
-            str_expressions = []
+            str_expressions: list[str] = []
             for expr in cond.expressions:
                 comp_operator = expr.comparison_operator
                 val = expr.value
@@ -599,7 +599,7 @@ class UserQueryParsingStages:
 
         field_valid_values = ""
         curr_validation_step = None
-        permitted_values = []
+        permitted_values: list[str] = []
         if asset_schema.exists_field_valid_values(metadata_field):
             permitted_values = asset_schema.get_field_valid_values(metadata_field)
             field_valid_values = f"b) List of the only permitted values: {permitted_values}"

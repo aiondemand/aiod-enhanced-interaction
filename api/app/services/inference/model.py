@@ -59,12 +59,12 @@ class AiModel:
 
     @torch.no_grad()
     def compute_asset_embeddings(self, assets: list[str]) -> list[torch.Tensor]:
-        chunks_embeddings_of_multiple_docs = self.model.forward(assets)
+        chunks_embeddings_of_multiple_assets = self.model.forward(assets)
         if self.use_chunking is False:
-            chunks_embeddings_of_multiple_docs = [
-                emb[None] for emb in chunks_embeddings_of_multiple_docs
+            chunks_embeddings_of_multiple_assets = [
+                emb[None] for emb in chunks_embeddings_of_multiple_assets
             ]
-        return chunks_embeddings_of_multiple_docs
+        return chunks_embeddings_of_multiple_assets
 
     @torch.no_grad()
     def compute_query_embeddings(self, query: str) -> list[list[float]]:

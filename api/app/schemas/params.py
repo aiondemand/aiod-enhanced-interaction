@@ -31,7 +31,7 @@ class VectorSearchParams(BaseModel, ABC):
 
     # filter related attributes
     metadata_filter: str = ""
-    doc_ids_to_exclude: list[str] = Field(default_factory=list)
+    asset_ids_to_exclude: list[int] = Field(default_factory=list)
 
     @abstractmethod
     def get_params(self) -> dict:
@@ -39,16 +39,16 @@ class VectorSearchParams(BaseModel, ABC):
 
 
 class MilvusSearchParams(VectorSearchParams):
-    group_by_field: str = "doc_id"
-    output_fields: list[str] = Field(default_factory=lambda: ["doc_id"])
+    group_by_field: str = "asset_id"
+    output_fields: list[str] = Field(default_factory=lambda: ["asset_id"])
     search_params: dict = Field(default_factory=lambda: {"metric_type": "COSINE"})
 
     @property
     def filter(self) -> str:
-        if len(self.doc_ids_to_exclude) > 0 and len(self.metadata_filter) > 0:
-            return f"({self.metadata_filter}) and (doc_id not in {self.doc_ids_to_exclude})"
-        elif len(self.doc_ids_to_exclude) > 0:
-            return f"doc_id not in {self.doc_ids_to_exclude}"
+        if len(self.asset_ids_to_exclude) > 0 and len(self.metadata_filter) > 0:
+            return f"({self.metadata_filter}) and (asset_id not in {self.asset_ids_to_exclude})"
+        elif len(self.asset_ids_to_exclude) > 0:
+            return f"asset_id not in {self.asset_ids_to_exclude}"
         elif len(self.metadata_filter) > 0:
             return self.metadata_filter
         else:

@@ -10,18 +10,17 @@ from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
 
-Query = TypeVar("Query", bound=BaseUserQuery)
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
-async def submit_query(user_query: Query, database: Database) -> str:
+async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
     database.insert(user_query)
     QUERY_QUEUE.put((user_query.id, type(user_query)))
     return user_query.id
 
 
 async def get_query_results(
-    query_id: UUID, database: Database, query_type: Type[Query]
+    query_id: UUID, database: Database, query_type: Type[BaseUserQuery]
 ) -> Response:
     user_query = database.find_by_id(query_type, id=str(query_id))
     if user_query is None:

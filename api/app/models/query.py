@@ -33,8 +33,8 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
             return {}
         elif self.result_set is not None:
             return {
-                "returned_doc_count": len(self.result_set),
-                "result_doc_ids": self.result_set.doc_ids,
+                "returned_asset_count": len(self.result_set),
+                "result_asset_ids": self.result_set.asset_ids,
             }
         else:
             raise ValueError("SearchResults are not available for this completed query")
