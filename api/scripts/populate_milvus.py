@@ -91,6 +91,13 @@ def create_new_collection(
     if client.has_collection(collection_name):
         return False
 
+    vector_index_kwargs = {
+        "index_type": "HNSW_SQ",
+        "metric_type": "COSINE",
+        "params": {"sq_type": "SQ8"},
+    }
+    scalar_index_kwargs = {"index_type": "INVERTED"}
+
     schema = client.create_schema(auto_id=True)
     schema.add_field("id", DataType.INT64, is_primary=True)
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
@@ -125,11 +132,22 @@ def create_new_collection(
         schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
         schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
-    schema.verify()
+        schema.verify()
 
-    index_params = IndexParams()
-    index_params.add_index("vector", "", "", metric_type="COSINE")
-    index_params.add_index("doc_id", "", "")
+        index_params = IndexParams()
+        index_params = client.prepare_index_params()
+
+        index_params.add_index(field_name="vector", **vector_index_kwargs)
+        index_params.add_index(field_name="doc_id", **scalar_index_kwargs)
+
+        if extract_metadata and collection_name.endswith("_datasets"):
+            index_params.add_index(field_name="date_published", **scalar_index_kwargs)
+            index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
+            index_params.add_index(field_name="license", **scalar_index_kwargs)
+            index_params.add_index(field_name="task_types", **scalar_index_kwargs)
+            index_params.add_index(field_name="languages", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
+            index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
 
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params

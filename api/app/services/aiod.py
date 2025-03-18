@@ -8,7 +8,7 @@ from requests.exceptions import HTTPError, Timeout
 
 from app.config import settings
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 
 
 def recursive_aiod_asset_fetch(

@@ -68,22 +68,6 @@ metastore:
     ttl: 86400 # snapshot ttl in seconds
     reserveTime: 3600 # snapshot reserve time in seconds
 
-# Related configuration of tikv, used to store Milvus metadata.
-# Notice that when TiKV is enabled for metastore, you still need to have etcd for service discovery.
-# TiKV is a good option when the metadata size requires better horizontal scalability.
-tikv:
-  endpoints: 127.0.0.1:2389 # Note that the default pd port of tikv is 2379, which conflicts with etcd.
-  rootPath: by-dev # The root path where data is stored in tikv
-  metaSubPath: meta # metaRootPath = rootPath + '/' + metaSubPath
-  kvSubPath: kv # kvRootPath = rootPath + '/' + kvSubPath
-  requestTimeout: 10000 # ms, tikv request timeout
-  snapshotScanSize: 256 # batch size of tikv snapshot scan
-  ssl:
-    enabled: false # Whether to support TiKV secure connection mode
-    tlsCert:  # path to your cert file
-    tlsKey:  # path to your key file
-    tlsCACert:  # path to your CACert file
-
 localStorage:
   # Local path to where vector data are stored during a search or a query to avoid repetitve access to MinIO or S3 service.
   # Caution: Changing this parameter after using Milvus for a period of time will affect your access to old data.
@@ -150,7 +134,7 @@ minio:
   # Custom endpoint for fetch IAM role credentials. when useIAM is true & cloudProvider is "aws".
   # Leave it empty if you want to use AWS default endpoint
   iamEndpoint:
-  logLevel: warn # Log level for aws sdk log. Supported level:  off, fatal, error, warn, info, debug, trace
+  logLevel: error # Log level for aws sdk log. Supported level:  off, fatal, error, warn, info, debug, trace
   region:  # Specify minio storage system location region
   useVirtualHost: false # Whether use virtual host mode for bucket
   requestTimeoutMs: 10000 # minio timeout for request time in milliseconds
@@ -180,42 +164,6 @@ mq:
     retrySleep: 3 # register retry sleep time in seconds
     retryTimeout: 60 # register retry timeout in seconds
 
-# Related configuration of pulsar, used to manage Milvus logs of recent mutation operations, output streaming log, and provide log publish-subscribe services.
-pulsar:
-  # IP address of Pulsar service.
-  # Environment variable: PULSAR_ADDRESS
-  # pulsar.address and pulsar.port together generate the valid access to Pulsar.
-  # Pulsar preferentially acquires the valid IP address from the environment variable PULSAR_ADDRESS when Milvus is started.
-  # Default value applies when Pulsar is running on the same network with Milvus.
-  address: localhost
-  port: 6650 # Port of Pulsar service.
-  webport: 80 # Web port of of Pulsar service. If you connect directly without proxy, should use 8080.
-  # The maximum size of each message in Pulsar. Unit: Byte.
-  # By default, Pulsar can transmit at most 2MB of data in a single message. When the size of inserted data is greater than this value, proxy fragments the data into multiple messages to ensure that they can be transmitted correctly.
-  # If the corresponding parameter in Pulsar remains unchanged, increasing this configuration will cause Milvus to fail, and reducing it produces no advantage.
-  maxMessageSize: 2097152
-  # Pulsar can be provisioned for specific tenants with appropriate capacity allocated to the tenant.
-  # To share a Pulsar instance among multiple Milvus instances, you can change this to an Pulsar tenant rather than the default one for each Milvus instance before you start them. However, if you do not want Pulsar multi-tenancy, you are advised to change msgChannel.chanNamePrefix.cluster to the different value.
-  tenant: public
-  namespace: default # A Pulsar namespace is the administrative unit nomenclature within a tenant.
-  requestTimeout: 60 # pulsar client global request timeout in seconds
-  enableClientMetrics: false # Whether to register pulsar client metrics into milvus metrics path.
-
-# If you want to enable kafka, needs to comment the pulsar configs
-# kafka:
-#   brokerList: localhost:9092
-#   saslUsername:
-#   saslPassword:
-#   saslMechanisms:
-#   securityProtocol:
-#   ssl:
-#     enabled: false # whether to enable ssl mode
-#     tlsCert:  # path to client's public key (PEM) used for authentication
-#     tlsKey:  # path to client's private key (PEM) used for authentication
-#     tlsCaCert:  # file or directory path to CA certificate(s) for verifying the broker's key
-#     tlsKeyPassword:  # private key passphrase for use with ssl.key.location and set_ssl_cert(), if any
-#   readTimeout: 10
-
 rocksmq:
   # Prefix of the key to where Milvus stores data in RocksMQ.
   # Caution: Changing this parameter after using Milvus for a period of time will affect your access to old data.
@@ -228,27 +176,6 @@ rocksmq:
   retentionSizeInMB: 8192 # The maximum retention size of acked messages of each topic in RocksMQ. Acked messages in each topic are cleared if their size exceed this parameter. Unit: MB.
   compactionInterval: 86400 # Time interval to trigger rocksdb compaction to remove deleted data. Unit: Second
   compressionTypes: 0,0,7,7,7 # compaction compression type, only support use 0,7. 0 means not compress, 7 will use zstd. Length of types means num of rocksdb level.
-
-# natsmq configuration.
-# more detail: https://docs.nats.io/running-a-nats-service/configuration
-natsmq:
-  server:
-    port: 4222 # Listening port of the NATS server.
-    storeDir: /var/lib/milvus/nats # Directory to use for JetStream storage of nats
-    maxFileStore: 17179869184 # Maximum size of the 'file' storage
-    maxPayload: 8388608 # Maximum number of bytes in a message payload
-    maxPending: 67108864 # Maximum number of bytes buffered for a connection Applies to client connections
-    initializeTimeout: 4000 # waiting for initialization of natsmq finished
-    monitor:
-      trace: false # If true enable protocol trace log messages
-      debug: false # If true enable debug log messages
-      logTime: true # If set to false, log without timestamps.
-      logFile: /tmp/milvus/logs/nats.log # Log file path relative to .. of milvus binary if use relative path
-      logSizeLimit: 536870912 # Size in bytes after the log file rolls over to a new one
-    retention:
-      maxAge: 4320 # Maximum age of any message in the P-channel
-      maxBytes:  # How many bytes the single P-channel may contain. Removing oldest messages if the P-channel exceeds this size
-      maxMsgs:  # How many message the single P-channel may contain. Removing oldest messages if the P-channel exceeds this limit
 
 # Related configuration of rootCoord, used to handle data definition language (DDL) and data control language (DCL) requests
 rootCoord:
@@ -351,7 +278,7 @@ queryCoord:
   segmentCountFactor: 0.4 # the segment count weight used when balancing segments among queryNodes
   globalSegmentCountFactor: 0.1 # the segment count weight used when balancing segments among queryNodes
   # the channel count weight used when balancing channels among queryNodes,
-  # 		A higher value reduces the likelihood of assigning channels from the same collection to the same QueryNode. Set to 1 to disable this feature.
+  # A higher value reduces the likelihood of assigning channels from the same collection to the same QueryNode. Set to 1 to disable this feature.
   collectionChannelCountFactor: 10
   segmentCountMaxSteps: 50 # segment count based plan generator max steps
   rowCountMaxSteps: 50 # segment count based plan generator max steps
@@ -425,7 +352,7 @@ queryNode:
     # chunk cache during the load process. This approach has the potential to substantially reduce query/search latency
     # for a specific duration post-load, albeit accompanied by a concurrent increase in disk usage;
     # 2. If set to "disable" original vector data will only be loaded into the chunk cache during search/query.
-    warmup: disable
+    warmup: async
   mmap:
     vectorField: false # Enable mmap for loading vector data
     vectorIndex: false # Enable mmap for loading vector index
@@ -505,7 +432,7 @@ indexCoord:
 indexNode:
   scheduler:
     buildParallel: 1
-  enableDisk: true # enable index node build disk vector index
+  enableDisk: false # enable index node build disk vector index
   maxDiskUsagePercentage: 95
   ip:  # TCP/IP address of indexNode. If not specified, use the first unicastable address
   port: 21121 # TCP port of indexNode
