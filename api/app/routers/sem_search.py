@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Type, TypeVar
 from uuid import UUID
 
@@ -27,6 +28,8 @@ async def get_query_results(
         raise HTTPException(
             status_code=404, detail="Requested query doesn't exist or has been deleted."
         )
+    if user_query.expires_at is not None and user_query.expires_at < datetime.now(tz=timezone.utc):
+        raise HTTPException(status_code=410, detail="Requested query has expired.")
     return user_query.map_to_response()
 
 

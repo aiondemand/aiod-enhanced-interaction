@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Generic, Type, TypeVar
 
+from app.config import settings
 from app.models.db_entity import DatabaseEntity
 from app.models.filter import Filter
 from app.schemas.enums import AssetType, QueryStatus
@@ -23,10 +24,17 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
     result_set: SearchResults | None = None
+    expires_at: datetime | None = None
 
     def update_status(self, status: QueryStatus) -> None:
         self.status = status
         self.updated_at = datetime.now(tz=timezone.utc)
+
+        if self.status in (QueryStatus.COMPLETED, QueryStatus.FAILED):
+            # an arbitrarily chosen expiration date
+            self.expires_at = datetime.now(tz=timezone.utc) + timedelta(
+                minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES
+            )
 
     def _add_results_kwargs(self) -> dict:
         if self.status != QueryStatus.COMPLETED:
