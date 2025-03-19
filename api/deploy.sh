@@ -45,4 +45,4 @@ else
 fi
 
 # TODO uncomment
-# docker compose -f docker-compose.final.yml $COMPOSE_COMMAND
+# docker compose -f docker-compose.milvus.yml -f docker-compose.final.yml $COMPOSE_COMMAND

@@ -28,9 +28,9 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
-docker compose -f docker-compose.yml -f docker-compose.populate.yml up populate-db --build
+docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml up populate-db --build
 EXIT_CODE=$?
-docker compose -f docker-compose.yml -f docker-compose.populate.yml down
+docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml down
 
 # TODO fix
 # Exit code is still set to 0, even if the application in the docker crashes

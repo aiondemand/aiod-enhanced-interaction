@@ -150,7 +150,6 @@ Perform the following steps to deploy the service:
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `USE_LLM` ENV variables: `./deploy.sh`
-    - This script creates a Dockerfile `Dockerfile.final` and a docker compose file `docker-compose.final.yml` under the hood that are subsequently utilized to spawn the desired services.
 
 
 ### Stop/Delete the application
