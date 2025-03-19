@@ -22,25 +22,27 @@ if [ -z "$USE_LLM" ]; then
   exit 1
 fi
 
-# Select the base docker-compose file
-MAIN_COMPOSE_FILE="docker-compose.yml"
-
 # What operation we wish to perform
-COMPOSE_COMMAND="up -d --build"
-if [ "$1" == "--stop" ]; then
+if [ "$#" -eq 0 ]; then
+  COMPOSE_COMMAND="up -d --build"
+
+  # Build docker-compose first (stored as docker-compose.final.yml)
+  docker compose -f docker-compose.build.yml up --build
+  EXIT_CODE=$?
+  docker compose -f docker-compose.build.yml down
+
+  if [ $EXIT_CODE -ne 0 ]; then
+    echo "Failed to build a docker compose"
+    exit 1
+  fi
+elif [ "$1" == "--stop" ]; then
   COMPOSE_COMMAND="stop"
 elif [ "$1" == "--remove" ]; then
   COMPOSE_COMMAND="down"
+else
+  echo "Invalid operation '$1'. Only '--stop' and '--remove' are allowed"
+  exit 1
 fi
 
-# TODO we need to create docker compose dynamically or through some templates as this is not scalable...
-# Note: This has been already implemented in other branch
-if [ "$USE_GPU" = "true" ] && [ "$USE_LLM" = "true" ]; then
-  docker compose -f $MAIN_COMPOSE_FILE -f docker-compose.ollama.yml -f docker-compose.gpu.yml -f docker-compose.ollama.gpu.yml $COMPOSE_COMMAND
-elif [ "$USE_GPU" = "true" ]; then
-  docker compose -f $MAIN_COMPOSE_FILE -f docker-compose.gpu.yml $COMPOSE_COMMAND
-elif [ "$USE_LLM" = "true" ]; then
-  docker compose -f $MAIN_COMPOSE_FILE -f docker-compose.ollama.yml $COMPOSE_COMMAND
-else
-  docker compose -f $MAIN_COMPOSE_FILE $COMPOSE_COMMAND
-fi
+# TODO uncomment
+# docker compose -f docker-compose.final.yml $COMPOSE_COMMAND

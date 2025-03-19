@@ -16,10 +16,4 @@ USER $USERNAME
 
 WORKDIR /code
 
-COPY ./requirements-populate.txt ./
-
-RUN pip install --no-cache-dir --upgrade -r requirements-populate.txt
-
-COPY ./scripts/populate_milvus.py ./
-
-CMD ["/bin/sh", "-c", "python populate_milvus.py --i $INPUT_DIRPATH --uri $MILVUS_URI --metadata $EXTRACT_METADATA"]
+RUN pip install --no-cache-dir --upgrade jinja2==3.1.6
