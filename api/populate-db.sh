@@ -32,11 +32,10 @@ fi
 mkdir -p ${DATA_DIRPATH}/volumes
 
 docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml up populate-db --build
-EXIT_CODE=$?
+CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-populate-db-1"
+EXIT_CODE=$(docker inspect $CONTAINER_NAME --format='{{.State.ExitCode}}')
 docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml down
 
-# TODO fix
-# Exit code is still set to 0, even if the application in the docker crashes
 if [ $EXIT_CODE -eq 0 ]; then
   echo "Population of vector DB has run successfully."
   mkdir -p ${DATA_DIRPATH}/volumes/tinydb/
