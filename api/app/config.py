@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     TINYDB_FILEPATH: Path = Field(...)
     MODEL_LOADPATH: str = Field(...)
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
+    QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(60, gt=0)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod

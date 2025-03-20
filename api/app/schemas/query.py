@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -14,6 +15,7 @@ class BaseUserQueryResponse(BaseModel, ABC):
     topk: int
     returned_asset_count: int = -1
     result_asset_ids: list[int] | None = None
+    expires_at: datetime | None = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):
