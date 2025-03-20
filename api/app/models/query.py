@@ -31,7 +31,6 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
         self.updated_at = datetime.now(tz=timezone.utc)
 
         if self.status in (QueryStatus.COMPLETED, QueryStatus.FAILED):
-            # an arbitrarily chosen expiration date
             self.expires_at = datetime.now(tz=timezone.utc) + timedelta(
                 minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES
             )
@@ -46,6 +45,10 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
             }
         else:
             raise ValueError("SearchResults are not available for this completed query")
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and self.expires_at < datetime.now(tz=timezone.utc)
 
     @staticmethod
     def sort_function_to_populate_queue(query: BaseUserQuery) -> tuple[bool, float]:
