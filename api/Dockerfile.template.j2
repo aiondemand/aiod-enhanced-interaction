@@ -6,7 +6,7 @@ FROM python:3.11
 
 ARG USERNAME=ubuntu
 ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+ARG USER_GID=1000
 
 # Create a non-root user that has sudo privileges
 RUN groupadd --gid $USER_GID $USERNAME \
@@ -17,6 +17,8 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
 USER $USERNAME
+
+ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
 WORKDIR /code
 
@@ -31,6 +33,6 @@ RUN pip install --no-cache-dir --upgrade .
 
 COPY ./api/app /code/app
 COPY ./api/data /code/data
-COPY ./api/scripts/milvus_credentials_setup.py /code/scripts
+COPY ./api/scripts /code/scripts
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]

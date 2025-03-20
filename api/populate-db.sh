@@ -28,6 +28,9 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
+# Create path under the current user so that it won't be created automatically by Milvus under root
+mkdir -p ${DATA_DIRPATH}/volumes
+
 docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml up populate-db --build
 EXIT_CODE=$?
 docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml down

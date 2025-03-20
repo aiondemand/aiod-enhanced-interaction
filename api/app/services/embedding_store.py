@@ -155,7 +155,6 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
             schema.verify()
 
-            index_params = IndexParams()
             index_params = self.client.prepare_index_params()
 
             index_params.add_index(field_name="vector", **self.vector_index_kwargs)
