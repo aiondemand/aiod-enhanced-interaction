@@ -64,7 +64,6 @@ def populate_collection(
 
     print(f"Populating collection: {collection_name}")
 
-    it = 0
     for file in tqdm(os.listdir(json_dirpath)):
         path = os.path.join(json_dirpath, file)
         with open(path) as f:
@@ -91,10 +90,6 @@ def populate_collection(
 
         client.insert(collection_name=collection_name, data=data)
         unique_asset_ids.update(d["asset_id"] for d in data)
-
-        it += 1
-        if it >= 100:
-            break
 
 
 def create_new_collection(
