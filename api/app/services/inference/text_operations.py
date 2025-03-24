@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from typing import Any
 
+from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.asset_metadata.dataset_metadata import (
     HuggingFaceDatasetMetadataTemplate,
 )
@@ -75,9 +76,15 @@ class HuggingFaceDatasetExtractMetadata:
                     processed_licenses.append(prefix)
                     break
 
+        valid_licenses = SchemaOperations.get_list_of_valid_values(
+            HuggingFaceDatasetMetadataTemplate, "license"
+        )
+        processed_licenses = [lic for lic in processed_licenses if lic in valid_licenses]
+
         if len(processed_licenses) == 0:
             return None
-        return processed_licenses[0]
+        else:
+            return processed_licenses[0]
 
     @classmethod
     def translate_size_category(
@@ -147,7 +154,11 @@ class HuggingFaceDatasetExtractMetadata:
                     + cls.extract_hf_keywords(obj, keyword_type="task_ids")
                 )
             )
-        )[:100]
+        )
+        valid_task_types = SchemaOperations.get_list_of_valid_values(
+            HuggingFaceDatasetMetadataTemplate, "task_types"
+        )
+        task_types = [tt for tt in task_types if tt in valid_task_types][:100]
 
         size_categories = cls.strip_unknown(
             cls.extract_hf_keywords(obj, keyword_type="size_categories")

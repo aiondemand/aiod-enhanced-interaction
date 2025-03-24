@@ -265,7 +265,7 @@ class UserQueryParsing:
             ]
             return topic_list + to_add
 
-        if not asset_type in SchemaOperations.SCHEMA_MAPPING.keys():
+        if asset_type not in SchemaOperations.get_supported_asset_types():
             raise ValueError(f"Invalid asset_type argument '{asset_type}'")
         asset_schema = SchemaOperations.get_asset_schema(asset_type)
 
@@ -299,7 +299,12 @@ class UserQueryParsing:
             )
 
             valid_expressions = [
-                expr for expr in out_stage_2["expressions"] if expr.get("discard", False) is False
+                expr
+                for expr in out_stage_2["expressions"]
+                if (
+                    expr.get("discard", False) is False
+                    and expr.get("processed_value", None) is not None
+                )
             ]
             if len(valid_expressions) > 0:
                 parsed_conditions.append(
@@ -460,38 +465,18 @@ class UserQueryParsingStages:
     def _create_dynamic_stage2_schema(
         cls, field_name: str, asset_schema: Type[BaseModel]
     ) -> Type[BaseModel]:
-        # TODO incorporate
-        def none_field_validator(cls, value: Any) -> Any:
-            if value == "NONE":
-                return None
-            return value
-
-        def orig_field_validator_wrapper(cls, value: Any, func: Callable) -> Any:
-            is_list_field = SchemaOperations.get_list_fields_mask(asset_schema)[field_name]
-
-            # TODO modify this field validator wrapper...
-
-            if value == "NONE":
-                return value
-            if is_list_field is False:
-                return func(value)
-            if is_list_field:
-                out = func([value])
-                if out is not None and len(out) > 0:
-                    return out[0]
-
-            raise ValueError(
-                f"Value '{str(value)}' didn't comply with '{field_name}' validator demands"
-            )
-
         original_field = asset_schema.model_fields[field_name]
-        validators = SchemaOperations.get_field_validators(asset_schema, field_name)
-        new_field = deepcopy(original_field)
+        new_field = SchemaOperations.get_inner_field_info(asset_schema, field_name)
+
+        if new_field.description != original_field.description and new_field.description != "":
+            new_field.description = f"{original_field.description} {new_field.description}"
+        else:
+            new_field.description = original_field.description
+        new_field.description = f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {new_field.description}."
 
         new_field.annotation = Optional[
-            SchemaOperations.dynamically_create_type_for_a_field_value(asset_schema, field_name)
+            SchemaOperations.get_inner_annotation(asset_schema, field_name)
         ]
-        new_field.description = f"The processed value used to compare to metadata field '{field_name}', that adheres to the same constraints as the field: {original_field.description}."
 
         inner_class_dict = {
             "__annotations__": {
@@ -517,34 +502,19 @@ class UserQueryParsingStages:
                 description="A boolean value indicating whether the expression should be discarded if 'raw_value' cannot be transformed into a valid 'processed_value'",
             ),
         }
-
-        # TODO check validators whether they work correctly
-        # field validator to convert NONE to None
         inner_class_dict.update(
-            {
-                "validate_processed_value_NONE": field_validator("processed_value", mode="before")(
-                    none_field_validator
-                ),
-            }
+            SchemaOperations.create_new_field_validators(
+                asset_schema, orig_field_name=field_name, new_field_name="processed_value"
+            )
         )
-        inner_class_dict.update(
-            {
-                # wrapping original field validators in 'orig_field_validator_wrapper' function
-                f"validate_processed_value_{func_name}": field_validator(
-                    "processed_value", mode=decor.info.mode
-                )(
-                    partial(
-                        orig_field_validator_wrapper,
-                        func=getattr(asset_schema, func_name),
-                    )
-                )
-                for func_name, decor in validators
-            }
+        expression_class = type(
+            f"UserQuery_Stage2_Expression_{asset_schema.__name__}_{field_name}",
+            (BaseModel,),
+            inner_class_dict,
         )
 
-        expression_class = type(f"Expression_{field_name}", (BaseModel,), inner_class_dict)
         return type(
-            f"UserQuery_Stage2_OutputSchema_{field_name}",
+            f"UserQuery_Stage2_Filter_{asset_schema.__name__}_{field_name}",
             (BaseModel,),
             {
                 "__annotations__": {
@@ -562,25 +532,6 @@ class UserQueryParsingStages:
                 ),
             },
         )
-
-    @classmethod
-    def _get_inner_most_primitive_type(cls, data_type: Type) -> Type:
-        origin = get_origin(data_type)
-        if origin is Literal:
-            return type(get_args(data_type)[0])
-        if origin is not None:
-            args = get_args(data_type)
-            if args:
-                return cls._get_inner_most_primitive_type(
-                    args[0]
-                )  # Check the first argument for simplicity
-        return data_type
-
-    @classmethod
-    def _translate_primitive_type_to_str(cls, data_type: Type) -> str:
-        if data_type not in [str, int, float]:
-            raise ValueError("Not supported data type")
-        return {str: "string", int: "integer", float: "float"}[data_type]
 
     @classmethod
     def _call_function_stage_2(
@@ -626,8 +577,11 @@ class UserQueryParsingStages:
         field_valid_values = ""
         curr_validation_step = None
         permitted_values = []
-        if asset_schema.exists_field_valid_values(metadata_field):
-            permitted_values = asset_schema.get_field_valid_values(metadata_field)
+
+        if SchemaOperations.exists_list_of_valid_values(asset_schema, metadata_field):
+            permitted_values = SchemaOperations.get_list_of_valid_values(
+                asset_schema, metadata_field
+            )
             field_valid_values = f"b) List of the only permitted values: {permitted_values}"
             curr_validation_step = validation_step
 
@@ -652,8 +606,8 @@ class UserQueryParsingStages:
             {
                 "name": name,
                 "description": field.description,
-                "type": cls._translate_primitive_type_to_str(
-                    cls._get_inner_most_primitive_type(field.annotation)
+                "type": SchemaOperations.translate_primitive_type_to_str(
+                    SchemaOperations.get_inner_most_primitive_type(field.annotation)
                 ),
             }
             for name, field in asset_schema.model_fields.items()

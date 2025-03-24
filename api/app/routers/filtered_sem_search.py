@@ -1,9 +1,9 @@
-from typing import Annotated
+from typing import Annotated, Type
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
-from pydantic import conlist
+from pydantic import BaseModel, conlist
 
 from app.config import settings
 from app.models.filter import Filter
@@ -13,6 +13,7 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
+from app.schemas.asset_metadata.base import SchemaOperations
 from app.schemas.enums import AssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
@@ -77,14 +78,26 @@ async def get_fields_to_filter_by(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    # TODO return a list of fields that can be filtered by for a given asset type
-    # I suppose we can add their their respective types as well...
+    schema = SchemaOperations.get_asset_schema(asset_type)
+    field_names = SchemaOperations.get_schema_field_names(schema)
 
-    # TODO problem -> How am I supposed to depict value restrictions for a field, if they're guarded by field_validator decorators only?
+    inner_class_dict = {
+        field: SchemaOperations.get_inner_field_info(schema, field) for field in field_names
+    }
+    inner_class_dict["__annotations__"] = {
+        field: SchemaOperations.get_inner_annotation(schema, field) for field in field_names
+    }
 
-    # TODO start off with a simple list of fields without their respective types
+    fields_class: Type[BaseModel] = type(
+        f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict
+    )
+    output_schema = fields_class.model_json_schema()["properties"]
 
-    raise NotImplementedError
+    for field in output_schema.keys():
+        output_schema[field].pop("default", None)
+        output_schema[field].pop("title", None)
+
+    return output_schema
 
 
 @router.get("/schemas/get_filter_schema")
@@ -101,13 +114,15 @@ async def get_filter_schema(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    # TODO initial checks
-    # 1. check if asset_type is supported
-    # 2. check if field_name is supported
+    schema = SchemaOperations.get_asset_schema(asset_type)
+    if field_name not in SchemaOperations.get_schema_field_names(schema):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Asset type '{asset_type.value}' does not support field name '{field_name}'",
+        )
 
-    # TODO create Pydantic class for an asset-specific filter, and then do .model_dump() to get the schema spec
-
-    raise NotImplementedError
+    filter_class = Filter.create_field_specific_filter_type(asset_type, field_name)
+    return filter_class.model_json_schema()
 
 
 async def _sumbit_filtered_query(
@@ -131,7 +146,3 @@ async def _sumbit_filtered_query(
         filters=filters if filters else None,
     )
     return await submit_query(user_query, database)
-
-
-# TODO endpoints defining schemas for metadata filtering are required
-# so that a user has an idea how he can build filters manually...
