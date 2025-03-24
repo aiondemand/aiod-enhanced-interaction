@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Generic, Type, TypeVar
+from typing import Generic, TypeVar
 
 from app.models.db_entity import DatabaseEntity
 from app.models.filter import Filter
