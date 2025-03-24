@@ -3,7 +3,8 @@ import re
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from app.schemas.asset_metadata.base import BaseMetadataTemplate
+from pydantic import Field
 
 # Every metadata field we use for filtering purposes has 2 annotations associated with it:
 # - The inner annotation corresponding to a singular eligible value for the field;
@@ -75,7 +76,7 @@ class DatasetEligibleComparisonOperators:
             raise ValueError(f"Invalid field name: {field_name}")
 
 
-class HuggingFaceDatasetMetadataTemplate(BaseModel):
+class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
     """

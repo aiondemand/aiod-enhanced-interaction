@@ -13,7 +13,7 @@ from app.models.query import (
     RecommenderUserQuery,
     SimpleUserQuery,
 )
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.search_results import SearchResults
 from app.services.aiod import check_aiod_document

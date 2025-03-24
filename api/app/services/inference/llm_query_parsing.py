@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.config import settings
 from app.models.filter import Filter
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 
 

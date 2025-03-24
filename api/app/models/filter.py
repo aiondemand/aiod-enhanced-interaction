@@ -5,8 +5,8 @@ from typing import Annotated, Any, Callable, Literal, Type, TypeAlias
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from api.app.schemas.asset_metadata.dataset_metadata import DatasetEligibleComparisonOperators
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.dataset_metadata import DatasetEligibleComparisonOperators
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 
 PrimitiveTypes: TypeAlias = Annotated[str, Field(max_length=50)] | int | float
@@ -39,6 +39,31 @@ class Filter(BaseModel):
         if field_name not in SchemaOperations.get_schema_field_names(asset_schema):
             raise HTTPException(status_code=400, detail=f"Invalid field value '{field_name}'")
 
+        expression_class = cls._create_expression_type(asset_type, field_name)
+
+        filter_class_dict = {
+            "__annotations__": {
+                "field": Literal[field_name],
+                "logical_operator": Filter.model_fields["logical_operator"].annotation,
+                "expressions": list[expression_class],
+            },
+            "field": Field(..., description=Filter.model_fields["field"].description),
+            "logical_operator": Field(
+                ..., description=Filter.model_fields["logical_operator"].description
+            ),
+            "expressions": Field(
+                ..., description=Filter.model_fields["expressions"].description, max_length=5
+            ),
+        }
+        return type(
+            f"Filter_{asset_type.value.capitalize()}_{field_name.capitalize()}",
+            (BaseModel,),
+            filter_class_dict,
+        )
+
+    @classmethod
+    def _create_expression_type(cls, asset_type: AssetType, field_name: str) -> Type[BaseModel]:
+        asset_schema = SchemaOperations.get_asset_schema(asset_type)
         annotation = SchemaOperations.get_inner_annotation(asset_schema, field_name)
         field_info = SchemaOperations.get_inner_field_info(asset_schema, field_name)
 
@@ -61,33 +86,11 @@ class Filter(BaseModel):
                 asset_schema, orig_field_name=field_name, new_field_name="value"
             )
         )
-        expression_class = type(
+        return type(
             f"Expression_{asset_type.value.capitalize()}_{field_name.capitalize()}",
             (BaseModel,),
             expression_class_dict,
         )
-
-        filter_class_dict = {
-            "__annotations__": {
-                "field": Literal[field_name],
-                "logical_operator": Filter.model_fields["logical_operator"].annotation,
-                "expressions": list[expression_class],
-            },
-            "field": Field(..., description=Filter.model_fields["field"].description),
-            "logical_operator": Field(
-                ..., description=Filter.model_fields["logical_operator"].description
-            ),
-            "expressions": Field(
-                ..., description=Filter.model_fields["expressions"].description, max_length=5
-            ),
-        }
-
-        filter_class = type(
-            f"Filter_{asset_type.value.capitalize()}_{field_name.capitalize()}",
-            (BaseModel,),
-            filter_class_dict,
-        )
-        return filter_class
 
     def validate_filter_or_raise(self, asset_type: AssetType) -> None:
         filter_class = self.create_field_specific_filter_type(asset_type, self.field)

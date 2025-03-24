@@ -3,10 +3,11 @@ import re
 from datetime import datetime
 from typing import Any
 
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.dataset_metadata import (
     HuggingFaceDatasetMetadataTemplate,
 )
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 
 
@@ -180,9 +181,10 @@ class HuggingFaceDatasetExtractMetadata:
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound,
         }
-        return cls.filter_out_empty_fields(
+        obj_to_return = cls.filter_out_empty_fields(
             HuggingFaceDatasetMetadataTemplate(**obj_to_return).model_dump()
         )
+        return HuggingFaceDatasetMetadataTemplate.apply_lowercase_recursively(obj_to_return)
 
 
 class ConvertJsonToString:

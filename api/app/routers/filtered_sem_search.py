@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, conlist
+from pydantic import BaseModel, Field, conlist
 
 from app.config import settings
 from app.models.filter import Filter
@@ -13,7 +13,7 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
@@ -46,7 +46,7 @@ async def submit_filtered_query(
         AssetType.DATASETS,
         description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
     ),
-    filters: conlist(Filter, max_length=5) | None = Body(
+    filters: Annotated[list[Filter], Field(..., max_length=5)] | None = Body(
         None,
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
