@@ -2,20 +2,24 @@ from copy import deepcopy
 from functools import partial
 from typing import Annotated, Any, Callable, Literal, Type, Union, get_args, get_origin
 
+from app.schemas.asset_metadata.base import BaseInnerAnnotations, BaseMetadataTemplate
 from app.schemas.asset_metadata.dataset_metadata import (
+    DatasetInnerAnnotations,
     HuggingFaceDatasetMetadataTemplate,
 )
 from app.schemas.enums import AssetType
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
 from pydantic._internal._decorators import Decorator, FieldValidatorDecoratorInfo
 from pydantic.fields import FieldInfo
 
 
 class SchemaOperations:
-    SCHEMA_MAPPING = {AssetType.DATASETS: HuggingFaceDatasetMetadataTemplate}
+    SCHEMA_MAPPING: dict[AssetType, Type[BaseMetadataTemplate]] = {
+        AssetType.DATASETS: HuggingFaceDatasetMetadataTemplate
+    }
 
     @classmethod
-    def get_asset_schema(cls, asset_type: AssetType) -> Type[BaseModel]:
+    def get_asset_schema(cls, asset_type: AssetType) -> Type[BaseMetadataTemplate]:
         return cls.SCHEMA_MAPPING[asset_type]
 
     @classmethod
@@ -23,57 +27,60 @@ class SchemaOperations:
         return list(cls.SCHEMA_MAPPING.keys())
 
     @classmethod
-    def get_schema_field_names(cls, asset_schema: Type[BaseModel]) -> list[str]:
+    def get_schema_field_names(cls, asset_schema: Type[BaseMetadataTemplate]) -> list[str]:
         return list(asset_schema.model_fields.keys())
 
     @classmethod
-    def get_outer_annotation(cls, asset_schema: Type[BaseModel], field_name: str) -> Type:
-        return asset_schema.model_fields[field_name].annotation
+    def strip_outer_annotation(
+        cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
+    ) -> Type:
+        outer_annot = asset_schema.model_fields[field_name].annotation
+        if outer_annot is None:
+            raise ValueError(f"Field {field_name} does not have an annotation")
+        return cls.strip_list_type(cls.strip_optional_type(outer_annot))
 
     @classmethod
-    def strip_outer_annotation(cls, asset_schema: Type[BaseModel], field_name: str) -> Type:
-        return cls.strip_list_type(
-            cls.strip_optional_type(cls.get_outer_annotation(asset_schema, field_name))
-        )
-
-    @classmethod
-    def get_inner_annotation(cls, asset_schema: Type[BaseModel], field_name: str) -> Type:
-        annotated_type = cls.strip_outer_annotation(asset_schema, field_name)
-        if not cls.is_valid_inner_annotation(annotated_type):
-            raise ValueError("Invalid metadata filtering schema")
-
-        return get_args(annotated_type)[0]
-
-    @classmethod
-    def get_outer_field_info(cls, asset_schema: Type[BaseModel], field_name: str) -> FieldInfo:
-        return deepcopy(asset_schema.model_fields[field_name])
-
-    @classmethod
-    def get_inner_field_info(cls, asset_schema: Type[BaseModel], field_name: str) -> FieldInfo:
+    def get_inner_annotation(
+        cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
+    ) -> Type:
         annotated_type = cls.strip_outer_annotation(asset_schema, field_name)
         if not cls.is_valid_inner_annotation(annotated_type):
             raise ValueError("Invalid metadata filtering schema")
 
         inner_annotation = get_args(annotated_type)[0]
+        if inner_annotation is None:
+            raise ValueError(f"Field {field_name} does not have an inner annotation")
+        return inner_annotation
+
+    @classmethod
+    def get_inner_field_info(
+        cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
+    ) -> FieldInfo:
+        annotated_type = cls.strip_outer_annotation(asset_schema, field_name)
+        if not cls.is_valid_inner_annotation(annotated_type):
+            raise ValueError("Invalid metadata filtering schema")
+
+        inner_annotation = cls.get_inner_annotation(asset_schema, field_name)
         field_info: FieldInfo = deepcopy(get_args(annotated_type)[1])
         field_info.annotation = inner_annotation
 
         return field_info
 
     @classmethod
-    def exists_list_of_valid_values(cls, asset_schema: Type[BaseModel], field_name: str) -> bool:
-        inner_annot = cls.get_inner_annotation(asset_schema, field_name)
-        if get_origin(inner_annot) is Literal:
-            return True
-        return False
+    def exists_list_of_valid_values(
+        cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
+    ) -> bool:
+        return asset_schema.get_inner_annotations_class().exists_list_of_valid_values(field_name)
 
     @classmethod
-    def get_list_of_valid_values(cls, asset_schema: Type[BaseModel], field_name: str) -> list[str]:
-        if not cls.exists_list_of_valid_values(asset_schema, field_name):
+    def get_list_of_valid_values(
+        cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
+    ) -> list[str]:
+        inner_annotations_class = asset_schema.get_inner_annotations_class()
+        if not inner_annotations_class.exists_list_of_valid_values(field_name):
             raise ValueError("Field does not have a list of valid values")
 
-        inner_annot = cls.get_inner_annotation(asset_schema, field_name)
-        return list(get_args(inner_annot))
+        return inner_annotations_class.get_list_of_valid_values(field_name)
 
     @classmethod
     def is_valid_inner_annotation(cls, annotated_type: Type) -> bool:
@@ -84,7 +91,7 @@ class SchemaOperations:
         )
 
     @classmethod
-    def get_list_fields_mask(cls, asset_schema: Type[BaseModel]) -> dict[str, bool]:
+    def get_list_fields_mask(cls, asset_schema: Type[BaseMetadataTemplate]) -> dict[str, bool]:
         return {
             k: cls.is_list_type(cls.strip_optional_type(v))
             for k, v in asset_schema.__annotations__.items()
@@ -114,7 +121,7 @@ class SchemaOperations:
 
     @classmethod
     def get_field_validators(
-        cls, asset_schema: Type[BaseModel], field: str
+        cls, asset_schema: Type[BaseMetadataTemplate], field: str
     ) -> list[tuple[str, Decorator[FieldValidatorDecoratorInfo]]]:
         return [
             (func_name, decor)
@@ -123,7 +130,10 @@ class SchemaOperations:
         ]
 
     @classmethod
-    def get_inner_most_primitive_type(cls, annotation: Type) -> Type:
+    def get_inner_most_primitive_type(cls, annotation: Type | None) -> Type:
+        if annotation is None:
+            raise ValueError("Annotation is None")
+
         origin = get_origin(annotation)
         if origin is Literal:
             return type(get_args(annotation)[0])
@@ -144,7 +154,7 @@ class SchemaOperations:
 
     @classmethod
     def _orig_field_validator_wrapper(
-        cls, value: Any, func: Callable, asset_schema: Type[BaseModel], field_name: str
+        cls, value: Any, func: Callable, asset_schema: Type[BaseMetadataTemplate], field_name: str
     ) -> Any:
         if value is None:
             return None
@@ -162,7 +172,7 @@ class SchemaOperations:
 
     @classmethod
     def create_new_field_validators(
-        cls, asset_schema: Type[BaseModel], orig_field_name: str, new_field_name: str
+        cls, asset_schema: Type[BaseMetadataTemplate], orig_field_name: str, new_field_name: str
     ) -> dict:
         validators = SchemaOperations.get_field_validators(asset_schema, orig_field_name)
 

@@ -9,7 +9,7 @@ from app.schemas.asset_metadata.dataset_metadata import DatasetEligibleCompariso
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 
-PrimitiveTypes: TypeAlias = Annotated[str, Field(max_length=50)] | int | float
+PrimitiveTypes: TypeAlias = int | float | Annotated[str, Field(max_length=50)]
 
 
 class Expression(BaseModel):
@@ -45,7 +45,7 @@ class Filter(BaseModel):
             "__annotations__": {
                 "field": Literal[field_name],
                 "logical_operator": Filter.model_fields["logical_operator"].annotation,
-                "expressions": list[expression_class],
+                "expressions": list[expression_class],  # type: ignore[valid-type]
             },
             "field": Field(..., description=Filter.model_fields["field"].description),
             "logical_operator": Field(
@@ -97,6 +97,8 @@ class Filter(BaseModel):
 
         try:
             validated_filter = filter_class(**self.model_dump())
+            validated_filter = Filter(**validated_filter.model_dump())
+
             self.expressions = [
                 Expression(**expr.model_dump()) for expr in validated_filter.expressions
             ]

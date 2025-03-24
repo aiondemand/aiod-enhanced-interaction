@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+from abc import ABC
+
 from pydantic import BaseModel
 
 from app.models.filter import Filter
 from app.schemas.enums import QueryStatus
 
 
-class BaseUserQueryResponse(BaseModel):
+class BaseUserQueryResponse(BaseModel, ABC):
     asset_type: str
     status: QueryStatus = QueryStatus.QUEUED
     topk: int
-    returned_doc_count: int = -1
-    result_doc_ids: list[str] | None = None
+    returned_asset_count: int = -1
+    result_asset_ids: list[int] | None = None
 
 
 class SimpleUserQueryResponse(BaseUserQueryResponse):

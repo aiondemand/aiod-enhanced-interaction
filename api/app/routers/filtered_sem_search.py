@@ -1,4 +1,4 @@
-from typing import Annotated, Type
+from typing import Annotated, Any, Type
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
@@ -81,7 +81,7 @@ async def get_fields_to_filter_by(
     schema = SchemaOperations.get_asset_schema(asset_type)
     field_names = SchemaOperations.get_schema_field_names(schema)
 
-    inner_class_dict = {
+    inner_class_dict: dict[str, Any] = {
         field: SchemaOperations.get_inner_field_info(schema, field) for field in field_names
     }
     inner_class_dict["__annotations__"] = {

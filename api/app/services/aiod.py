@@ -8,7 +8,7 @@ from requests.exceptions import HTTPError, Timeout
 
 from app.config import settings
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 
 
 def recursive_aiod_asset_fetch(
@@ -46,10 +46,10 @@ def recursive_aiod_asset_fetch(
     return data
 
 
-def get_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 0.1) -> dict | None:
+def get_aiod_asset(asset_id: int, asset_type: AssetType, sleep_time: float = 0.1) -> dict | None:
     try:
         sleep(sleep_time)
-        response = perform_url_request(settings.AIOD.get_asset_by_id_url(doc_id, asset_type))
+        response = perform_url_request(settings.AIOD.get_asset_by_id_url(asset_id, asset_type))
         return response.json()
     except HTTPError as e:
         if e.response.status_code == 404:
@@ -57,8 +57,8 @@ def get_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 0.
         raise
 
 
-def check_aiod_document(doc_id: str, asset_type: AssetType, sleep_time: float = 0.1) -> bool:
-    return get_aiod_document(doc_id, asset_type, sleep_time) is not None
+def check_aiod_asset(asset_id: int, asset_type: AssetType, sleep_time: float = 0.1) -> bool:
+    return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
 
 def _build_aiod_url_queries(url_params: RequestParams) -> dict:

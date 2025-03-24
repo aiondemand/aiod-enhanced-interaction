@@ -1,10 +1,11 @@
 import json
 import re
+from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Literal, Optional
+from typing import Annotated, ClassVar, Optional, Type
 
-from app.schemas.asset_metadata.base import BaseMetadataTemplate
-from pydantic import Field
+from app.schemas.asset_metadata.base import BaseInnerAnnotations, BaseMetadataTemplate
+from pydantic import Field, field_validator
 
 # Every metadata field we use for filtering purposes has 2 annotations associated with it:
 # - The inner annotation corresponding to a singular eligible value for the field;
@@ -13,7 +14,7 @@ from pydantic import Field
 #   - This annotation is used for extracting metadata from AIoD assets automatically using an LLM
 
 
-class DatasetInnerAnnotations:
+class DatasetInnerAnnotations(BaseInnerAnnotations):
     @staticmethod
     def _load_all_valid_values(path: Path) -> dict[str, list[str]]:
         with open(path) as f:
@@ -24,7 +25,16 @@ class DatasetInnerAnnotations:
         Path("data/valid_metadata_values.json")
     )
 
-    # Inner annotations
+    @classmethod
+    def exists_list_of_valid_values(cls, field_name: str) -> bool:
+        return field_name in cls._ALL_VALID_VALUES
+
+    @classmethod
+    def get_list_of_valid_values(cls, field_name: str) -> list[str]:
+        if not cls.exists_list_of_valid_values(field_name):
+            raise ValueError(f"Field {field_name} does not have a list of valid values")
+        return cls._ALL_VALID_VALUES[field_name]
+
     DatePublished = Annotated[
         str,
         Field(
@@ -36,13 +46,17 @@ class DatasetInnerAnnotations:
         int, Field(description="The total size of the dataset in megabytes.", ge=0)
     ]
     License = Annotated[
-        Literal[*_ALL_VALID_VALUES["license"]],
-        Field(description="The license of the dataset. Only a subset of licenses are recognized."),
+        str,
+        Field(
+            description="The license of the dataset. Only a subset of licenses are recognized.",
+            enum=_ALL_VALID_VALUES["license"],
+        ),
     ]
     TaskType = Annotated[
-        Literal[*_ALL_VALID_VALUES["task_types"]],
+        str,
         Field(
-            description="The machine learning tasks corresponding to this dataset. Only a subset of task types are recognized."
+            description="The machine learning tasks corresponding to this dataset. Only a subset of task types are recognized.",
+            enum=_ALL_VALID_VALUES["task_types"],
         ),
     ]
     Language = Annotated[
@@ -76,7 +90,7 @@ class DatasetEligibleComparisonOperators:
             raise ValueError(f"Invalid field name: {field_name}")
 
 
-class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate):
+class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnotations]):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
     """
@@ -108,3 +122,21 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate):
         None,
         description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
     )
+
+    # FieldInfo enum argument is only for documentation purposes (OpenAPI schema generation)
+    # It doesn't affect the validation logic, hence the need to check the fields manually
+    @classmethod
+    @field_validator("license", mode="before")
+    def check_license(cls, value: str) -> str | None:
+        valid_values = DatasetInnerAnnotations.get_list_of_valid_values("license")
+        return value if value in valid_values else None
+
+    @classmethod
+    @field_validator("task_types", mode="before")
+    def check_task_types(cls, values: list[str]) -> list[str] | None:
+        valid_values = DatasetInnerAnnotations.get_list_of_valid_values("task_types")
+        return [val for val in values if val.lower() in valid_values]
+
+    @classmethod
+    def get_inner_annotations_class(cls) -> Type[DatasetInnerAnnotations]:
+        return DatasetInnerAnnotations

@@ -10,7 +10,7 @@ import torch
 from app.config import settings
 from app.models.asset_collection import AssetCollection
 from app.schemas.enums import AssetType
-from app.schemas.request_params import RequestParams
+from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
@@ -106,12 +106,12 @@ def process_aiod_assets_wrapper(
     asset_collection: AssetCollection,
     asset_type: AssetType,
 ) -> None:
-    existing_doc_ids_from_past = embedding_store.get_all_document_ids(asset_type)
-    newly_added_doc_ids = []
+    existing_asset_ids_from_past = embedding_store.get_all_asset_ids(asset_type)
+    newly_added_asset_ids: list[int] = []
 
     last_update = asset_collection.last_update
-    last_db_sync_datetime: datetime = getattr(last_update, "from_time", None)
-    query_from_time = last_db_sync_datetime
+    last_db_sync_datetime: datetime | None = getattr(last_update, "from_time", None)
+    query_from_time: datetime | None = last_db_sync_datetime
 
     last_db_sync_datetime = (
         last_db_sync_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -139,19 +139,19 @@ def process_aiod_assets_wrapper(
         assets_to_add, asset_ids_to_remove = get_assets_to_add_and_delete(
             asset_type,
             url_params,
-            existing_doc_ids_from_past=existing_doc_ids_from_past,
-            newly_added_doc_ids=newly_added_doc_ids,
+            existing_asset_ids_from_past=existing_asset_ids_from_past,
+            newly_added_asset_ids=newly_added_asset_ids,
             last_db_sync_datetime=last_db_sync_datetime,
         )
-        if assets_to_add is None:
+        if assets_to_add is None or asset_ids_to_remove is None:
             break
 
         # Remove embeddings associated with old versions of assets
         num_emb_removed = 0
         if len(asset_ids_to_remove) > 0:
             num_emb_removed = embedding_store.remove_embeddings(asset_ids_to_remove, asset_type)
-            existing_doc_ids_from_past = np.array(existing_doc_ids_from_past)[
-                ~np.isin(existing_doc_ids_from_past, asset_ids_to_remove)
+            existing_asset_ids_from_past = np.array(existing_asset_ids_from_past)[
+                ~np.isin(existing_asset_ids_from_past, asset_ids_to_remove)
             ].tolist()
 
         # Add embeddings of new assets or of new iteration of assets
@@ -159,7 +159,7 @@ def process_aiod_assets_wrapper(
         num_emb_added = 0
         if len(assets_to_add) > 0:
             stringified_assets = [stringify_function(obj) for obj in assets_to_add]
-            asset_ids = [str(obj["identifier"]) for obj in assets_to_add]
+            asset_ids = [obj["identifier"] for obj in assets_to_add]
 
             metadata: list[dict] = [{} for _ in assets_to_add]
             if extract_metadata_function is not None:
@@ -180,7 +180,7 @@ def process_aiod_assets_wrapper(
                 asset_type=asset_type,
                 milvus_batch_size=settings.MILVUS.BATCH_SIZE,
             )
-            newly_added_doc_ids += asset_ids
+            newly_added_asset_ids += asset_ids
 
         asset_collection.update(embeddings_added=num_emb_added, embeddings_removed=num_emb_removed)
         database.upsert(asset_collection)
@@ -197,10 +197,10 @@ def process_aiod_assets_wrapper(
 def get_assets_to_add_and_delete(
     asset_type: AssetType,
     url_params: RequestParams,
-    existing_doc_ids_from_past: list[str],
-    newly_added_doc_ids: list[str],
+    existing_asset_ids_from_past: list[int],
+    newly_added_asset_ids: list[int],
     last_db_sync_datetime: datetime | None,
-) -> tuple[list[dict] | None, list[str] | None]:
+) -> tuple[list[dict] | None, list[int] | None]:
     mark_recursions: list[int] = []
     assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 
@@ -214,13 +214,13 @@ def get_assets_to_add_and_delete(
     if settings.AIOD.TESTING and url_params.offset >= 500:
         return None, None
 
-    asset_ids = [str(obj["identifier"]) for obj in assets]
+    asset_ids = [obj["identifier"] for obj in assets]
     modified_dates = np.array([parse_aiod_asset_date(obj, none_value="now") for obj in assets])
 
     # new assets to store that we have never encountered before
-    new_asset_idx = np.where(~np.isin(asset_ids, existing_doc_ids_from_past + newly_added_doc_ids))[
-        0
-    ]
+    new_asset_idx = np.where(
+        ~np.isin(asset_ids, existing_asset_ids_from_past + newly_added_asset_ids)
+    )[0]
     assets_to_add = [assets[idx] for idx in new_asset_idx]
 
     if last_db_sync_datetime is None:
@@ -228,12 +228,13 @@ def get_assets_to_add_and_delete(
         return assets_to_add, []
 
     # old assets that have been changed since the last time we embedded them
-    # We skip assets that have just been computed (are found within newly_added_doc_ids),
-    # otherwise we would have to recompute all the documents composing the pagination
+    # We skip assets that have just been computed (are found within newly_added_asset_ids),
+    # otherwise we would have to recompute all the assets composing the pagination
     # overlap...
     # Old assets need to be deleted first, then they're stored in DB yet again
     updated_asset_idx = np.where(
-        (np.isin(asset_ids, existing_doc_ids_from_past)) & (modified_dates >= last_db_sync_datetime)
+        (np.isin(asset_ids, existing_asset_ids_from_past))
+        & (modified_dates >= last_db_sync_datetime)
     )[0]
     asset_ids_to_del = [asset_ids[idx] for idx in updated_asset_idx]
     assets_to_add += [assets[idx] for idx in updated_asset_idx]

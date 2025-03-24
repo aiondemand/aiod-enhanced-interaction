@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, TypeVar
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -10,6 +10,8 @@ from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
 
+Response = TypeVar("Response", bound=BaseUserQueryResponse)
+
 
 async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
     database.insert(user_query)
@@ -19,7 +21,7 @@ async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
 
 async def get_query_results(
     query_id: UUID, database: Database, query_type: Type[BaseUserQuery]
-) -> BaseUserQueryResponse:
+) -> Response:
     user_query = database.find_by_id(query_type, id=str(query_id))
     if user_query is None:
         raise HTTPException(
