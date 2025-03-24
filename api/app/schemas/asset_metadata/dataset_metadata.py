@@ -1,8 +1,6 @@
 import json
-import re
-from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, ClassVar, Optional, Type
+from typing import Annotated, Any, ClassVar, Optional, Type
 
 from app.schemas.asset_metadata.base import BaseInnerAnnotations, BaseMetadataTemplate
 from pydantic import Field, field_validator
@@ -75,21 +73,6 @@ class DatasetInnerAnnotations(BaseInnerAnnotations):
     ]
 
 
-class DatasetEligibleComparisonOperators:
-    @staticmethod
-    def get_eligible_comparison_operators(field_name: str) -> list[str]:
-        if field_name == "date_published":
-            return [">=", "<="]
-        elif field_name == "size_in_mb":
-            return ["==", "!=", ">", "<", ">=", "<="]
-        elif field_name in ["license", "task_type", "language"]:
-            return ["==", "!="]
-        elif field_name in ["datapoints_lower_bound", "datapoints_upper_bound"]:
-            return [">=", "<="]
-        else:
-            raise ValueError(f"Invalid field name: {field_name}")
-
-
 class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnotations]):
     """
     Extraction of relevant metadata we wish to retrieve from ML assets
@@ -123,16 +106,26 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
         description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
     )
 
+    @field_validator("license", "task_types", "languages", mode="before")
+    @classmethod
+    def convert_strings_to_lowercase(cls, value: Any) -> Any:
+        return cls.apply_string_function_recursively(value, str.lower)
+
+    @field_validator("date_published", mode="before")
+    @classmethod
+    def convert_strings_to_uppercase(cls, value: Any) -> Any:
+        return cls.apply_string_function_recursively(value, str.upper)
+
     # FieldInfo enum argument is only for documentation purposes (OpenAPI schema generation)
     # It doesn't affect the validation logic, hence the need to check the fields manually
-    @classmethod
     @field_validator("license", mode="before")
+    @classmethod
     def check_license(cls, value: str) -> str | None:
         valid_values = DatasetInnerAnnotations.get_list_of_valid_values("license")
         return value if value in valid_values else None
 
-    @classmethod
     @field_validator("task_types", mode="before")
+    @classmethod
     def check_task_types(cls, values: list[str]) -> list[str] | None:
         valid_values = DatasetInnerAnnotations.get_list_of_valid_values("task_types")
         return [val for val in values if val.lower() in valid_values]
@@ -140,3 +133,17 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
     @classmethod
     def get_inner_annotations_class(cls) -> Type[DatasetInnerAnnotations]:
         return DatasetInnerAnnotations
+
+    @classmethod
+    def get_supported_comparison_operators(cls, field_name: str) -> list[str]:
+        match_operators = ["==", "!="]
+        range_operators = [">", "<", ">=", "<="]
+
+        if field_name in ["date_published"]:
+            return range_operators
+        elif field_name in ["license", "task_types", "languages"]:
+            return match_operators
+        elif field_name in ["size_in_mb", "datapoints_lower_bound", "datapoints_upper_bound"]:
+            return match_operators + range_operators
+        else:
+            raise ValueError(f"Invalid field name: {field_name}")

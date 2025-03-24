@@ -3,7 +3,6 @@ import re
 from datetime import datetime
 from typing import Any
 
-from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.dataset_metadata import (
     HuggingFaceDatasetMetadataTemplate,
 )
@@ -181,10 +180,9 @@ class HuggingFaceDatasetExtractMetadata:
             "datapoints_lower_bound": lower_bound,
             "datapoints_upper_bound": upper_bound,
         }
-        obj_to_return = cls.filter_out_empty_fields(
+        return cls.filter_out_empty_fields(
             HuggingFaceDatasetMetadataTemplate(**obj_to_return).model_dump()
         )
-        return HuggingFaceDatasetMetadataTemplate.apply_lowercase_recursively(obj_to_return)
 
 
 class ConvertJsonToString:

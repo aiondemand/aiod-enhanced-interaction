@@ -2,13 +2,12 @@ from copy import deepcopy
 from functools import partial
 from typing import Annotated, Any, Callable, Literal, Type, Union, get_args, get_origin
 
-from app.schemas.asset_metadata.base import BaseInnerAnnotations, BaseMetadataTemplate
+from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.dataset_metadata import (
-    DatasetInnerAnnotations,
     HuggingFaceDatasetMetadataTemplate,
 )
 from app.schemas.enums import AssetType
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 from pydantic._internal._decorators import Decorator, FieldValidatorDecoratorInfo
 from pydantic.fields import FieldInfo
 
@@ -27,7 +26,7 @@ class SchemaOperations:
         return list(cls.SCHEMA_MAPPING.keys())
 
     @classmethod
-    def get_schema_field_names(cls, asset_schema: Type[BaseMetadataTemplate]) -> list[str]:
+    def get_schema_field_names(cls, asset_schema: Type[BaseModel]) -> list[str]:
         return list(asset_schema.model_fields.keys())
 
     @classmethod
@@ -91,7 +90,7 @@ class SchemaOperations:
         )
 
     @classmethod
-    def get_list_fields_mask(cls, asset_schema: Type[BaseMetadataTemplate]) -> dict[str, bool]:
+    def get_list_fields_mask(cls, asset_schema: Type[BaseModel]) -> dict[str, bool]:
         return {
             k: cls.is_list_type(cls.strip_optional_type(v))
             for k, v in asset_schema.__annotations__.items()
@@ -121,7 +120,7 @@ class SchemaOperations:
 
     @classmethod
     def get_field_validators(
-        cls, asset_schema: Type[BaseMetadataTemplate], field: str
+        cls, asset_schema: Type[BaseModel], field: str
     ) -> list[tuple[str, Decorator[FieldValidatorDecoratorInfo]]]:
         return [
             (func_name, decor)

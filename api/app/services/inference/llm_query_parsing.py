@@ -5,7 +5,7 @@ from ast import literal_eval
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Type, get_args, get_origin
+from typing import Any, Callable, Literal, Optional, Type
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
@@ -41,6 +41,16 @@ class NaturalLanguageCondition(BaseModel):
         ...,
         description="Logical operator used between multiple values pertaining to the same metadata field. If the condition describes only one value, set it to NONE instead.",
     )
+
+    @field_validator("field", mode="before")
+    @classmethod
+    def validate_field(cls, v: str) -> str:
+        return v.lower()
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def validate_operator(cls, v: str) -> str:
+        return v.upper()
 
 
 # TODO rename

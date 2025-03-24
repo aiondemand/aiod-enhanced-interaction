@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Callable, Literal, Type, TypeAlias
+from typing import Annotated, Literal, Type, TypeAlias
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from app.schemas.asset_metadata.dataset_metadata import DatasetEligibleComparisonOperators
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 
@@ -31,6 +30,16 @@ class Filter(BaseModel):
         max_length=5,
     )
 
+    @field_validator("field", mode="before")
+    @classmethod
+    def validate_field(cls, v: str) -> str:
+        return v.lower()
+
+    @field_validator("logical_operator", mode="before")
+    @classmethod
+    def validate_logical_operator(cls, v: str) -> str:
+        return v.upper()
+
     @classmethod
     def create_field_specific_filter_type(
         cls, asset_type: AssetType, field_name: str
@@ -55,6 +64,21 @@ class Filter(BaseModel):
                 ..., description=Filter.model_fields["expressions"].description, max_length=5
             ),
         }
+
+        field_validators = SchemaOperations.get_field_validators(Filter, "field")
+        logical_operator_validators = SchemaOperations.get_field_validators(
+            Filter, "logical_operator"
+        )
+
+        filter_class_dict.update(
+            {
+                func_name: field_validator(func_name, mode=decor.info.mode)(
+                    getattr(Filter, func_name)
+                )
+                for func_name, decor in field_validators + logical_operator_validators
+            }
+        )
+
         return type(
             f"Filter_{asset_type.value.capitalize()}_{field_name.capitalize()}",
             (BaseModel,),
@@ -71,9 +95,7 @@ class Filter(BaseModel):
             "__annotations__": {
                 "value": annotation,
                 "comparison_operator": Literal[
-                    *DatasetEligibleComparisonOperators.get_eligible_comparison_operators(
-                        field_name
-                    )
+                    *asset_schema.get_supported_comparison_operators(field_name)
                 ],
             },
             "value": field_info,

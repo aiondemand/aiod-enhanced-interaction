@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Type, TypeVar
+from typing import Any, Callable, Generic, Type, TypeVar
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 class BaseInnerAnnotations(ABC):
@@ -20,27 +20,34 @@ InnerAnnotations = TypeVar("InnerAnnotations", bound=BaseInnerAnnotations)
 
 
 class BaseMetadataTemplate(BaseModel, Generic[InnerAnnotations], ABC):
-    @field_validator("*", mode="before")
     @classmethod
-    def convert_strings_to_lowercase(cls, value: Any) -> Any:
-        return cls.apply_lowercase_recursively(value)
-
-    @classmethod
-    def apply_lowercase_recursively(cls, value: Any) -> Any:
+    def apply_string_function_recursively(
+        cls, value: Any, string_function: Callable[[str], str]
+    ) -> Any:
         if isinstance(value, str):
-            return value.lower()
+            return string_function(value)
         elif isinstance(value, list):
-            return [cls.apply_lowercase_recursively(item) for item in value]
+            return [cls.apply_string_function_recursively(item, string_function) for item in value]
         elif isinstance(value, dict):
-            return {k: cls.apply_lowercase_recursively(v) for k, v in value.items()}
+            return {
+                k: cls.apply_string_function_recursively(v, string_function)
+                for k, v in value.items()
+            }
         elif isinstance(value, tuple):
-            return tuple(cls.apply_lowercase_recursively(item) for item in value)
+            return tuple(
+                cls.apply_string_function_recursively(item, string_function) for item in value
+            )
         elif isinstance(value, set):
-            return {cls.apply_lowercase_recursively(item) for item in value}
+            return {cls.apply_string_function_recursively(item, string_function) for item in value}
         else:
             return value
 
     @classmethod
     @abstractmethod
     def get_inner_annotations_class(cls) -> Type[InnerAnnotations]:
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def get_supported_comparison_operators(cls, field_name: str) -> list[str]:
         raise NotImplementedError

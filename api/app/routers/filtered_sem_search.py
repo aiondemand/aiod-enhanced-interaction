@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field, conlist
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.models.filter import Filter
