@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn==0.34.0",
     "numpy==2.2.3",
     "pydantic==2.10.6",
-    "pydantic-settings==2.4.0",
+    "pydantic-settings==2.8.1",
     "tqdm==4.67.1",
     "python-dotenv==1.0.1",
     "pymilvus==2.5.5",
