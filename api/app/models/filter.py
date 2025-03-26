@@ -65,17 +65,23 @@ class Filter(BaseModel):
             ),
         }
 
+        # TODO FIX
         field_validators = SchemaOperations.get_field_validators(Filter, "field")
         logical_operator_validators = SchemaOperations.get_field_validators(
             Filter, "logical_operator"
         )
+        field_names = ["field"] * len(field_validators) + ["logical_operator"] * len(
+            logical_operator_validators
+        )
 
         filter_class_dict.update(
             {
-                func_name: field_validator(func_name, mode=decor.info.mode)(
+                func_name: field_validator(field_name, mode=decor.info.mode)(
                     getattr(Filter, func_name)
                 )
-                for func_name, decor in field_validators + logical_operator_validators
+                for (func_name, decor), field_name in zip(
+                    field_validators + logical_operator_validators, field_names
+                )
             }
         )
 
