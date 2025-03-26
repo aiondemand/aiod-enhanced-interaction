@@ -65,7 +65,6 @@ class Filter(BaseModel):
             ),
         }
 
-        # TODO FIX
         field_validators = SchemaOperations.get_field_validators(Filter, "field")
         logical_operator_validators = SchemaOperations.get_field_validators(
             Filter, "logical_operator"
