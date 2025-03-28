@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from queue import Queue
-from typing import Type, TypeVar
+from typing import Type
 
 import numpy as np
 from app.config import settings
@@ -13,7 +13,7 @@ from app.models.query import (
     RecommenderUserQuery,
     SimpleUserQuery,
 )
-from app.schemas.asset_metadata.base import SchemaOperations
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import SearchResults

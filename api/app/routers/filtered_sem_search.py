@@ -1,10 +1,11 @@
-from typing import Annotated
+from typing import Annotated, Any, Type
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Path, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
-from pydantic import conlist
+from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.models.filter import Filter
 from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
@@ -12,6 +13,7 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
+from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import AssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
@@ -44,7 +46,7 @@ async def submit_filtered_query(
         AssetType.DATASETS,
         description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
     ),
-    filters: conlist(Filter, max_length=5) | None = Body(  # type: ignore[valid-type]
+    filters: Annotated[list[Filter], Field(..., max_length=5)] | None = Body(
         None,
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
@@ -61,6 +63,68 @@ async def get_filtered_query_result(
     query_id: UUID = Path(..., description="Valid query ID"),
 ) -> FilteredUserQueryResponse:
     return await get_query_results(query_id, database, FilteredUserQuery)
+
+
+@router.get("/schemas/get_fields")
+async def get_fields_to_filter_by(
+    asset_type: AssetType = Query(
+        AssetType.DATASETS,
+        description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
+    ),
+) -> dict:
+    if asset_type not in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
+        raise HTTPException(
+            status_code=404,
+            detail=f"We currently do not support asset type '{asset_type.value}'",
+        )
+
+    schema = SchemaOperations.get_asset_schema(asset_type)
+    field_names = SchemaOperations.get_schema_field_names(schema)
+
+    inner_class_dict: dict[str, Any] = {
+        "__annotations__": {},
+    }
+    for field in field_names:
+        inner_class_dict[field] = SchemaOperations.get_inner_field_info(schema, field)
+        inner_class_dict["__annotations__"][field] = SchemaOperations.get_inner_annotation(
+            schema, field
+        )
+
+    fields_class: Type[BaseModel] = type(
+        f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict
+    )
+    output_schema = fields_class.model_json_schema()["properties"]
+
+    for field in output_schema.keys():
+        output_schema[field].pop("default", None)
+        output_schema[field].pop("title", None)
+
+    return output_schema
+
+
+@router.get("/schemas/get_filter_schema")
+async def get_filter_schema(
+    asset_type: AssetType = Query(
+        AssetType.DATASETS,
+        description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
+    ),
+    field_name: str = Query(..., description="Name of the field we wish to filter assets by"),
+) -> dict:
+    if asset_type not in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
+        raise HTTPException(
+            status_code=404,
+            detail=f"We currently do not support asset type '{asset_type.value}'",
+        )
+
+    schema = SchemaOperations.get_asset_schema(asset_type)
+    if field_name not in SchemaOperations.get_schema_field_names(schema):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Asset type '{asset_type.value}' does not support field name '{field_name}'",
+        )
+
+    filter_class = Filter.create_field_specific_filter_type(asset_type, field_name)
+    return filter_class.model_json_schema()
 
 
 async def _sumbit_filtered_query(
@@ -84,7 +148,3 @@ async def _sumbit_filtered_query(
         filters=filters if filters else None,
     )
     return await submit_query(user_query, database)
-
-
-# TODO endpoints defining schemas for metadata filtering are required
-# so that a user has an idea how he can build filters manually...

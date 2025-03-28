@@ -22,6 +22,7 @@ from app.services.threads.milvus_gc_thread import (
     delete_embeddings_of_aiod_assets_wrapper,
 )
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
+from app.services.threads.tinydb_gc_thread import tinydb_cleanup
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
@@ -41,7 +42,7 @@ app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
 if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(
-        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
+        filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
     )
 
 
@@ -93,6 +94,14 @@ def app_init() -> None:
             target_func=delete_embeddings_of_aiod_assets_wrapper,
         ),
         CronTrigger(day=settings.AIOD.DAY_IN_MONTH_FOR_EMB_CLEANING, hour=0, minute=0),
+    )
+    # Recurring TinyDB cleanup
+    SCHEDULER.add_job(
+        partial(
+            threads.run_async_in_thread,
+            target_func=tinydb_cleanup,
+        ),
+        CronTrigger(hour=0, minute=0),
     )
     SCHEDULER.start()
 
