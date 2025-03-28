@@ -8,7 +8,6 @@ from typing import Generic, TypeVar
 import numpy as np
 import pandas as pd
 from pymilvus import DataType, MilvusClient
-from pymilvus.milvus_client import IndexParams
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -155,7 +154,6 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
             schema.verify()
 
-            index_params = IndexParams()
             index_params = self.client.prepare_index_params()
 
             index_params.add_index(field_name="vector", **self.vector_index_kwargs)

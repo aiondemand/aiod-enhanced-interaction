@@ -6,7 +6,6 @@ from time import sleep
 import numpy as np
 from pydantic import BaseModel, field_validator
 from pymilvus import DataType, MilvusClient
-from pymilvus.milvus_client import IndexParams
 from tqdm import tqdm
 
 
@@ -63,6 +62,7 @@ def populate_collection(
         unique_asset_ids = get_all_asset_ids(client, collection_name)
 
     print(f"Populating collection: {collection_name}")
+
     for file in tqdm(os.listdir(json_dirpath)):
         path = os.path.join(json_dirpath, file)
         with open(path) as f:
@@ -138,22 +138,21 @@ def create_new_collection(
         schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
         schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
 
-        schema.verify()
+    schema.verify()
 
-        index_params = IndexParams()
-        index_params = client.prepare_index_params()
+    index_params = client.prepare_index_params()
 
-        index_params.add_index(field_name="vector", **vector_index_kwargs)
-        index_params.add_index(field_name="asset_id", **scalar_index_kwargs)
+    index_params.add_index(field_name="vector", **vector_index_kwargs)
+    index_params.add_index(field_name="asset_id", **scalar_index_kwargs)
 
-        if extract_metadata and collection_name.endswith("_datasets"):
-            index_params.add_index(field_name="date_published", **scalar_index_kwargs)
-            index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
-            index_params.add_index(field_name="license", **scalar_index_kwargs)
-            index_params.add_index(field_name="task_types", **scalar_index_kwargs)
-            index_params.add_index(field_name="languages", **scalar_index_kwargs)
-            index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
-            index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
+    if extract_metadata and collection_name.endswith("_datasets"):
+        index_params.add_index(field_name="date_published", **scalar_index_kwargs)
+        index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
+        index_params.add_index(field_name="license", **scalar_index_kwargs)
+        index_params.add_index(field_name="task_types", **scalar_index_kwargs)
+        index_params.add_index(field_name="languages", **scalar_index_kwargs)
+        index_params.add_index(field_name="datapoints_upper_bound", **scalar_index_kwargs)
+        index_params.add_index(field_name="datapoints_lower_bound", **scalar_index_kwargs)
 
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params
