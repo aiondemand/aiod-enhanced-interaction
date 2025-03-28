@@ -1,15 +1,15 @@
 import json
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Optional, Type
+from typing import Annotated, Any, ClassVar, Type
 
 from app.schemas.asset_metadata.base import BaseInnerAnnotations, BaseMetadataTemplate
 from pydantic import Field, field_validator
 
 # Every metadata field we use for filtering purposes has 2 annotations associated with it:
 # - The inner annotation corresponding to a singular eligible value for the field;
-#   - This annotation is used for creating and validating user queries and filters/conditions
-# - The outer annotation wrapping the inner annotation and extending it by allowing for a list of values if necessary
-#   - This annotation is used for extracting metadata from AIoD assets automatically using an LLM
+#       - This annotation is used for creating and validating user queries and filters/conditions
+# - The outer annotation wrapping the inner annotation and extending it by allowing for a list of values if desired
+#       - This annotation is used for extracting metadata from AIoD assets using an LLM
 
 
 class DatasetInnerAnnotations(BaseInnerAnnotations):
@@ -78,30 +78,30 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
     Extraction of relevant metadata we wish to retrieve from ML assets
     """
 
-    date_published: Optional[DatasetInnerAnnotations.DatePublished] = Field(
+    date_published: DatasetInnerAnnotations.DatePublished | None = Field(
         None,
         description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'. Don't forget to convert the date to appropriate format if necessary.",
     )
-    size_in_mb: Optional[DatasetInnerAnnotations.SizeInMb] = Field(
+    size_in_mb: DatasetInnerAnnotations.SizeInMb | None = Field(
         None,
         description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
     )
-    license: Optional[DatasetInnerAnnotations.License] = Field(
+    license: DatasetInnerAnnotations.License | None = Field(
         None, description="The license of the dataset, e.g., 'mit', 'apache'"
     )
-    task_types: Optional[list[DatasetInnerAnnotations.TaskType]] = Field(
+    task_types: list[DatasetInnerAnnotations.TaskType] | None = Field(
         None,
         description="The machine learning tasks suitable for this dataset. Acceptable values may include task categories or task ids found on HuggingFace platform (e.g., 'token-classification', 'question-answering', ...)",
     )
-    languages: Optional[list[DatasetInnerAnnotations.Language]] = Field(
+    languages: list[DatasetInnerAnnotations.Language] | None = Field(
         None,
         description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...).",
     )
-    datapoints_lower_bound: Optional[DatasetInnerAnnotations.DatapointsLowerBound] = Field(
+    datapoints_lower_bound: DatasetInnerAnnotations.DatapointsLowerBound | None = Field(
         None,
         description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset.",
     )
-    datapoints_upper_bound: Optional[DatasetInnerAnnotations.DatapointsUpperBound] = Field(
+    datapoints_upper_bound: DatasetInnerAnnotations.DatapointsUpperBound | None = Field(
         None,
         description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
     )
@@ -116,7 +116,7 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
     def convert_strings_to_uppercase(cls, value: Any) -> Any:
         return cls.apply_string_function_recursively(value, str.upper)
 
-    # FieldInfo enum argument is only for documentation purposes (OpenAPI schema generation)
+    # FieldInfo enum argument is only used for documentation purposes (OpenAPI schema generation)
     # It doesn't affect the validation logic, hence the need to check the fields manually
     @field_validator("license", mode="before")
     @classmethod

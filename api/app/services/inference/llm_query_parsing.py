@@ -5,7 +5,7 @@ from ast import literal_eval
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Type
+from typing import Any, Callable, Literal, Type, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
@@ -473,6 +473,7 @@ class UserQueryParsingStages:
         original_field = asset_schema.model_fields[field_name]
         new_field = SchemaOperations.get_inner_field_info(asset_schema, field_name)
 
+        # combine descriptions
         if new_field.description != original_field.description and new_field.description != "":
             new_field.description = f"{original_field.description} {new_field.description}"
         else:
@@ -484,7 +485,10 @@ class UserQueryParsingStages:
             "__annotations__": {
                 "raw_value": str,
                 "processed_value": new_field.annotation,
-                "comparison_operator": Literal["<", ">", "<=", ">=", "==", "!="],
+                # TODO change the comparison_operator lists
+                "comparison_operator": Literal[
+                    *asset_schema.get_supported_comparison_operators(field_name)
+                ],
                 "discard": bool,
             },
             # We have intentionally split the value into two separate fields, into raw_value and processed value as our model had trouble

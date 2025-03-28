@@ -82,11 +82,13 @@ async def get_fields_to_filter_by(
     field_names = SchemaOperations.get_schema_field_names(schema)
 
     inner_class_dict: dict[str, Any] = {
-        field: SchemaOperations.get_inner_field_info(schema, field) for field in field_names
+        "__annotations__": {},
     }
-    inner_class_dict["__annotations__"] = {
-        field: SchemaOperations.get_inner_annotation(schema, field) for field in field_names
-    }
+    for field in field_names:
+        inner_class_dict[field] = SchemaOperations.get_inner_field_info(schema, field)
+        inner_class_dict["__annotations__"][field] = SchemaOperations.get_inner_annotation(
+            schema, field
+        )
 
     fields_class: Type[BaseModel] = type(
         f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict

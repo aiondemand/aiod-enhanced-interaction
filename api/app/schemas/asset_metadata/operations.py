@@ -1,5 +1,6 @@
 from copy import deepcopy
 from functools import partial
+from types import UnionType
 from typing import Annotated, Any, Callable, Literal, Type, Union, get_args, get_origin
 
 from app.schemas.asset_metadata.base import BaseMetadataTemplate
@@ -69,7 +70,8 @@ class SchemaOperations:
     def exists_list_of_valid_values(
         cls, asset_schema: Type[BaseMetadataTemplate], field_name: str
     ) -> bool:
-        return asset_schema.get_inner_annotations_class().exists_list_of_valid_values(field_name)
+        inner_annotations_class = asset_schema.get_inner_annotations_class()
+        return inner_annotations_class.exists_list_of_valid_values(field_name)
 
     @classmethod
     def get_list_of_valid_values(
@@ -98,7 +100,7 @@ class SchemaOperations:
 
     @classmethod
     def is_optional_type(cls, annotation: Type) -> bool:
-        if get_origin(annotation) is Union:
+        if get_origin(annotation) is Union or get_origin(annotation) is UnionType:
             return type(None) in get_args(annotation)
         return False
 

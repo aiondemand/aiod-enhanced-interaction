@@ -15,14 +15,14 @@ class Expression(BaseModel):
     value: PrimitiveTypes = Field(..., description="Value to be compared to the metadata field")
     comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(
         ...,
-        description="Eligible comparison operator to be used for comparing the value to the metadata field",
+        description="Allowed comparison operator to be used for comparing the value to the metadata field",
     )
 
 
 class Filter(BaseModel):
     field: str = Field(..., max_length=30, description="Name of the metadata field to filter by")
     logical_operator: Literal["AND", "OR"] = Field(
-        ..., description="Eligible logical operator to be used for combining multiple expressions"
+        ..., description="Allowed logical operator to be used for combining multiple expressions"
     )
     expressions: list[Expression] = Field(
         ...,
@@ -48,7 +48,7 @@ class Filter(BaseModel):
         if field_name not in SchemaOperations.get_schema_field_names(asset_schema):
             raise HTTPException(status_code=400, detail=f"Invalid field value '{field_name}'")
 
-        expression_class = cls._create_expression_type(asset_type, field_name)
+        expression_class = cls._create_field_specific_expression_type(asset_type, field_name)
 
         filter_class_dict = {
             "__annotations__": {
@@ -65,6 +65,7 @@ class Filter(BaseModel):
             ),
         }
 
+        # apply original validators from the Filter class
         field_validators = SchemaOperations.get_field_validators(Filter, "field")
         logical_operator_validators = SchemaOperations.get_field_validators(
             Filter, "logical_operator"
@@ -72,7 +73,6 @@ class Filter(BaseModel):
         field_names = ["field"] * len(field_validators) + ["logical_operator"] * len(
             logical_operator_validators
         )
-
         filter_class_dict.update(
             {
                 func_name: field_validator(field_name, mode=decor.info.mode)(
@@ -91,7 +91,9 @@ class Filter(BaseModel):
         )
 
     @classmethod
-    def _create_expression_type(cls, asset_type: AssetType, field_name: str) -> Type[BaseModel]:
+    def _create_field_specific_expression_type(
+        cls, asset_type: AssetType, field_name: str
+    ) -> Type[BaseModel]:
         asset_schema = SchemaOperations.get_asset_schema(asset_type)
         annotation = SchemaOperations.get_inner_annotation(asset_schema, field_name)
         field_info = SchemaOperations.get_inner_field_info(asset_schema, field_name)
@@ -126,6 +128,7 @@ class Filter(BaseModel):
             validated_filter = filter_class(**self.model_dump())
             validated_filter = Filter(**validated_filter.model_dump())
 
+            # update the values within expressions in the case of implicit data type conversion
             self.expressions = [
                 Expression(**expr.model_dump()) for expr in validated_filter.expressions
             ]
