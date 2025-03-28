@@ -485,7 +485,6 @@ class UserQueryParsingStages:
             "__annotations__": {
                 "raw_value": str,
                 "processed_value": new_field.annotation,
-                # TODO change the comparison_operator lists
                 "comparison_operator": Literal[
                     *asset_schema.get_supported_comparison_operators(field_name)
                 ],
