@@ -6,7 +6,6 @@ from time import sleep
 import numpy as np
 from pydantic import BaseModel, field_validator
 from pymilvus import DataType, MilvusClient
-from pymilvus.milvus_client import IndexParams
 from tqdm import tqdm
 
 
