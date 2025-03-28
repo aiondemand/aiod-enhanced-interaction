@@ -8,18 +8,6 @@ ARG USERNAME=ubuntu
 ARG USER_UID=1000
 ARG USER_GID=1000
 
-# Create a non-root user that has sudo privileges
-RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
-    && apt-get update \
-    && apt-get install -y sudo \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME
-
-USER $USERNAME
-
-ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
-
 WORKDIR /code
 
 {% if USE_GPU == "false" %}
@@ -34,5 +22,11 @@ RUN pip install --no-cache-dir --upgrade .
 COPY ./api/app /code/app
 COPY ./api/data /code/data
 COPY ./api/scripts /code/scripts
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && chown -R ${USER_UID}:${USER_GID} /code
+
+USER $USERNAME
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
