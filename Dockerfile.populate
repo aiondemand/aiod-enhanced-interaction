@@ -2,7 +2,7 @@ FROM python:3.11
 
 WORKDIR /code
 
-COPY ./requirements-populate.txt .
+COPY ./scripts/requirements-populate.txt .
 
 RUN pip install --no-cache-dir --upgrade -r requirements-populate.txt
 

@@ -184,8 +184,6 @@ docker-compose*.yml
 # Config files to exclude
 .flake8
 .milvus.yaml
-pyproject.toml
-requirements*.txt
 
 # Scripts to exclude
 deploy.sh

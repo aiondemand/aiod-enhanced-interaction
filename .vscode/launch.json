@@ -18,6 +18,10 @@
             "type": "debugpy",
             "request": "launch",
             "program":"${workspaceFolder}/app/main.py",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${cwd}"
+            },
             "console": "integratedTerminal",
             "justMyCode": true
         },

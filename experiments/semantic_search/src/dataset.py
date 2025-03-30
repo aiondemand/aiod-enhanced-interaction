@@ -8,10 +8,10 @@ import json
 import os
 import os
 from torch.utils.data import Dataset, DataLoader
-from chromadb.api.client import Client as ChromaClient
+# from chromadb.api.client import Client as ChromaClient
 import numpy as np
 import random
-from nltk.corpus import words
+# from nltk.corpus import words
 
 from data_types import QueryDatapoint, VectorDbClient
 
