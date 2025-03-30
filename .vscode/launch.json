@@ -2,12 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Python file for prototyping",
+            "name": "Debug Python file when experimenting with semantic search",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
+            "cwd": "${workspaceFolder}/experiments/semantic_search",
             "env": {
-                "PYTHONPATH": "${cwd}/src"
+                "PYTHONPATH": "${cwd}/experiments/semantic_search/src"
             },
             "console": "integratedTerminal",
             "justMyCode": true
@@ -16,16 +17,12 @@
             "name": "Debug FastAPI service",
             "type": "debugpy",
             "request": "launch",
-            "program":"${workspaceFolder}/api/app/main.py",
-            "cwd": "${workspaceFolder}/api",
-            "env": {
-                "PYTHONPATH": "${cwd}/api"
-            },
+            "program":"${workspaceFolder}/app/main.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },
         {
-            "name": "Debug Python file",
+            "name": "Debug arbitrary Python file",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",

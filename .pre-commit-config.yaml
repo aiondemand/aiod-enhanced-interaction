@@ -28,7 +28,8 @@ repos:
     hooks:
       - id: mypy
         name: mypy api
-        files: api/.*
+        files: .*
+        exclude: experiments/.*
         additional_dependencies:
           - pydantic
           - types-python-dateutil
