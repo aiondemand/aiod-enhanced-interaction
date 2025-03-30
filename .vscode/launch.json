@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Python file when experimenting with semantic search",
+            "name": "Debug Python file for Semantic search experiments",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",

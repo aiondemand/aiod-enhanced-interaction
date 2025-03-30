@@ -1,6 +1,6 @@
 # Semantic search module
 
-<!-- TODO UPDATE -->
+<!-- TODO UPDATE (account for other services besides sem search when describing this repo) -->
 
 This API service expands the AIoD platform by providing a separately managed
 semantic search module that can be applied to AIoD assets,
@@ -21,6 +21,7 @@ Currently supported AIoD asset types:
 - Case studies
 - Educational resources
 - Experiments
+- Services
 
 ## Acquisition of AIoD assets
 
@@ -162,3 +163,21 @@ In order for our application to work properly on a host machine, we need to chec
 - CUDA (test command: `nvidia-smi`)
     - CUDA is only necessary for the instances you wish to use a GPU inside the Docker container (`USE_GPU` set to `True`)
 - Nvidia toolkit
+
+---
+
+# Repo structure
+
+```
+app/                          FastAPI application
+├── models/                     DB entities
+├── routers/                    FastAPI endpoints
+├── schemas/                    Input/output schemas
+├── services/                   Main FastAPI logic
+├── config.py                   FastAPI config
+└── main.py                     FastAPI entrypoint
+data/                         Misc data used by FastAPI app
+experiments/                  Initial experimentation and PoC (not used by FastAPI app)
+└── semantic_search/            Semantic search experiments
+scripts/                      Helper files and scripts for deployment of FastAPI app
+```
