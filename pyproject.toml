@@ -9,7 +9,7 @@ authors = [
     { name = "Andrej Ridzik", email = "andrej.ridzik@kinit.sk" }
 ]
 dependencies = [
-    "fastapi==0.115.11",
+    "fastapi==0.115.12",
     "uvicorn==0.34.0",
     "numpy==2.2.4",
     "pydantic==2.10.6",
