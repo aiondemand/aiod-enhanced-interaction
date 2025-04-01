@@ -2,7 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 from functools import partial
 from threading import Thread
-from time import sleep
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -38,6 +37,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
 
+
+@app.get("/health", tags=["healthcheck"])
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
 if settings.PERFORM_LLM_QUERY_PARSING:
@@ -64,7 +69,6 @@ def setup_logger():
 
 
 def app_init() -> None:
-    sleep(10)  # Headstart for Milvus to fully initialize
     setup_logger()
 
     # Instantiate singletons before utilizing them in other threads

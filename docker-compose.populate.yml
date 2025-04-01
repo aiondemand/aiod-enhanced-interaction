@@ -12,6 +12,7 @@ services:
       - MILVUS_URI=http://milvus-standalone:19530
       - EXTRACT_METADATA=${USE_LLM}
     depends_on:
-      - milvus-standalone
+      milvus-standalone:
+        condition: service_healthy
     volumes:
       - ${INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH}:/data_to_populate
