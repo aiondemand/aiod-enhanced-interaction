@@ -214,7 +214,7 @@ class UserQueryParsing:
     # few shot examples... We would need to dynamically assign them on LLM invocation
     # once we know which asset type a specific input is associated with
     _DEFAULT_PATH_TO_STAGE_1_FEWSHOTS = Path(
-        "api/data/fewshot_examples/user_query_stage1/datasets.json"
+        "app/data/fewshot_examples/user_query_stage1/datasets.json"
     )
 
     @classmethod

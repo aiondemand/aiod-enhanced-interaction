@@ -187,7 +187,6 @@ docker-compose*.yml
 
 # Scripts to exclude
 deploy.sh
-populate-db.sh
 
 # Other files to exclude
 README.md

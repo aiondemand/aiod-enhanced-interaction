@@ -170,13 +170,13 @@ In order for our application to work properly on a host machine, we need to chec
 
 ```
 app/                          FastAPI application
+├── data/                       Misc data used by FastAPI app
 ├── models/                     DB entities
 ├── routers/                    FastAPI endpoints
 ├── schemas/                    Input/output schemas
 ├── services/                   Main FastAPI logic
 ├── config.py                   FastAPI config
 └── main.py                     FastAPI entrypoint
-data/                         Misc data used by FastAPI app
 experiments/                  Initial experimentation and PoC (not used by FastAPI app)
 └── semantic_search/            Semantic search experiments
 scripts/                      Helper files and scripts for deployment of FastAPI app
