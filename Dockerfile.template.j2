@@ -14,14 +14,11 @@ WORKDIR /code
 RUN pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
 
 {% endif %}
-# We cannot access files in parent directory .. (outside of defined context)
-# TODO Once we reorganize the repo, we can change it to the way it was before
 COPY ./pyproject.toml .
 RUN pip install --no-cache-dir --upgrade .
 
-COPY ./api/app /code/app
-COPY ./api/data /code/data
-COPY ./api/scripts /code/scripts
+COPY ./app /code/app
+COPY ./scripts /code/scripts
 
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \

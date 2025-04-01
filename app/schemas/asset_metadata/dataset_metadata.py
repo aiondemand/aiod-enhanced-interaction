@@ -20,7 +20,7 @@ class DatasetInnerAnnotations(BaseInnerAnnotations):
         return valid_values
 
     _ALL_VALID_VALUES: ClassVar[dict[str, list[str]]] = _load_all_valid_values(
-        Path("data/valid_metadata_values.json")
+        Path("app/data/valid_metadata_values.json")
     )
 
     @classmethod

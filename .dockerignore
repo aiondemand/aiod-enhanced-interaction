@@ -1,3 +1,5 @@
+# Copied content from .gitignore and slightly modified
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -5,26 +7,6 @@ __pycache__/
 
 # C extensions
 *.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -163,15 +145,7 @@ cython_debug/
 # Visual Studio Code
 **/.vscode/*
 .vs/
-# Don's exclude launch.json in all subfolders
-!**/.vscode/launch.json
-!.vscode/settings.json
-# !.vscode/tasks.json
-# !.vscode/extensions.json
-# !.vscode/*.code-snippets
-
 *.code-workspace
-
 
 # Local History for Visual Studio Code
 .history/
@@ -181,17 +155,38 @@ cython_debug/
 
 nohup.out
 
-experiments/**/data/
-
 temp/
 tmp/
 db/
 
 .env.*
-!.env.*.sample
 
-# Generated Dockerfile/compose for a particular env var combination
-# These files don't necessarily need to be omitted,
-# but for the sake of keeping the reposiroty clean we may as well ignore them
-Dockerfile.final
-docker-compose.final.yml
+########################################################
+# .dockerignore specific files
+########################################################
+
+# Folder to exclude from the root folder
+build/
+experiments/
+.ruff_cache/
+
+# Git files to exclude
+.git/
+.github/
+.gitignore
+.pre-commit-config.yaml
+
+# Docker files to exclude
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Config files to exclude
+.flake8
+.milvus.yaml
+
+# Scripts to exclude
+deploy.sh
+
+# Other files to exclude
+README.md

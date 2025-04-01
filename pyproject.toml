@@ -37,11 +37,14 @@ dev = [
     "torch==2.6.0"
 ]
 
+[tool.setuptools]
+py-modules = []
+
 [tool.ruff]
 line-length = 100
 exclude = [
     # TODO: Remove once refactored
-    "src",
+    "experiments",
 ]
 
 [tool.codespell]
@@ -54,4 +57,4 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-local-folder = ["api/app"]
+known-local-folder = ["app"]

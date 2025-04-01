@@ -38,7 +38,7 @@ docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml down
 
 if [ $EXIT_CODE -eq 0 ]; then
   echo "Population of vector DB has run successfully."
-  mkdir -p ${DATA_DIRPATH}/volumes/tinydb/
+  mkdir -p ${DATA_DIRPATH}/volumes/tinydb
   cp $INITIAL_TINYDB_JSON_FILEPATH ${DATA_DIRPATH}/volumes/tinydb/tinydb.json
   EXIT_CODE_2=$?
 

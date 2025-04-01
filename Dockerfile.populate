@@ -9,7 +9,7 @@ WORKDIR /code
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
 
-COPY ./requirements-populate.txt ./
+COPY ./scripts/requirements-populate.txt ./
 
 RUN pip install --no-cache-dir --upgrade -r requirements-populate.txt
 
