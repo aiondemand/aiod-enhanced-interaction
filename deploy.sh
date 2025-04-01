@@ -22,6 +22,12 @@ if [ -z "$USE_LLM" ]; then
   exit 1
 fi
 
+# Check if DATA_DIRPATH is set
+if [ -z "$DATA_DIRPATH" ]; then
+  echo "DATA_DIRPATH is not set"
+  exit 1
+fi
+
 # What operation we wish to perform
 if [ "$#" -eq 0 ]; then
   COMPOSE_COMMAND="up -d --build"
@@ -31,6 +37,11 @@ if [ "$#" -eq 0 ]; then
   CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-build-compose-1"
   EXIT_CODE=$(docker inspect $CONTAINER_NAME --format='{{.State.ExitCode}}')
   docker compose -f docker-compose.build.yml down
+
+  # Create folders for holding Docker volumes if they don't exist
+  # otherwise Milvus would create them under the root user...
+  mkdir -p ${DATA_DIRPATH}/volumes/tinydb
+  mkdir -p ${DATA_DIRPATH}/model
 
   if [ $EXIT_CODE -ne 0 ]; then
     echo "Failed to build a docker compose"
