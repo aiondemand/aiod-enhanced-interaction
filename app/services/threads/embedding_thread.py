@@ -149,7 +149,7 @@ def process_aiod_assets_wrapper(
     # if it's Nth day of the month, we wish to iterate over all the data just in case
     # we have missed some assets due to large number of assets having been deleted in the past
     all_assets_day = settings.AIOD.DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS
-    if last_update.to_time.day == all_assets_day:
+    if last_update.to_time.day == all_assets_day and last_db_sync_datetime is not None:
         query_from_time = None
         logging.info("\t\tIterating over entire database (recurring update)")
 
