@@ -1,28 +1,4 @@
 services:
-  # FastAPI service
-  app:
-    build:
-      context: .. #TODO change context once the repo is reorganized (we need pyproject.toml to be in the same folder as the dockerfiles)
-      dockerfile: api/Dockerfile
-    command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
-    env_file:
-      - .env.app
-    environment:
-      - TINYDB_FILEPATH=/data/tinydb.json
-      - USE_GPU=false
-      - MILVUS__URI=http://milvus-standalone:19530
-      - MILVUS__USER=${MILVUS_AIOD_USER}
-      - MILVUS__PASS=${MILVUS_AIOD_PASS}
-      - MILVUS__EXTRACT_METADATA=false
-      - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
-    ports:
-      - "${APP_HOST_PORT}:80"
-    depends_on:
-      - milvus-standalone
-    volumes:
-      - ${DATA_DIRPATH}/volumes/tinydb:/data
-      - ${DATA_DIRPATH}/model:/model
-
   # Milvus services
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.16

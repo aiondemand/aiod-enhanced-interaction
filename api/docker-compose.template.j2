@@ -1,0 +1,61 @@
+services:
+  # FastAPI service
+  app:
+    build:
+      context: .. #TODO change context once the repo is reorganized (we need pyproject.toml to be in the same folder as the dockerfiles)
+      dockerfile: api/Dockerfile.final
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
+    env_file:
+      - .env.app
+    environment:
+      - TINYDB_FILEPATH=/data/tinydb.json
+      - USE_GPU={{ USE_GPU }}
+      - MILVUS__URI=http://milvus-standalone:19530
+      - MILVUS__USER=${MILVUS_AIOD_USER}
+      - MILVUS__PASS=${MILVUS_AIOD_PASS}
+      - MILVUS__EXTRACT_METADATA={{ USE_LLM }}
+      - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
+      {% if USE_LLM == "true" %}
+      - OLLAMA__URI=http://ollama:11434
+      {% endif %}
+    ports:
+      - "${APP_HOST_PORT}:80"
+    depends_on:
+      - milvus-standalone
+      {% if USE_LLM == "true" %}
+      - ollama
+      {% endif %}
+    volumes:
+      - ${DATA_DIRPATH}/volumes/tinydb:/data
+      - ${DATA_DIRPATH}/model:/model
+    {% if USE_GPU == "true" %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    {% endif %}
+  {% if USE_LLM == "true" %}
+
+  #Ollama service
+  ollama:
+    image: ollama/ollama:0.5.4
+    volumes:
+      - ${DATA_DIRPATH}/ollama:/root/.ollama/
+    ports:
+      - "${OLLAMA_HOST_PORT}:11434"
+    {% if USE_GPU == "true" %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    {% endif %}
+  {% endif %}
