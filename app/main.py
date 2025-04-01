@@ -42,7 +42,7 @@ app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
 if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(
-        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
+        filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
     )
 
 
@@ -67,7 +67,7 @@ def app_init() -> None:
     sleep(10)  # Headstart for Milvus to fully initialize
     setup_logger()
 
-    logging.info("APP INIT")  # TODO
+    logging.info("APP INIT")  # TODO Remove this
 
     # Instantiate singletons before utilizing them in other threads
     Database()

@@ -1,11 +1,20 @@
 FROM python:3.11
 
+ARG USERNAME=ubuntu
+ARG USER_UID=1000
+ARG USER_GID=1000
+
 WORKDIR /code
 
-COPY ./scripts/requirements-populate.txt .
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+
+COPY ./scripts/requirements-populate.txt ./
 
 RUN pip install --no-cache-dir --upgrade -r requirements-populate.txt
 
-COPY ./scripts /code
+COPY ./scripts/populate_milvus.py ./
+
+USER $USERNAME
 
 CMD ["/bin/sh", "-c", "python populate_milvus.py --i $INPUT_DIRPATH --uri $MILVUS_URI --metadata $EXTRACT_METADATA"]

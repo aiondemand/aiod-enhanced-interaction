@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
 
-    USE_GPU: bool = Field(...)
+    USE_GPU: bool = Field(False)
     TINYDB_FILEPATH: Path = Field(...)
     MODEL_LOADPATH: str = Field(...)
     MODEL_BATCH_SIZE: int = Field(..., gt=0)

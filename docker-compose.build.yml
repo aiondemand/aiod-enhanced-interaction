@@ -1,0 +1,14 @@
+services:
+  # Python script for building docker compose with Jinja2 templates and env vars
+  build-compose:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    env_file:
+      - .env
+    command: /bin/sh -c "python scripts/build_compose.py"
+    volumes:
+      - ./:/code
