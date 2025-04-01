@@ -1,4 +1,0 @@
-pydantic==2.10.6
-numpy==2.2.3
-tqdm==4.67.1
-pymilvus==2.5.5

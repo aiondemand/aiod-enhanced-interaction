@@ -1,0 +1,18 @@
+services:
+  # Python script for populating vector DB
+  populate-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.populate
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    environment:
+      - INPUT_DIRPATH=/data_to_populate
+      - MILVUS_URI=http://milvus-standalone:19530
+      - EXTRACT_METADATA=${USE_LLM}
+    depends_on:
+      milvus-standalone:
+        condition: service_healthy
+    volumes:
+      - ${INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH}:/data_to_populate

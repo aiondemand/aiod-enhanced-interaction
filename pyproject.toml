@@ -9,20 +9,20 @@ authors = [
     { name = "Andrej Ridzik", email = "andrej.ridzik@kinit.sk" }
 ]
 dependencies = [
-    "fastapi==0.115.11",
+    "fastapi==0.115.12",
     "uvicorn==0.34.0",
-    "numpy==2.2.3",
+    "numpy==2.2.4",
     "pydantic==2.10.6",
-    "pydantic-settings==2.4.0",
+    "pydantic-settings==2.8.1",
     "tqdm==4.67.1",
-    "python-dotenv==1.0.1",
+    "python-dotenv==1.1.0",
     "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
     "tinydb==4.8.0",
     "tinydb-serialization==2.1.1",
     "apscheduler==3.10.4",
-    "langchain-core==0.3.45",
+    "langchain-core==0.3.47",
     "langchain-ollama==0.2.3",
     "ollama==0.4.7"
 ]
@@ -31,17 +31,20 @@ readme = "README.md"
 [project.optional-dependencies]
 dev = [
     "black==24.8.0",
-    "flake8==7.1.1",
+    "flake8==7.2.0",
     "isort==5.13.2",
     "pre-commit==3.3.3",
     "torch==2.6.0"
 ]
 
+[tool.setuptools]
+py-modules = []
+
 [tool.ruff]
 line-length = 100
 exclude = [
     # TODO: Remove once refactored
-    "src",
+    "experiments",
 ]
 
 [tool.codespell]
@@ -54,4 +57,4 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-local-folder = ["api/app"]
+known-local-folder = ["app"]
