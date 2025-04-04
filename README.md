@@ -111,6 +111,28 @@ Create a Python v11 environment preferably using conda:
 - `conda create --name aiod-env python=3.11`
 - `conda activate aiod-env; pip install .`
 
+### Dependencies
+
+For the application to work you need to set up its dependencies, namely Milvus database and Ollama. Unless you have an access to already existing services to these technologies, you need to run them locally on your machine for development purposes.
+If you decide to run these dependencies using our docker-compose files (further described below), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
+The `.env` file and all its environment variables are described in great detail in the *Deployment* section below.
+
+**Milvus**
+- We recommend deploying the database using `docker-compose.milvus.yml` file
+- Required env vars to define in `.env`:
+    - Where to store data: `DATA_DIRPATH`
+- Optional env vars to define in `.env`:
+    - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+    - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
+    - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
+- Command to run: `docker compose -f docker-compose.milvus.yml up -d`
+
+**Ollama**
+- We recommend installing Ollama directly from their website: https://ollama.com/ *(So that you don't need to bother with granting Docker an access to your GPU)*
+
+
+### Run the application
+
 To start the application you can either:
 - Use a .vscode launch option called `Debug FastAPI service` if you use VSCode as your IDE
 - Execute the following command: `uvicorn app.main:app --reload`
