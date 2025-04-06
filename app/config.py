@@ -66,6 +66,7 @@ class AIoDConfig(BaseModel):
     DAY_IN_MONTH_FOR_EMB_CLEANING: int = Field(1, ge=1, le=31)
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
+    STORE_DATA_IN_JSON: bool = Field(False)
 
     @classmethod
     def convert_csv_to_asset_types(cls, value: str) -> list[AssetType]:
