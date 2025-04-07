@@ -32,7 +32,7 @@ readme = "README.md"
 dev = [
     "black==24.8.0",
     "flake8==7.2.0",
-    "isort==5.13.2",
+    "isort==6.0.1",
     "pre-commit==3.3.3",
     "torch==2.6.0"
 ]
