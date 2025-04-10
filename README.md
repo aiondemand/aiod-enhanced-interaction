@@ -111,6 +111,28 @@ Create a Python v11 environment preferably using conda:
 - `conda create --name aiod-env python=3.11`
 - `conda activate aiod-env; pip install .`
 
+### Dependencies
+
+For the application to work you need to set up its dependencies, namely Milvus database and Ollama. Unless you have an access to already existing services to these technologies, you need to run them locally on your machine for development purposes.
+If you decide to run these dependencies using our docker-compose files (further described below), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
+The `.env` file and all its environment variables are described in great detail in the *Deployment* section below.
+
+**Milvus**
+- We recommend deploying the database using `docker-compose.milvus.yml` file
+- Required env vars to define in `.env`:
+    - Where to store data: `DATA_DIRPATH`
+- Optional env vars to define in `.env`:
+    - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+    - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
+    - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
+- Command to run: `docker compose -f docker-compose.milvus.yml up -d`
+
+**Ollama**
+- We recommend installing Ollama directly from their website: https://ollama.com/ *(So that you don't need to bother with granting Docker an access to your GPU)*
+
+
+### Run the application
+
 To start the application you can either:
 - Use a .vscode launch option called `Debug FastAPI service` if you use VSCode as your IDE
 - Execute the following command: `uvicorn app.main:app --reload`
@@ -121,6 +143,10 @@ For deploying purposes, we use a Docker compose config enabling us to deploy not
 
 Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:
+    - `COMPOSE_PROJECT_NAME`: A project prefix for all the Docker containers that are deployed within this repository
+    - `USER_UID`: User ID of the local non-root user we use for deploying the application. We need this ID to create a non-root user (without sudo privileges) within the Docker image that shares the same IDs for maintaining proper bind mount volumes. Execute the following command in the terminal to retrieve your user ID: `id -u`
+    - `USER_GID`: Group ID of the local non-root user we use for deploying the application. We need this ID to create a non-root user (without sudo privileges) within the Docker image that shares the same IDs for maintaining proper bind mount volumes.
+    Execute the following command in the terminal to retrieve your group ID: `id -g`
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.

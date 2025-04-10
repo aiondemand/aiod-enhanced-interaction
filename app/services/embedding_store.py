@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import os
 from abc import ABC, abstractmethod
 from functools import partial
 from typing import Any, Generic, TypeVar
-
+from uuid import uuid4
 import numpy as np
 import pandas as pd
 
@@ -235,13 +236,29 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                 all_metadata.extend([meta] * len(chunk_embeds_of_an_asset))
 
             if len(all_embeddings) >= milvus_batch_size or it == len(loader) - 1:
-                data = [
+                data: list[dict] = [
                     {"vector": emb, "asset_id": asset_id, **meta}
                     for emb, asset_id, meta in zip(all_embeddings, all_asset_ids, all_metadata)
                 ]
                 total_inserted += self.client.insert(collection_name=collection_name, data=data)[
                     "insert_count"
                 ]
+
+                # Store data locally into JSON files as well if we wish to do so
+                # Used for storing cold start data in JSON format
+                if settings.AIOD.STORE_DATA_IN_JSON:
+                    for i in range(len(data)):
+                        data[i]["vector"] = data[i]["vector"].tolist()
+
+                    full_json_filepath = (
+                        settings.TINYDB_FILEPATH.parent
+                        / f"jsons/{collection_name}"
+                        / f"{str(uuid4())}.json"
+                    )
+                    full_json_filepath.parent.mkdir(parents=True, exist_ok=True)
+
+                    with open(full_json_filepath, "w") as f:
+                        json.dump(data, f)
 
                 all_embeddings = []
                 all_asset_ids = []

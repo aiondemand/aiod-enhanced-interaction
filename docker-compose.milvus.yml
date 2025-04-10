@@ -24,11 +24,11 @@ services:
     labels:
       autoheal-label: true
     environment:
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-accesskey}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-secretkey}
     ports:
-      - "${MINIO_HOST_PORT_9001}:9001"
-      - "${MINIO_HOST_PORT_9000}:9000"
+      - "${MINIO_HOST_PORT_9001:-9001}:9001"
+      - "${MINIO_HOST_PORT_9000:-9000}:9000"
     volumes:
       - ${DATA_DIRPATH}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -49,8 +49,8 @@ services:
     environment:
       ETCD_ENDPOINTS: milvus-etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
-      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-accesskey}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-secretkey}
     volumes:
       - ./milvus.yaml:/milvus/configs/milvus.yaml
       - ${DATA_DIRPATH}/volumes/milvus:/var/lib/milvus
@@ -62,8 +62,8 @@ services:
       retries: 3
     restart: always
     ports:
-      - "${MILVUS_HOST_PORT_19530}:19530"
-      - "${MILVUS_HOST_PORT_9091}:9091"
+      - "${MILVUS_HOST_PORT_19530:-19530}:19530"
+      - "${MILVUS_HOST_PORT_9091:-9091}:9091"
     depends_on:
       milvus-etcd:
         condition: service_healthy
