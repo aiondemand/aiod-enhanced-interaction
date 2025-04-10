@@ -143,6 +143,10 @@ For deploying purposes, we use a Docker compose config enabling us to deploy not
 
 Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:
+    - `COMPOSE_PROJECT_NAME`: A project prefix for all the Docker containers that are deployed within this repository
+    - `USER_UID`: User ID of the local non-root user we use for deploying the application. We need this ID to create a non-root user (without sudo privileges) within the Docker image that shares the same IDs for maintaining proper bind mount volumes. Execute the following command in the terminal to retrieve your user ID: `id -u`
+    - `USER_GID`: Group ID of the local non-root user we use for deploying the application. We need this ID to create a non-root user (without sudo privileges) within the Docker image that shares the same IDs for maintaining proper bind mount volumes.
+    Execute the following command in the terminal to retrieve your group ID: `id -g`
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
