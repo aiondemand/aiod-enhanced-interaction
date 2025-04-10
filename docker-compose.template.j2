@@ -7,6 +7,8 @@ services:
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
+    labels:
+      autoheal-label: true
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     env_file:
       - .env.app
@@ -56,6 +58,8 @@ services:
   #Ollama service
   ollama:
     image: ollama/ollama:0.5.4
+    labels:
+      autoheal-label: true
     restart: always
     healthcheck:
       test: ["CMD", "ollama"]
