@@ -19,7 +19,7 @@ dependencies = [
     "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
-    "tinydb==4.8.0",
+    "tinydb==4.8.2",
     "tinydb-serialization==2.1.1",
     "apscheduler==3.10.4",
     "langchain-core==0.3.47",
