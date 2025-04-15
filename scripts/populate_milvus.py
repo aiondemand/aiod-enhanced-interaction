@@ -144,6 +144,7 @@ def create_new_collection(
     index_params.add_index(field_name="asset_id", **scalar_index_kwargs)
 
     # TODO This has been intentionally commented out due to unexpected Milvus behavior...
+    # Issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/77
     # if extract_metadata and collection_name.endswith("_datasets"):
     #     index_params.add_index(field_name="date_published", **scalar_index_kwargs)
     #     index_params.add_index(field_name="size_in_mb", **scalar_index_kwargs)
