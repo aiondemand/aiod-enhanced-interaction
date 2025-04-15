@@ -41,7 +41,7 @@ services:
       # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
       # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
       {% if USE_GPU == "true" %}
-      test: ["CMD", "curl -f http://localhost:80/health && nvidia-smi || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health && nvidia-smi || exit 1"]
       {% else %}
       test: ["CMD", "curl -f http://localhost:80/health"]
       {% endif %}
@@ -70,7 +70,7 @@ services:
     healthcheck:
       # TODO Same as above
       {% if USE_GPU == "true" %}
-      test: ["CMD", "ollama && nvidia-smi || exit 1"]
+      test: ["CMD-SHELL", "ollama && nvidia-smi || exit 1"]
       {% else %}
       test: ["CMD", "ollama"]
       {% endif %}
