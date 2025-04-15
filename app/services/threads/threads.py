@@ -2,6 +2,9 @@ import asyncio
 from threading import Thread
 from typing import Any, Callable, Coroutine
 
+# TODO Fix incorrect thread cleanup
+# https://github.com/aiondemand/aiod-enhanced-interaction/issues/24
+
 
 def run_async_in_thread(target_func: Callable[[], Coroutine[Any, Any, None]]) -> None:
     asyncio.run(target_func())

@@ -38,7 +38,11 @@ services:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      {% if USE_GPU == "true" %}
+      test: ["CMD", "curl -f http://localhost:80/health && nvidia-smi || exit 1"]
+      {% else %}
+      test: ["CMD", "curl -f http://localhost:80/health"]
+      {% endif %}
       interval: 30s
       timeout: 20s
       retries: 3
@@ -62,7 +66,11 @@ services:
       autoheal-label: true
     restart: always
     healthcheck:
+      {% if USE_GPU == "true" %}
+      test: ["CMD", "ollama && nvidia-smi || exit 1"]
+      {% else %}
       test: ["CMD", "ollama"]
+      {% endif %}
       interval: 30s
       timeout: 20s
       retries: 3

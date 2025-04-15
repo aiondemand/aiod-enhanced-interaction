@@ -166,19 +166,23 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             index_params.add_index(field_name="vector", **self.vector_index_kwargs)
             index_params.add_index(field_name="asset_id", **self.scalar_index_kwargs)
 
-            if self.extract_metadata:
-                if asset_type == AssetType.DATASETS:
-                    index_params.add_index(field_name="date_published", **self.scalar_index_kwargs)
-                    index_params.add_index(field_name="size_in_mb", **self.scalar_index_kwargs)
-                    index_params.add_index(field_name="license", **self.scalar_index_kwargs)
-                    index_params.add_index(field_name="task_types", **self.scalar_index_kwargs)
-                    index_params.add_index(field_name="languages", **self.scalar_index_kwargs)
-                    index_params.add_index(
-                        field_name="datapoints_upper_bound", **self.scalar_index_kwargs
-                    )
-                    index_params.add_index(
-                        field_name="datapoints_lower_bound", **self.scalar_index_kwargs
-                    )
+            # TODO This has been intentionally commented out due to unexpected Milvus behavior
+            # when trying to index scalar fields.... More information can be found here:
+            # - https://github.com/aiondemand/aiod-enhanced-interaction/issues/77
+
+            # if self.extract_metadata:
+            #     if asset_type == AssetType.DATASETS:
+            #         index_params.add_index(field_name="date_published", **self.scalar_index_kwargs)
+            #         index_params.add_index(field_name="size_in_mb", **self.scalar_index_kwargs)
+            #         index_params.add_index(field_name="license", **self.scalar_index_kwargs)
+            #         index_params.add_index(field_name="task_types", **self.scalar_index_kwargs)
+            #         index_params.add_index(field_name="languages", **self.scalar_index_kwargs)
+            #         index_params.add_index(
+            #             field_name="datapoints_upper_bound", **self.scalar_index_kwargs
+            #         )
+            #         index_params.add_index(
+            #             field_name="datapoints_lower_bound", **self.scalar_index_kwargs
+            #         )
 
             self.client.create_collection(
                 collection_name=collection_name,

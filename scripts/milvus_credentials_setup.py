@@ -20,7 +20,7 @@ if __name__ == "__main__":
         client.close()
         exit(0)
     except Exception:
-        # TODO: Fix logic
+        # TODO Make this more comprehendible
         print("Continue process..")
         pass
 
