@@ -13,6 +13,9 @@ from app.services.resilience import AIoDUnavailableException
 
 # TODO Represent the AIoD communication as a AsyncClientWrapper (similar to how it's employed in RAIL)
 # once we try to make our app more asynchronous
+# This TODO describes a functionality covered in 2 issues:
+# - https://github.com/aiondemand/aiod-enhanced-interaction/issues/79
+# - https://github.com/aiondemand/aiod-enhanced-interaction/issues/17
 
 
 def recursive_aiod_asset_fetch(

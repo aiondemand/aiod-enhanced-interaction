@@ -38,7 +38,13 @@ services:
       - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
+      # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
+      {% if USE_GPU == "true" %}
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health && nvidia-smi || exit 1"]
+      {% else %}
+      test: ["CMD", "curl -f http://localhost:80/health"]
+      {% endif %}
       interval: 30s
       timeout: 20s
       retries: 3
@@ -62,7 +68,12 @@ services:
       autoheal-label: true
     restart: always
     healthcheck:
+      # TODO Same as above
+      {% if USE_GPU == "true" %}
+      test: ["CMD-SHELL", "ollama && nvidia-smi || exit 1"]
+      {% else %}
       test: ["CMD", "ollama"]
+      {% endif %}
       interval: 30s
       timeout: 20s
       retries: 3

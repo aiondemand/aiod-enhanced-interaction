@@ -29,6 +29,8 @@ from app.services.resilience import OllamaUnavailableException, with_retry_sync
 
 # TODO refactor code to consolidate logic of LLM invocations into one service, one class
 # That class then can be extended with the resilience wrapper
+# First though, this file will likely be substantially changed because of issue:
+# - https://github.com/aiondemand/aiod-enhanced-interaction/issues/19
 
 
 # Classes pertaining to the first stage of user query parsing
