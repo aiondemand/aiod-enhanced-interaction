@@ -126,10 +126,14 @@ The `.env` file and all its environment variables are described in great detail 
     - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
     - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
 - Command to run: `docker compose -f docker-compose.milvus.yml up -d`
+- Set the following env vars defined in `.env.app`:
+    - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
+        - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var)
+    - `MILVUS__USER=root`
+    - `MILVUS__PASS=Milvus`
 
 **Ollama**
 - We recommend installing Ollama directly from their website: https://ollama.com/ *(So that you don't need to bother with granting Docker an access to your GPU)*
-
 
 ### Run the application
 
