@@ -73,33 +73,38 @@ class Database:
 
         self.collections: dict[Type[DatabaseEntity], MyCollection] = {
             SimpleUserQuery: MyCollection[SimpleUserQuery](
-                self.db.table("simple_queries"), self.db_lock
+                self.db.table("simple_queries"),
             ),
             FilteredUserQuery: MyCollection[FilteredUserQuery](
-                self.db.table("filtered_queries"), self.db_lock
+                self.db.table("filtered_queries"),
             ),
             AssetCollection: MyCollection[AssetCollection](
-                self.db.table("asset_collections"), self.db_lock
+                self.db.table("asset_collections"),
             ),
             RecommenderUserQuery: MyCollection[RecommenderUserQuery](
-                self.db.table("recommender_queries"), self.db_lock
+                self.db.table("recommender_queries"),
             ),
         }
 
     def insert(self, obj: DatabaseEntity) -> Any:
-        return self.collections[type(obj)].insert(obj)
+        with self.db_lock:
+            return self.collections[type(obj)].insert(obj)
 
     def upsert(self, obj: DatabaseEntity) -> Any:
-        return self.collections[type(obj)].upsert(obj)
+        with self.db_lock:
+            return self.collections[type(obj)].upsert(obj)
 
     def find_by_id(self, type: Type[DbEntity], id: str) -> DbEntity | None:
-        return self.collections[type].find_by_id(type, id)
+        with self.db_lock:
+            return self.collections[type].find_by_id(type, id)
 
     def delete(self, type: Type[DbEntity], *args, **kwargs) -> Any:
-        return self.collections[type].delete(*args, **kwargs)
+        with self.db_lock:
+            return self.collections[type].delete(*args, **kwargs)
 
     def search(self, type: Type[DbEntity], *args, **kwargs) -> list[DbEntity]:
-        return self.collections[type].search(type, *args, **kwargs)
+        with self.db_lock:
+            return self.collections[type].search(type, *args, **kwargs)
 
     def get_first_asset_collection_by_type(self, asset_type: AssetType) -> AssetCollection | None:
         rs = self.search(AssetCollection, Query().aiod_asset_type == asset_type)
@@ -109,17 +114,14 @@ class Database:
 
 
 class MyCollection(Generic[DbEntity]):
-    def __init__(self, table: Table, db_lock: threading.Lock) -> None:
+    def __init__(self, table: Table) -> None:
         self.table = table
-        self.db_lock = db_lock
 
     def insert(self, object: DbEntity) -> Any:
-        with self.db_lock:
-            return self.table.insert(object.model_dump())
+        return self.table.insert(object.model_dump())
 
     def upsert(self, object: DbEntity) -> Any:
-        with self.db_lock:
-            return self.table.upsert(object.model_dump(), Query().id == object.id)
+        return self.table.upsert(object.model_dump(), Query().id == object.id)
 
     def find_by_id(self, type: Type[DbEntity], id: str) -> DbEntity | None:
         obj = self.table.get(Query().id == id)
@@ -128,8 +130,7 @@ class MyCollection(Generic[DbEntity]):
         return type(**obj)
 
     def delete(self, *args, **kwargs):
-        with self.db_lock:
-            return self.table.remove(*args, **kwargs)
+        return self.table.remove(*args, **kwargs)
 
     def search(self, type: Type[DbEntity], *args, **kwargs) -> list[DbEntity]:
         results = self.table.search(*args, **kwargs)
