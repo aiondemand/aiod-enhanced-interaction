@@ -57,7 +57,7 @@ class MilvusSearchParams(VectorSearchParams):
     def get_params(self) -> dict:
         return {
             "data": self.data,
-            "topk": self.topk,
+            "limit": self.topk,
             "group_by_field": self.group_by_field,
             "output_fields": self.output_fields,
             "search_params": self.search_params,
