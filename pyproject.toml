@@ -17,7 +17,7 @@ dependencies = [
     "tqdm==4.67.1",
     "python-dotenv==1.1.0",
     "pymilvus==2.5.5",
-    "transformers==4.44.2",
+    "transformers==4.52.3",
     "sentence-transformers==3.0.1",
     "tinydb==4.8.0",
     "tinydb-serialization==2.1.1",
