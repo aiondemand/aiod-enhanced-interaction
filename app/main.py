@@ -107,6 +107,7 @@ def app_init() -> None:
         ),
         CronTrigger(hour=0, minute=0),
     )
+    # TODO add crawler to scheduler
     SCHEDULER.start()
 
     # Immediate computation of AIoD asset embeddings
