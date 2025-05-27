@@ -41,16 +41,13 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
         elif self.result_set is None:
             raise ValueError("The search results are not available for this completed query")
         else:
-            results: dict[str, Any] = {}
-
+            results: dict[str, Any] = {
+                "returned_asset_count": len(self.result_set),
+                "result_asset_ids": self.result_set.asset_ids,
+            }
             if return_entire_assets:
                 results["result_assets"] = self.result_set.assets
-            results.update(
-                {
-                    "returned_asset_count": len(self.result_set),
-                    "result_asset_ids": self.result_set.asset_ids,
-                }
-            )
+
             return results
 
     @property
