@@ -27,7 +27,11 @@ async def submit_recommender_query(
     topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
 ) -> RedirectResponse:
     query_id = await _submit_recommender_query(
-        database, asset_id, asset_type, output_asset_type, topk
+        database,
+        asset_id,
+        asset_type,
+        output_asset_type,
+        topk,
     )
     return RedirectResponse(url=f"/recommender/{query_id}/result", status_code=202)
 
@@ -36,8 +40,14 @@ async def submit_recommender_query(
 async def get_recommender_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID,
+    return_entire_assets: bool = Query(
+        default=False,
+        description="Whether to return the entire AIoD assets or only their corresponding IDs",
+    ),
 ) -> RecommenderUserQueryResponse:
-    return await get_query_results(query_id, database, RecommenderUserQuery)
+    return await get_query_results(
+        query_id, database, RecommenderUserQuery, return_entire_assets=return_entire_assets
+    )
 
 
 async def _submit_recommender_query(

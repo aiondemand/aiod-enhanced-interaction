@@ -20,7 +20,10 @@ async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
 
 
 async def get_query_results(
-    query_id: UUID, database: Database, query_type: Type[BaseUserQuery]
+    query_id: UUID,
+    database: Database,
+    query_type: Type[BaseUserQuery],
+    return_entire_assets: bool = False,
 ) -> Response:
     user_query = database.find_by_id(query_type, id=str(query_id))
     if user_query is None:
@@ -29,7 +32,7 @@ async def get_query_results(
         )
     if user_query.is_expired:
         raise HTTPException(status_code=410, detail="Requested query has expired.")
-    return user_query.map_to_response()
+    return user_query.map_to_response(return_entire_assets)
 
 
 def validate_query_endpoint_arguments_or_raise(

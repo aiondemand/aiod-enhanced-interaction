@@ -15,6 +15,7 @@ class BaseUserQueryResponse(BaseModel, ABC):
     topk: int
     returned_asset_count: int = -1
     result_asset_ids: list[int] | None = None
+    result_assets: list[dict] | None = None
     expires_at: datetime | None = None
 
 
