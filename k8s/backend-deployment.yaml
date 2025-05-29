@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: your-registry/your-backend-image:latest
+        command: ["/bin/sh", "-c", "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"]
+        ports:
+        - containerPort: 80
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secrets
+        volumeMounts:
+        - name: tinydb
+          mountPath: /data
+        - name: model
+          mountPath: /model
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+      volumes:
+      - name: tinydb
+        persistentVolumeClaim:
+          claimName: tinydb-pvc
+      - name: model
+        persistentVolumeClaim:
+          claimName: model-pvc

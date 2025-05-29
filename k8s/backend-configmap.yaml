@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  TINYDB_FILEPATH: /data/tinydb.json
+  USE_GPU: "true"
+  MILVUS__URI: http://milvus-standalone:19530
+  MILVUS__EXTRACT_METADATA: "true"
+  OLLAMA__URI: http://ollama:11434

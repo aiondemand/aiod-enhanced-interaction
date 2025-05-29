@@ -1,0 +1,13 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: example-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: job-runner
+        image: your-registry/your-job-image:latest
+        command: ["python", "scripts/example_job.py"]
+      restartPolicy: Never
+  backoffLimit: 4
