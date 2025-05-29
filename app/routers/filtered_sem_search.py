@@ -14,7 +14,7 @@ from app.routers.sem_search import (
     validate_query_endpoint_arguments_or_raise,
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.schemas.query import FilteredUserQueryResponse
 from app.services.database import Database
 
@@ -42,8 +42,8 @@ async def submit_filtered_query(
     search_query: str = Query(
         ..., max_length=200, min_length=1, description="User search query with filters"
     ),
-    asset_type: AssetType = Query(
-        AssetType.DATASETS,
+    asset_type: SupportedAssetType = Query(
+        SupportedAssetType.DATASETS,
         description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
     ),
     filters: Annotated[list[Filter], Field(..., max_length=5)] | None = Body(
@@ -67,8 +67,8 @@ async def get_filtered_query_result(
 
 @router.get("/schemas/get_fields")
 async def get_fields_to_filter_by(
-    asset_type: AssetType = Query(
-        AssetType.DATASETS,
+    asset_type: SupportedAssetType = Query(
+        SupportedAssetType.DATASETS,
         description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
     ),
 ) -> dict:
@@ -104,8 +104,8 @@ async def get_fields_to_filter_by(
 
 @router.get("/schemas/get_filter_schema")
 async def get_filter_schema(
-    asset_type: AssetType = Query(
-        AssetType.DATASETS,
+    asset_type: SupportedAssetType = Query(
+        SupportedAssetType.DATASETS,
         description="Asset type we wish to create a filter for. Currently only 'datasets' asset type works.",
     ),
     field_name: str = Query(..., description="Name of the field we wish to filter assets by"),
@@ -130,7 +130,7 @@ async def get_filter_schema(
 async def _sumbit_filtered_query(
     database: Database,
     search_query: str,
-    asset_type: AssetType,
+    asset_type: SupportedAssetType,
     filters: list[Filter] | None,
     topk: int,
 ) -> str:

@@ -7,11 +7,12 @@ from typing import Generic, TypeVar
 from app.config import settings
 from app.models.db_entity import DatabaseEntity
 from app.models.filter import Filter
-from app.schemas.enums import AssetType, QueryStatus
+from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
     RecommenderUserQueryResponse,
+    ReturnedAsset,
     SimpleUserQueryResponse,
 )
 from app.schemas.search_results import SearchResults
@@ -20,7 +21,6 @@ Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
 class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
-    asset_type: AssetType
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
     result_set: SearchResults | None = None
@@ -39,10 +39,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
         if self.status != QueryStatus.COMPLETED:
             return {}
         elif self.result_set is not None:
-            return {
-                "returned_asset_count": len(self.result_set),
-                "result_asset_ids": self.result_set.asset_ids,
-            }
+            return {"results": ReturnedAsset.create_from_result_set(self.result_set)}
         else:
             raise ValueError("SearchResults are not available for this completed query")
 
@@ -61,6 +58,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
 
 class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
     search_query: str
+    asset_type: AssetTypeQueryParam
 
     def map_to_response(self) -> SimpleUserQueryResponse:
         return SimpleUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
@@ -68,6 +66,7 @@ class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
 
 class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
     search_query: str
+    asset_type: SupportedAssetType
     filters: list[Filter] | None = None
 
     @property
@@ -80,7 +79,8 @@ class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
 
 class RecommenderUserQuery(BaseUserQuery[RecommenderUserQueryResponse]):
     asset_id: int
-    output_asset_type: AssetType
+    asset_type: SupportedAssetType
+    output_asset_type: AssetTypeQueryParam
 
     def map_to_response(self) -> RecommenderUserQueryResponse:
         return RecommenderUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())

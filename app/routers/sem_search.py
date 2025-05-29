@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.models.query import BaseUserQuery
-from app.schemas.enums import AssetType
+from app.schemas.enums import AssetTypeQueryParam, SupportedAssetType
 from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
@@ -33,24 +33,36 @@ async def get_query_results(
 
 
 def validate_query_endpoint_arguments_or_raise(
-    query: str | int, asset_type: AssetType, database: Database, apply_filtering: bool
+    query: str | int,
+    asset_type: AssetTypeQueryParam | SupportedAssetType,
+    database: Database,
+    apply_filtering: bool,
 ) -> None:
+    # TODO this whole function is ugly...
     valid_asset_types = (
         settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         if apply_filtering
         else settings.AIOD.ASSET_TYPES
     )
-    if asset_type not in valid_asset_types:
+    if apply_filtering and asset_type.is_all():
         raise HTTPException(
-            status_code=404,
-            detail=f"We currently do not support asset type '{asset_type.value}'",
+            status_code=400,
+            detail=f"You need to specify a specific asset type to perform a filtered search",
         )
-    asset_col = database.get_first_asset_collection_by_type(asset_type)
-    if asset_col is None:
-        raise HTTPException(
-            status_code=501,
-            detail=f"The database for the asset type '{asset_type.value}' has yet to be built. Try again later...",
-        )
+
+    if not asset_type.is_all():
+        supp_asset_type = asset_type.to_SupportedAssetType()
+
+        if supp_asset_type not in valid_asset_types:
+            raise HTTPException(
+                status_code=404,
+                detail=f"We currently do not support asset type '{supp_asset_type.value}'",
+            )
+        if database.get_first_asset_collection_by_type(supp_asset_type) is None:
+            raise HTTPException(
+                status_code=501,
+                detail=f"The database for the asset type '{supp_asset_type.value}' has yet to be built. Try again later...",
+            )
     # TODO
     # It needs to be revised.
     if isinstance(query, str):

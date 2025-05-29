@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from app.config import settings
 from app.models.asset_collection import AssetCollection
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
 from app.services.database import Database
@@ -100,7 +100,7 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
 
 
 def fetch_asset_collection(
-    database: Database, asset_type: AssetType, first_invocation: bool
+    database: Database, asset_type: SupportedAssetType, first_invocation: bool
 ) -> AssetCollection | None:
     asset_collection = database.get_first_asset_collection_by_type(asset_type)
 
@@ -131,7 +131,7 @@ def process_aiod_assets_wrapper(
     embedding_store: EmbeddingStore,
     database: Database,
     asset_collection: AssetCollection,
-    asset_type: AssetType,
+    asset_type: SupportedAssetType,
 ) -> None:
     existing_asset_ids_from_past = embedding_store.get_all_asset_ids(asset_type)
     newly_added_asset_ids: list[int] = []
@@ -222,7 +222,7 @@ def process_aiod_assets_wrapper(
 
 
 def get_assets_to_add_and_delete(
-    asset_type: AssetType,
+    asset_type: SupportedAssetType,
     url_params: RequestParams,
     existing_asset_ids_from_past: list[int],
     newly_added_asset_ids: list[int],

@@ -24,7 +24,7 @@ from app.config import settings
 from app.models.filter import Filter
 from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.services.resilience import OllamaUnavailableException, with_retry_sync
 
 # TODO refactor code to consolidate logic of LLM invocations into one service, one class
@@ -274,7 +274,7 @@ class UserQueryParsing:
             validation_step=UserQueryParsingStages.init_stage_3(llm=llm),
         )
 
-    def __call__(self, user_query: str, asset_type: AssetType) -> dict:
+    def __call__(self, user_query: str, asset_type: SupportedAssetType) -> dict:
         def expand_topic_query(
             topic_list: list[str], new_objects: list[dict], content_key: str
         ) -> list[str]:

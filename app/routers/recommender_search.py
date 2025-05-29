@@ -11,7 +11,7 @@ from app.routers.sem_search import (
     submit_query,
     validate_query_endpoint_arguments_or_raise,
 )
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam
 from app.schemas.query import RecommenderUserQueryResponse
 from app.services.database import Database
 
@@ -22,8 +22,12 @@ router = APIRouter()
 async def submit_recommender_query(
     database: Annotated[Database, Depends(Database)],
     asset_id: int = Query(..., description="Asset ID"),
-    asset_type: AssetType = Query(..., description="Asset type"),
-    output_asset_type: AssetType = Query(..., description="Output Asset type"),
+    asset_type: SupportedAssetType = Query(
+        ..., description="Asset type of an asset to find recommendations to"
+    ),
+    output_asset_type: AssetTypeQueryParam = Query(
+        ..., description="Output asset type of assets to return"
+    ),
     topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
 ) -> RedirectResponse:
     query_id = await _submit_recommender_query(
@@ -43,8 +47,8 @@ async def get_recommender_result(
 async def _submit_recommender_query(
     database: Database,
     asset_id: int,
-    asset_type: AssetType,
-    output_asset_type: AssetType,
+    asset_type: SupportedAssetType,
+    output_asset_type: AssetTypeQueryParam,
     topk: int,
 ) -> str:
     validate_query_endpoint_arguments_or_raise(
@@ -56,17 +60,19 @@ async def _submit_recommender_query(
 
     # TODO this should be revised too
     # validation output_asset_type
-    if output_asset_type not in settings.AIOD.ASSET_TYPES:
-        raise HTTPException(
-            status_code=404,
-            detail=f"We currently do not support asset type '{output_asset_type.value}'",
-        )
-    asset_col = database.get_first_asset_collection_by_type(output_asset_type)
-    if asset_col is None:
-        raise HTTPException(
-            status_code=501,
-            detail=f"The database for the asset type '{output_asset_type.value}' has yet to be built. Try again later...",
-        )
+    if not output_asset_type.is_all():
+        supp_asset_type = output_asset_type.to_SupportedAssetType()
+
+        if supp_asset_type not in settings.AIOD.ASSET_TYPES:
+            raise HTTPException(
+                status_code=404,
+                detail=f"We currently do not support asset type '{supp_asset_type.value}'",
+            )
+        if database.get_first_asset_collection_by_type(supp_asset_type) is None:
+            raise HTTPException(
+                status_code=501,
+                detail=f"The database for the asset type '{supp_asset_type.value}' has yet to be built. Try again later...",
+            )
 
     user_query = RecommenderUserQuery(
         asset_id=asset_id,

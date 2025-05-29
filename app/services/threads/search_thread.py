@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 import os
 from queue import Queue
@@ -14,7 +15,7 @@ from app.models.query import (
     SimpleUserQuery,
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import QueryStatus
+from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.aiod import check_aiod_asset
@@ -25,8 +26,6 @@ from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
 from tinydb import Query
-
-# SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
 
 QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
@@ -81,7 +80,7 @@ async def search_thread() -> None:
         logging.info(f"Searching relevant assets for query ID: {query_id}")
 
         try:
-            results = search_assets_wrapper(
+            results = outer_search_assets_wrapper(
                 model,
                 llm_query_parser,
                 embedding_store,
@@ -124,25 +123,52 @@ def fetch_user_query(
         return user_query
 
 
-def search_assets_wrapper(
+def outer_search_assets_wrapper(
     model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-    num_search_retries: int = 5,
 ) -> SearchResults:
-    search_params = prepare_search_parameters(model, llm_query_parser, embedding_store, user_query)
+    search_params, all_asset_types = prepare_search_parameters(
+        model, llm_query_parser, embedding_store, user_query
+    )
     if search_params is None:
         return SearchResults()
 
+    asset_type_list: list[SupportedAssetType] = (
+        [search_params.asset_type] if all_asset_types is False else settings.AIOD.ASSET_TYPES
+    )
+    search_results: list[SearchResults] = []
+
+    # perform multiple semantic searches in separate asset_type collections if
+    # the user requested to go over ALL asset types
+
+    for asset_type in asset_type_list:
+        temp_search_params = deepcopy(search_params)
+        temp_search_params.asset_type = asset_type
+
+        search_results.append(
+            search_assets_wrapper(embedding_store, temp_search_params, user_query)
+        )
+
+    return SearchResults.merge_results(search_results, k=user_query.topk)
+
+
+def search_assets_wrapper(
+    embedding_store: EmbeddingStore,
+    search_params: VectorSearchParams,
+    user_query: BaseUserQuery,
+    num_search_retries: int = 5,
+) -> SearchResults:
     asset_ids_to_remove_from_db: list[int] = []
     all_assets_to_return = SearchResults()
 
     for _ in range(num_search_retries):
         new_results = embedding_store.retrieve_topk_asset_ids(search_params)
-        all_assets_to_return = all_assets_to_return + validate_assets(
+        new_assets = validate_assets(
             new_results, search_params, asset_ids_to_remove_from_db
-        )
+        ).filter_out_assets_by_id(all_assets_to_return.asset_ids)
+        all_assets_to_return = all_assets_to_return + new_assets
 
         search_params.topk = user_query.topk - len(all_assets_to_return)
         if search_params.topk == 0 or len(new_results) == 0:
@@ -163,7 +189,7 @@ def prepare_search_parameters(
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-) -> VectorSearchParams | None:
+) -> tuple[VectorSearchParams | None, bool]:
     # apply metadata filtering
     metadata_filter_str = ""
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -185,17 +211,23 @@ def prepare_search_parameters(
             model, embedding_store, user_query
         )
         if query_embeddings is None:
-            return None
+            return None, False
     elif isinstance(user_query, (SimpleUserQuery, FilteredUserQuery)):
         query_embeddings = model.compute_query_embeddings(user_query.search_query)
     else:
         raise ValueError("We don't support other types of user queries yet")
 
     # select asset type to search for
-    target_asset_type = (
+    target_asset_type_temp = (
         user_query.output_asset_type
         if isinstance(user_query, RecommenderUserQuery)
         else user_query.asset_type
+    )
+    all_asset_types = target_asset_type_temp.is_all()
+    target_asset_type = (
+        target_asset_type_temp.to_SupportedAssetType()
+        if all_asset_types is False
+        else SupportedAssetType.DATASETS  # a placeholder value that will be replaced
     )
     # ignore the asset itself from the search if necessary
     asset_ids_to_exclude_from_search = (
@@ -205,13 +237,14 @@ def prepare_search_parameters(
         else []
     )
 
-    return embedding_store.create_search_params(
+    search_params = embedding_store.create_search_params(
         data=query_embeddings,
         topk=user_query.topk,
         asset_type=target_asset_type,
         metadata_filter=metadata_filter_str,
         asset_ids_to_exclude=asset_ids_to_exclude_from_search,
     )
+    return search_params, all_asset_types
 
 
 def validate_assets(
@@ -235,7 +268,7 @@ def validate_assets(
     )
 
     asset_ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
-    search_params.asset_ids_to_exclude.extend(asset_ids_to_del)
+    search_params.asset_ids_to_exclude.extend(results.asset_ids)
     asset_ids_to_remove_from_db.extend(asset_ids_to_del)
 
     return results.filter_out_assets_by_id(asset_ids_to_del)
