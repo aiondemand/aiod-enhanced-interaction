@@ -11,7 +11,8 @@ from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,
-    validate_query_endpoint_arguments_or_raise,
+    validate_asset_type_or_raise,
+    validate_query_or_raise,
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
@@ -134,9 +135,9 @@ async def _sumbit_filtered_query(
     filters: list[Filter] | None,
     topk: int,
 ) -> str:
-    validate_query_endpoint_arguments_or_raise(
-        search_query, asset_type, database, apply_filtering=True
-    )
+    validate_query_or_raise(search_query)
+    validate_asset_type_or_raise(asset_type, database, apply_filtering=True)
+
     if filters:
         for filter in filters:
             filter.validate_filter_or_raise(asset_type)

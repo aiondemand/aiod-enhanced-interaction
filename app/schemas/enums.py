@@ -10,7 +10,17 @@ class QueryStatus(Enum):
     FAILED = "Failed"
 
 
-class SupportedAssetType(Enum):
+class BaseAssetType:
+    def to_SupportedAssetType(self) -> SupportedAssetType:
+        if self.is_all():
+            raise ValueError("ALL value cannot be converted")
+        return SupportedAssetType(getattr(self, "value"))
+
+    def is_all(self) -> bool:
+        return getattr(self, "value") == "all"
+
+
+class SupportedAssetType(BaseAssetType, Enum):
     DATASETS = "datasets"
     ML_MODELS = "ml_models"
     PUBLICATIONS = "publications"
@@ -19,15 +29,15 @@ class SupportedAssetType(Enum):
     EXPERIMENTS = "experiments"
     SERVICES = "services"
 
-    def to_SupportedAssetType(self) -> SupportedAssetType:
-        return self
+    # def to_SupportedAssetType(self) -> SupportedAssetType:
+    #     return self
 
-    def is_all(self) -> bool:
-        return False
+    # def is_all(self) -> bool:
+    #     return False
 
 
 # TODO come up with a way to get rid of this duplication of enum values
-class AssetTypeQueryParam(Enum):
+class AssetTypeQueryParam(BaseAssetType, Enum):
     ALL = "all"  # select all asset types
     DATASETS = "datasets"
     ML_MODELS = "ml_models"
@@ -37,10 +47,10 @@ class AssetTypeQueryParam(Enum):
     EXPERIMENTS = "experiments"
     SERVICES = "services"
 
-    def to_SupportedAssetType(self) -> SupportedAssetType:
-        if self == AssetTypeQueryParam.ALL:
-            raise ValueError("ALL value cannot be converted")
-        return SupportedAssetType(self.value)
+    # def to_SupportedAssetType(self) -> SupportedAssetType:
+    #     if self == AssetTypeQueryParam.ALL:
+    #         raise ValueError("ALL value cannot be converted")
+    #     return SupportedAssetType(self.value)
 
-    def is_all(self) -> bool:
-        return self == AssetTypeQueryParam.ALL
+    # def is_all(self) -> bool:
+    #     return self == AssetTypeQueryParam.ALL

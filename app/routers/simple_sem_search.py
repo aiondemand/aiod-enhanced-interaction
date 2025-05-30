@@ -8,7 +8,8 @@ from app.models.query import SimpleUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,
-    validate_query_endpoint_arguments_or_raise,
+    validate_query_or_raise,
+    validate_asset_type_or_raise,
 )
 from app.schemas.enums import AssetTypeQueryParam
 from app.schemas.query import SimpleUserQueryResponse
@@ -41,14 +42,10 @@ async def get_simple_query_result(
 async def _sumbit_simple_query(
     database: Database, search_query: str, asset_type: AssetTypeQueryParam, topk: int
 ) -> str:
-    validate_query_endpoint_arguments_or_raise(
-        search_query,
-        asset_type,
-        database,
-        apply_filtering=False,
-    )
+    validate_query_or_raise(search_query)
+    validate_asset_type_or_raise(asset_type, database, apply_filtering=False)
+
     user_query = SimpleUserQuery(
         search_query=search_query.strip(), asset_type=asset_type, topk=topk
     )
-
     return await submit_query(user_query, database)

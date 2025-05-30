@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.models.query import BaseUserQuery
-from app.schemas.enums import AssetTypeQueryParam, SupportedAssetType
+from app.schemas.enums import BaseAssetType
 from app.schemas.query import BaseUserQueryResponse
 from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
@@ -32,13 +32,17 @@ async def get_query_results(
     return user_query.map_to_response()
 
 
-def validate_query_endpoint_arguments_or_raise(
-    query: str | int,
-    asset_type: AssetTypeQueryParam | SupportedAssetType,
-    database: Database,
-    apply_filtering: bool,
+def validate_query_or_raise(query: str) -> None:
+    if not query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid/empty user query",
+        )
+
+
+def validate_asset_type_or_raise(
+    asset_type: BaseAssetType, database: Database, apply_filtering: bool
 ) -> None:
-    # TODO this whole function is ugly...
     valid_asset_types = (
         settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         if apply_filtering
@@ -63,22 +67,3 @@ def validate_query_endpoint_arguments_or_raise(
                 status_code=501,
                 detail=f"The database for the asset type '{supp_asset_type.value}' has yet to be built. Try again later...",
             )
-    # TODO
-    # It needs to be revised.
-    if isinstance(query, str):
-        if not query.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid/empty user query",
-            )
-    elif isinstance(query, int):
-        if query is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid asset id. It must be a positive integer.",
-            )
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Query must be a non-empty string or a positive integer asset id.",
-        )

@@ -39,7 +39,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
         if self.status != QueryStatus.COMPLETED:
             return {}
         elif self.result_set is not None:
-            return {"results": ReturnedAsset.create_from_result_set(self.result_set)}
+            return {"results": ReturnedAsset.create_list_from_result_set(self.result_set)}
         else:
             raise ValueError("SearchResults are not available for this completed query")
 

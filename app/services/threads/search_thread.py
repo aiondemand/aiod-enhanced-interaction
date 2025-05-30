@@ -80,7 +80,7 @@ async def search_thread() -> None:
         logging.info(f"Searching relevant assets for query ID: {query_id}")
 
         try:
-            results = outer_search_assets_wrapper(
+            results = search_across_assets_wrapper(
                 model,
                 llm_query_parser,
                 embedding_store,
@@ -123,7 +123,7 @@ def fetch_user_query(
         return user_query
 
 
-def outer_search_assets_wrapper(
+def search_across_assets_wrapper(
     model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
@@ -134,27 +134,24 @@ def outer_search_assets_wrapper(
     )
     if search_params is None:
         return SearchResults()
-
     asset_type_list: list[SupportedAssetType] = (
         [search_params.asset_type] if all_asset_types is False else settings.AIOD.ASSET_TYPES
     )
-    search_results: list[SearchResults] = []
 
     # perform multiple semantic searches in separate asset_type collections if
-    # the user requested to go over ALL asset types
-
+    # the user has requested to go over ALL the asset types
+    search_results: list[SearchResults] = []
     for asset_type in asset_type_list:
         temp_search_params = deepcopy(search_params)
         temp_search_params.asset_type = asset_type
-
         search_results.append(
-            search_assets_wrapper(embedding_store, temp_search_params, user_query)
+            search_asset_collection(embedding_store, temp_search_params, user_query)
         )
 
     return SearchResults.merge_results(search_results, k=user_query.topk)
 
 
-def search_assets_wrapper(
+def search_asset_collection(
     embedding_store: EmbeddingStore,
     search_params: VectorSearchParams,
     user_query: BaseUserQuery,
@@ -165,10 +162,10 @@ def search_assets_wrapper(
 
     for _ in range(num_search_retries):
         new_results = embedding_store.retrieve_topk_asset_ids(search_params)
-        new_assets = validate_assets(
+        validated_new_results = validate_assets(
             new_results, search_params, asset_ids_to_remove_from_db
         ).filter_out_assets_by_id(all_assets_to_return.asset_ids)
-        all_assets_to_return = all_assets_to_return + new_assets
+        all_assets_to_return = all_assets_to_return + validated_new_results
 
         search_params.topk = user_query.topk - len(all_assets_to_return)
         if search_params.topk == 0 or len(new_results) == 0:

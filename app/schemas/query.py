@@ -15,7 +15,7 @@ class ReturnedAsset(BaseModel):
     asset_type: SupportedAssetType
 
     @staticmethod
-    def create_from_result_set(result_set: SearchResults) -> list[ReturnedAsset]:
+    def create_list_from_result_set(result_set: SearchResults) -> list[ReturnedAsset]:
         return [
             ReturnedAsset(asset_id=id, asset_type=typ)
             for id, typ in zip(result_set.asset_ids, result_set.asset_types)
