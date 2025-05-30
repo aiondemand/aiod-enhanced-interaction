@@ -53,7 +53,9 @@ async def scraper():
             # filter_chain=filter_chain
         ),
         scraping_strategy=LXMLWebScrapingStrategy(),
-        verbose=False
+        verbose=False,
+        scan_full_page=True,
+        scroll_delay=0.5,
     )
 
     async with AsyncWebCrawler() as crawler:
@@ -98,7 +100,7 @@ def create_webcontent_collection(collection_name: str, client: MilvusClient):
     # content, url, hash, embeddings
     schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True, auto_id=True)
     schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=1024)
-    schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=40000)  # TODO implement chunking? max_length = between 1 and 65535 bytes
+    schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)  # TODO implement chunking? max_length = between 1 and 65535 bytes
     schema.add_field(field_name="url", datatype=DataType.VARCHAR, max_length=256)
     schema.add_field(field_name="hash", datatype=DataType.INT64)
 

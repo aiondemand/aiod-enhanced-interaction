@@ -1,4 +1,5 @@
 from langchain_mistralai import ChatMistralAI
+from mistralai import Mistral
 from langchain.agents import create_openai_tools_agent
 from langchain.agents import AgentExecutor, ZeroShotAgent
 from pydantic import BaseModel, Field
@@ -39,6 +40,9 @@ asset_types = os.getenv("AIOD__COMMA_SEPARATED_ASSET_TYPES").split(",")
 collection_prefix = os.getenv("MILVUS__COLLECTION_PREFIX")
 aiod_url = os.getenv("AIOD__URL")
 
+# load client for moderation
+client = Mistral(api_key=mistral_key)
+
 # load llm
 llm = ChatMistralAI(
     model="ministral-8b-latest",
@@ -49,7 +53,6 @@ llm = ChatMistralAI(
 
 # load db
 milvus_db = MilvusClient(uri=milvus_uri, token=milvus_token)
-
 
 def prepare_embedding_model() -> Basic_EmbeddingModel:
     transformer = SentenceTransformerToHF(embedding_llm, trust_remote_code=True)
@@ -76,17 +79,6 @@ def embed_query(model, query: str) -> list[list[float]]:
     return embedding
 
 
-# https://python.langchain.com/docs/modules/memory/agent_with_memory/
-# modified memory to summarize previous messages ensure context length doesn't get out of control
-#  possibilities: only store last n messages, summarize conversation history
-#  https://python.langchain.com/docs/use_cases/chatbots/memory_management/
-# https://python.langchain.com/docs/use_cases/tool_use/prompting/
-# https://python.langchain.com/docs/use_cases/tool_use/multiple_tools/
-# https://python.langchain.com/docs/modules/agents/
-# https://python.langchain.com/docs/langgraph/
-# https://python.langchain.com/docs/use_cases/sql/agents/
-# https://python.langchain.com/docs/use_cases/sql/
-# https://python.langchain.com/docs/modules/tools/
 # store = {'-1': ChatMessageHistory(messages=[HumanMessage(content='mushroom dataset'), AIMessage(content="Question: mushroom dataset\nThought: I should use the resource_search tool to find datasets related to mushrooms.\nAction: resource_search\nAction Input: mushroom dataset\nObservation: \ndatasets 1:\nhttps://www.openml.org/search?type=data&id=43922\nmushroom\n['machine learning', 'meteorology']\nMushroom records drawn from The Audubon Society Field Guide to North American Mushrooms (1981). G. H. Lincoff (Pres.), New York: Alfred A. Knopf\nlink:https://www.openml.org/search?type=data&id=43922\n\ndatasets 2:\nhttps://www.openml.org/search?type=data&id=43923\nmushroom\n['machine learning', 'medicine']\nNursery Database was derived from a hierarchical decision model originally developed to rank applications for nursery schools.\nlink:https://www.openml.org/search?type=data&id=43923\n\ndatasets 3:\nhttps://zenodo.org/api/records/8212067\nA new species of smooth-spored Inocybe from Coniferous forests of Pakistan\n['taxonomy', 'mushroom', 'mycology', 'inocybe', 'pakistan']\nInocybe bhurbanensis is described and illustrated as a new species from Himalayan Moist Temperate forests of Pakistan. It is characterized by fibrillose, conical to convex, umbonate, brown to dark brown pileus, non-pruinose, fibrillose stipe with whitish tomentum at the base and smooth basidiospores that are larger (9 × 5.2 µm) and thicker caulocystidia (up to 21 m) as compared to the sister species Inocybe demetris. Phylogenetic analyses of a nuclear rDNA region encompassing the internal transcribed spacers 1 and 2 along with 5.8S rDNA (ITS) and the 28S rDNA D1–D2 domains (28S) also confirmed its novelty.\nlink:https://zenodo.org/api/records/8212067\n\ndatasets 4:\nhttps://zenodo.org/api/records/7797389\nData from: Effects of fungicides on aquatic fungi and bacteria: a comparison of morphological and molecular approaches from a microcosm experiment\n['dna metabarcoding', 'streams', 'community composition', 'stress response', 'leaf decomposition']\nData files and R code for the manuscript: Effects of fungicides on aquatic fungi and bacteria: a comparison of morphological and molecular approaches from a microcosm experiment. Published in Environmental Sciences Europe.\nlink:https://zenodo.org/api/records/7797389\n\ndatasets 5:\nhttps://zenodo.org/api/records/8210711\nSupplementary material 4 from: Jung P, Werner L, Briegel-Williams L, Emrich D, Lakatos M (2023) Roccellinastrum, Cenozosia and Heterodermia: Ecology and phylogeny of fog lichens and their photobionts from the coastal Atacama Desert. MycoKeys 98: 317- [...]\n['niebla', 'symbiochloris', 'pan de azucar', 'heterodermia', 'chlorolichens', 'trebouxia']\nSpot tests and TLC\nlink:https://zenodo.org/api/records/8210711\n\nThought: I now know the final answer\nFinal Answer: Here are some datasets related to mushrooms:\n\n1. [Mushroom records from The Audubon Society Field Guide to North American Mushrooms (1981)](https://www.openml.org/search?type=data&id=43922)\n2. [Nursery Database derived from a hierarchical decision model](https://www.openml.org/search?type=data&id=43923)\n3. [A new species of smooth-spored Inocybe from Coniferous forests of Pakistan](https://zenodo.org/api/records/8212067)\n4. [Effects of fungicides on aquatic fungi and bacteria](https://zenodo.org/api/records/7797389)\n5. [Supplementary material on fog lichens and their photobionts from the coastal Atacama Desert](https://zenodo.org/api/records/8210711)")])}
 store = {}
 embedding_model = prepare_embedding_model()
@@ -182,11 +174,10 @@ def asset_search(query: str, asset: str) -> str:
     return result
 
 
-asset_search("find me a mushroom dataset", "datasets")
 ps_desc = """Use the unmodified user input to get information about specific webpages on the AIoD website."""
 
 
-class PageSimilaritySearch(BaseTool):
+class PageSearch(BaseTool):
     name: str = "page_search"
     description: str = ps_desc
     # args_schema: Type[BaseModel] = SearchInput
@@ -205,30 +196,12 @@ class PageSimilaritySearch(BaseTool):
         raise NotImplementedError("custom_search does not support async")
 
 
-rsd_desc = f"Use this to search for assets that fit to the users requests. Available asset types are: {asset_types}."
-
-rsd_desc_kw = """Use this to search for specific user requests in the resources. Searches for documents of the specified resource type where all words in the query are in the document. Available resource types are: publications, datasets, educational_resources, experiments, ml_models.
-    """
-rsd_args = """Example: user: I want to know something about drones
-    Action: use resource_search
-    Result:
-    publications 1: Citizen Consultation | Drone-in-a-box by NAUST Robotics keywords: Robotics4EU, Citizen Consultation, Drone-in-a-box, NAUST Robotics, Publication
-The HTML code contains metadata and links for a website related to Robotics4EU, focusing on citizen consultation and drone technology by NAUST Robotics. The webpage includes social media tags and structured data for SEO optimization.
-link:https://www.robotics4eu.eu/publications/citizen-consultation-drone-in-a-box-by-naust-robotics/"""
-
-rsd_desc_v2 = """Use this tool search for resources that fit to the users requests. Available resource types are: publications, datasets, educational_resources, experiments, ml_models. If you want to search for multiple resources at the same time, use keyword 'all'. 
-    Make sure to give resource_search an argument structured like this: \{'input': 'the thing you want to search for', 'type': 'the type of the thing you want to search'\}
-    Example: user: show me publications about drones
-    Action: use resource_search with the input \{'input': 'drones', 'type': 'publications'\}
-    Result:
-    publications 1: Citizen Consultation | Drone-in-a-box by NAUST Robotics keywords: Robotics4EU, Citizen Consultation, Drone-in-a-box, NAUST Robotics, Publication
-The HTML code contains metadata and links for a website related to Robotics4EU, focusing on citizen consultation and drone technology by NAUST Robotics. The webpage includes social media tags and structured data for SEO optimization.
-link:https://www.robotics4eu.eu/publications/citizen-consultation-drone-in-a-box-by-naust-robotics/"""
+asset_search_desc = f"Use this to search for assets that fit to the users requests. Available asset types are: {asset_types}."
 
 
-class ResourceSimilaritySearch(BaseTool):
-    name: str = "resource_similarity_search"
-    description: str = rsd_desc
+class AssetSearch(BaseTool):
+    name: str = "asset_search"
+    description: str = asset_search_desc
     # args_schema: Type[BaseModel] = SearchInput
 
     def _run(
@@ -245,22 +218,10 @@ class ResourceSimilaritySearch(BaseTool):
         raise NotImplementedError("custom_search does not support async")
 
 
-tools = [PageSimilaritySearch(), ResourceSimilaritySearch()]
+tools = [PageSearch(), AssetSearch()]
 
 
-
-prefix = """You are an intelligent interactive assistant that manages the AI on Demand (AIoD) website. It is an amalgamation consisting of multiple parts. For example, you can up/download pre-trained AI models, find/upload scientific publications and access/provide a number of relevant datasets.
-
-Your goal is to guide new users, that have not visited the website you manage, to the resources they want. 
-To guide users you will first have to gather some information on the user.
-1. You have to figure out what interests the user has that overlap with the content provided on the website
-2. You have to figure out what the user wants to get from the website
-
-You can ask the users questions as you see fit, but make sure to stay on topic and stop the questioning once you gathered sufficient amount of information to guide the user towards an initial goal or after asking 3 questions. If the user wants more help afterwards, make sure to provide it and keep asking questions where and when needed. 
-
-To help the user navigate the website, you can provide links to pages you deem relevant. Always provide links to the ressources you talk about. You have access to the following tools:"""
-
-prefix2 = """You are an intelligent interactive assistant that manages the AI on Demand (AIoD) website. 
+prefix = """You are an intelligent interactive assistant that manages the AI on Demand (AIoD) website. 
 The AIoD website consists of multiple parts. It has been created to facilitate collaboration, exchange and development of AI in Europe.
 For example, users can up/download pre-trained AI models, find/upload scientific publications and access/provide a number of datasets.
 It is your job to help the user navigate the website using the page_search or help the user find resources using the resource_search providing links to the websites/sources you are talking about.
@@ -274,15 +235,10 @@ suffix = """Begin!"
 Question: {input}
 {agent_scratchpad}"""
 
-suffix_v2 = """Begin!"
-
-{chat_history}
-Question: {input}
-{agent_scratchpad}"""
 
 prompt = ZeroShotAgent.create_prompt(
     tools,
-    prefix=prefix2,
+    prefix=prefix,
     suffix=suffix,
     input_variables=["input", "chat_history", "agent_scratchpad"],
 )
@@ -356,20 +312,28 @@ def repeatedly_invoke(agent, input_query, config):
 
 
 def clean_final_response(final_response_str: str, words: list) -> str:
-    # if "Observation: " in final_response_str and "Final Answer: " in final_response_str:
-    #    words.append("Observation: ")
-    lines = final_response_str.splitlines()
-    filtered_lines = [line for line in lines if not any(line.startswith(word) for word in words)]
-    return "\n".join(filtered_lines)
-
-
-def clean_final_response_v2(final_response_str: str, words: list) -> str:
     if "Final Answer:" in final_response_str:
         return final_response_str.split("Final Answer:")[-1]
     else:
         lines = final_response_str.splitlines()
         filtered_lines = [line for line in lines if not any(line.startswith(word) for word in words)]
     return "\n".join(filtered_lines)
+
+
+def moderate_input(input_query, conversation=None):
+    response = client.classifiers.moderate_chat(
+        model="mistral-moderation-latest",
+        inputs=[
+            {"role": "user", "content": input_query},
+            {"role": "assistant", "content": "...assistant response..."},
+        ],
+    )
+    respond = True
+    for category in response.results[0].categories.keys():
+        if response.results[0].categories[category]:
+            respond = False
+
+    return respond
 
 
 def agent_response(input_query, session_identifier, personalization=None):
@@ -398,52 +362,58 @@ def agent_response(input_query, session_identifier, personalization=None):
     )
 
     print("input query", input_query)
-    # print("session id", session_identifier)
-    # response = agent_with_chat_history.invoke({'input': input_query}, config={'configurable': {"session_id": session_identifier}})
-    response = repeatedly_invoke(agent_with_chat_history, input_query, config={'configurable': {"session_id": session_identifier}})
-    """try:
-        response = agent_with_chat_history.invoke({'input': input_query},
-                                                   config={'configurable': {"session_id": session_identifier}})
-    except Exception as e:
-        response = {"output": "Something went wrong, please try again."}
-        print(datetime.now(), e)"""
+    answer_question = moderate_input(input_query)
+    if answer_question:
+        response = repeatedly_invoke(agent_with_chat_history, input_query, config={'configurable': {"session_id": session_identifier}})
+        """try:
+            response = agent_with_chat_history.invoke({'input': input_query},
+                                                       config={'configurable': {"session_id": session_identifier}})
+        except Exception as e:
+            response = {"output": "Something went wrong, please try again."}
+            print(datetime.now(), e)"""
 
-    final_response = response['output']  # .split("Final Answer:")[-1]
+        final_response = response['output']  # .split("Final Answer:")[-1]
 
-    if final_response == 'Agent stopped due to max iterations.':
-        final_response = response['intermediate_steps']
+        if final_response == 'Agent stopped due to max iterations.':
+            final_response = response['intermediate_steps']
 
-    if isinstance(final_response, list):
+        if isinstance(final_response, list):
 
-        try:
-            new_input = final_response[-1][1]
+            try:
+                new_input = final_response[-1][1]
 
-            exception_prompt = ChatPromptTemplate.from_messages(
-                [
-                    (
-                        "system",
-                        "Answer the given question to the best of your ability using the provided context. Make sure to cite your sources.",
-                    ),
-                    MessagesPlaceholder(variable_name="history"),
-                    ("assistant", "Context: {context}"),
-                    ("human", "{input}"),
-                ]
-            )
-            runnable = exception_prompt | llm
-            with_message_history = RunnableWithMessageHistory(
-                runnable,
-                get_session_history,
-                input_messages_key="input",
-                history_messages_key="history",
-            )
-            final_response = with_message_history.invoke({"input": input_query, "context": new_input}, config={
-                'configurable': {"session_id": session_identifier}}).content
+                exception_prompt = ChatPromptTemplate.from_messages(
+                    [
+                        (
+                            "system",
+                            "Answer the given question to the best of your ability using the provided context. Make sure to cite your sources.",
+                        ),
+                        MessagesPlaceholder(variable_name="history"),
+                        ("assistant", "Context: {context}"),
+                        ("human", "{input}"),
+                    ]
+                )
+                runnable = exception_prompt | llm
+                with_message_history = RunnableWithMessageHistory(
+                    runnable,
+                    get_session_history,
+                    input_messages_key="input",
+                    history_messages_key="history",
+                )
+                final_response = with_message_history.invoke({"input": input_query, "context": new_input}, config={
+                    'configurable': {"session_id": session_identifier}}).content
 
-        except:
-            final_response = 'I encountered an error. Could you reformulate the question?' + str(final_response)
+            except:
+                final_response = 'I encountered an error. Could you reformulate the question?' + str(final_response)
 
-    final_r = clean_final_response_v2(final_response, ["Thought:", "Action:", "Action Input:", "Question:", "Observation:"])
+        final_r = clean_final_response(final_response, ["Thought:", "Action:", "Action Input:", "Question:", "Observation:"])
     # clean_r = final_r.replace("Observation: ", "").replace("Final Answer: ", "")
-
+    else:
+        final_r = "I cannot answer this question."
     return final_r
+
+
+# a = agent_response("how can I get in contact with the aiod community", -1)
+a = agent_response("find machine learning models for image classification", -1)
+print(a)
 
