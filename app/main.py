@@ -1,6 +1,6 @@
+from functools import partial
 import logging
 from contextlib import asynccontextmanager
-from functools import partial
 from threading import Thread
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -12,16 +12,12 @@ from app.config import settings
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
-from app.services.database import Database
-from app.services.threads import threads
-from app.services.threads.embedding_thread import (
-    compute_embeddings_for_aiod_assets_wrapper,
-)
-from app.services.threads.milvus_gc_thread import (
-    delete_embeddings_of_aiod_assets_wrapper,
-)
+from app.services.mongo import init_mongodb_client
+from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
+from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
+from app.services.threads.threads import run_async_in_thread, start_async_thread
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
-from app.services.threads.tinydb_gc_thread import tinydb_cleanup
+from app.services.threads.db_gc_thread import mongo_cleanup
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
@@ -30,9 +26,9 @@ SCHEDULER: BackgroundScheduler | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app_init()
+    await app_init()
     yield
-    app_shutdown()
+    await app_shutdown()
 
 
 app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
@@ -68,14 +64,14 @@ def setup_logger():
     )
 
 
-def app_init() -> None:
+async def app_init() -> None:
     setup_logger()
 
-    # Instantiate singletons before utilizing them in other threads
-    Database()
+    # Initialize mongoDB database
+    app.db = await init_mongodb_client()
 
     global QUERY_THREAD
-    QUERY_THREAD = threads.start_async_thread(search_thread)
+    QUERY_THREAD = start_async_thread(search_thread)
 
     global SCHEDULER
     SCHEDULER = BackgroundScheduler()
@@ -83,7 +79,7 @@ def app_init() -> None:
     # Recurring AIoD updates
     SCHEDULER.add_job(
         partial(
-            threads.run_async_in_thread,
+            run_async_in_thread,
             target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=False),
         ),
         # Warning: We should not set the interval of recurring updates to a smaller
@@ -94,16 +90,16 @@ def app_init() -> None:
     # Recurring Milvus embedding cleanup
     SCHEDULER.add_job(
         partial(
-            threads.run_async_in_thread,
+            run_async_in_thread,
             target_func=delete_embeddings_of_aiod_assets_wrapper,
         ),
         CronTrigger(day=settings.AIOD.DAY_IN_MONTH_FOR_EMB_CLEANING, hour=0, minute=0),
     )
-    # Recurring TinyDB cleanup
+    # Recurring MongoDB cleanup
     SCHEDULER.add_job(
         partial(
-            threads.run_async_in_thread,
-            target_func=tinydb_cleanup,
+            run_async_in_thread,
+            target_func=mongo_cleanup,
         ),
         CronTrigger(hour=0, minute=0),
     )
@@ -111,12 +107,12 @@ def app_init() -> None:
 
     # Immediate computation of AIoD asset embeddings
     global IMMEDIATE_EMB_THREAD
-    IMMEDIATE_EMB_THREAD = threads.start_async_thread(
+    IMMEDIATE_EMB_THREAD = start_async_thread(
         target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=True)
     )
 
 
-def app_shutdown() -> None:
+async def app_shutdown() -> None:
     if QUERY_QUEUE:
         QUERY_QUEUE.put((None, None))
     if QUERY_THREAD:
@@ -125,6 +121,9 @@ def app_shutdown() -> None:
         IMMEDIATE_EMB_THREAD.join(timeout=5)
     if SCHEDULER:
         SCHEDULER.shutdown(wait=False)
+
+    if getattr(app, "db", None) is not None:
+        app.db.client.close()
 
 
 if __name__ == "__main__":

@@ -182,10 +182,13 @@ cython_debug/
 nohup.out
 
 experiments/**/data/
+data/
+!app/data
 
 temp/
 tmp/
 db/
+
 
 .env.*
 !.env.*.sample

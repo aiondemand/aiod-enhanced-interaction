@@ -70,7 +70,6 @@ In this section, we describe the necessary steps to take to set up this reposito
 ## Environment variables and configs
 Regardless whether you want to further develop this codespace or deploy the service, you need to create `.env.app` file that can be created from the `.env.app.sample` template.
 In this file you find the following ENV variables:
-- `TINYDB_FILEPATH`: A filepath where to store a file-based noSQL database, specifically a JSON file, e.g., `./data/db.json` *(Is overwritten in docker-compose.yml)*
 - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not. *(Is overwritten in docker-compose.yml)*
 - `MODEL_LOADPATH`: String representing the name of the model to either download from HuggingFace or load from the files locally found on your machine. The string must either be:
     - `Alibaba-NLP/gte-large-en-v1.5`: To download the specific model from the HuggingFace

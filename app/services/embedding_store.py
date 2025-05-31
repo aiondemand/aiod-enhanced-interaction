@@ -250,12 +250,12 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
                 # Store data locally into JSON files as well if we wish to do so
                 # Used for storing cold start data in JSON format
-                if settings.AIOD.STORE_DATA_IN_JSON:
+                if settings.AIOD.STORE_DATA_IN_JSON and settings.AIOD.JSON_SAVEPATH is not None:
                     for i in range(len(data)):
                         data[i]["vector"] = data[i]["vector"].tolist()
 
                     full_json_filepath = (
-                        settings.TINYDB_FILEPATH.parent
+                        settings.AIOD.JSON_SAVEPATH
                         / f"jsons/{collection_name}"
                         / f"{str(uuid4())}.json"
                     )
