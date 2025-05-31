@@ -1,6 +1,6 @@
 from typing import Type, TypeVar
-from uuid import UUID
 
+from beanie import PydanticObjectId
 from fastapi import HTTPException
 
 from app.config import settings
@@ -19,7 +19,9 @@ async def submit_query(user_query: BaseUserQuery) -> str:
     return user_query.id
 
 
-async def get_query_results(query_id: UUID, query_type: Type[BaseUserQuery]) -> Response:
+async def get_query_results(
+    query_id: PydanticObjectId, query_type: Type[BaseUserQuery]
+) -> Response:
     user_query = await query_type.get(query_id)
     if user_query is None:
         raise HTTPException(

@@ -5,8 +5,8 @@ import os
 from queue import Queue
 from typing import Type
 
+from beanie import PydanticObjectId
 from beanie.odm.operators.find.logical import Or
-from beanie.odm.operators.find.comparison import Eq
 import numpy as np
 from app.config import settings
 from app.models.query import (
@@ -27,16 +27,13 @@ from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
 
 
-QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
+QUERY_QUEUE: Queue[tuple[PydanticObjectId | None, Type[BaseUserQuery] | None]] = Queue()
 
 
 async def fill_query_queue() -> None:
     async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
         return await typ.find(
-            Or(
-                Eq(typ.status, QueryStatus.QUEUED),
-                Eq(typ.status, QueryStatus.IN_PROGRESS),
-            )
+            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
         ).to_list()
 
     simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
@@ -75,7 +72,7 @@ async def search_thread() -> None:
         user_query = await fetch_user_query(query_id, query_type)
         if user_query is None:
             continue
-        logging.info(f"Searching relevant assets for query ID: {query_id}")
+        logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
 
         try:
             results = search_assets_wrapper(
@@ -99,11 +96,13 @@ async def search_thread() -> None:
             await user_query.replace()
             logging.error(e)
             logging.error(
-                f"The above error has been encountered in the query processing thread while processing query ID: {query_id}"
+                f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
             )
 
 
-async def fetch_user_query(query_id: str, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:
+async def fetch_user_query(
+    query_id: PydanticObjectId, query_type: Type[BaseUserQuery]
+) -> BaseUserQuery | None:
     if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
         return None
 

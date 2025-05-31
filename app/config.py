@@ -100,7 +100,7 @@ class AIoDConfig(BaseModel):
     def check_json_savepath(self) -> AIoDConfig:
         if self.STORE_DATA_IN_JSON and self.JSON_SAVEPATH is None:
             raise ValueError(
-                "You need to specify JSON_SAVEPATH env var in order to store JSON data"
+                "You need to specify 'JSON_SAVEPATH' env var if 'STORE_DATA_IN_JSON' env var is set to True."
             )
         return self
 
@@ -134,11 +134,6 @@ class AIoDConfig(BaseModel):
 class MongoConfig(BaseModel):
     URI: AnyUrl = Field(...)
     DBNAME: str = Field("aiod")
-
-    @field_validator("URI", mode="before")
-    @classmethod
-    def validate(cls, value):
-        return value
 
 
 class Settings(BaseSettings):

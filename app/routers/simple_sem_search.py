@@ -26,7 +26,9 @@ async def submit_simple_query(
 
 @router.get("/{query_id}/result")
 async def get_simple_query_result(
-    query_id: PydanticObjectId = Path(..., description="Valid query ID"),
+    query_id: PydanticObjectId = Path(
+        ..., description="Valid query ID", openapi_extra={"examples": {}}
+    ),
 ) -> SimpleUserQueryResponse:
     return await get_query_results(query_id, SimpleUserQuery)
 
