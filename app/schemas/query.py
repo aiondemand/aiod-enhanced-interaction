@@ -7,19 +7,29 @@ from pydantic import BaseModel
 
 from app.models.filter import Filter
 from app.schemas.enums import QueryStatus, SupportedAssetType, AssetTypeQueryParam
-from app.schemas.search_results import SearchResults
+from app.schemas.search_results import AssetResults
 
 
 class ReturnedAsset(BaseModel):
     asset_id: int
     asset_type: SupportedAssetType
+    asset: dict | None = None
 
     @staticmethod
-    def create_list_from_result_set(result_set: SearchResults) -> list[ReturnedAsset]:
+    def create_list_from_asset_results(
+        asset_results: AssetResults, return_entire_assets: bool = False
+    ) -> list[ReturnedAsset]:
         return [
-            ReturnedAsset(asset_id=id, asset_type=typ)
-            for id, typ in zip(result_set.asset_ids, result_set.asset_types)
+            ReturnedAsset(
+                asset_id=id, asset_type=typ, asset=asset if return_entire_assets else None
+            )
+            for id, typ, asset in zip(
+                asset_results.asset_ids, asset_results.asset_types, asset_results.assets
+            )
         ]
+
+
+# TODO create function for converting model to a schema class within BaseQueryResponse?
 
 
 class BaseUserQueryResponse(BaseModel, ABC):

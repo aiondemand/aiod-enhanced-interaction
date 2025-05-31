@@ -15,7 +15,7 @@ from app.schemas.query import (
     ReturnedAsset,
     SimpleUserQueryResponse,
 )
-from app.schemas.search_results import SearchResults
+from app.schemas.search_results import AssetResults
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
@@ -23,7 +23,7 @@ Response = TypeVar("Response", bound=BaseUserQueryResponse)
 class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
-    result_set: SearchResults | None = None
+    result_set: AssetResults | None = None
     expires_at: datetime | None = None
 
     def update_status(self, status: QueryStatus) -> None:
@@ -35,13 +35,17 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
                 minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES
             )
 
-    def _add_results_kwargs(self) -> dict:
+    def _add_results_kwargs(self, return_entire_assets: bool = False) -> dict:
         if self.status != QueryStatus.COMPLETED:
             return {}
-        elif self.result_set is not None:
-            return {"results": ReturnedAsset.create_list_from_result_set(self.result_set)}
+        elif self.result_set is None:
+            raise ValueError("The search results are not available for this completed query")
         else:
-            raise ValueError("SearchResults are not available for this completed query")
+            return {
+                "results": ReturnedAsset.create_list_from_asset_results(
+                    self.result_set, return_entire_assets
+                )
+            }
 
     @property
     def is_expired(self) -> bool:
@@ -52,7 +56,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response], ABC):
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
-    def map_to_response(self) -> Response:
+    def map_to_response(self, return_entire_assets: bool = False) -> Response:
         raise NotImplementedError
 
 
@@ -60,8 +64,10 @@ class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
     search_query: str
     asset_type: AssetTypeQueryParam
 
-    def map_to_response(self) -> SimpleUserQueryResponse:
-        return SimpleUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> SimpleUserQueryResponse:
+        return SimpleUserQueryResponse(
+            **self.model_dump(), **self._add_results_kwargs(return_entire_assets)
+        )
 
 
 class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
@@ -73,8 +79,10 @@ class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
     def invoke_llm_for_parsing(self) -> bool:
         return self.filters is None
 
-    def map_to_response(self) -> FilteredUserQueryResponse:
-        return FilteredUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> FilteredUserQueryResponse:
+        return FilteredUserQueryResponse(
+            **self.model_dump(), **self._add_results_kwargs(return_entire_assets)
+        )
 
 
 class RecommenderUserQuery(BaseUserQuery[RecommenderUserQueryResponse]):
@@ -82,5 +90,7 @@ class RecommenderUserQuery(BaseUserQuery[RecommenderUserQueryResponse]):
     asset_type: SupportedAssetType
     output_asset_type: AssetTypeQueryParam
 
-    def map_to_response(self) -> RecommenderUserQueryResponse:
-        return RecommenderUserQueryResponse(**self.model_dump(), **self._add_results_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> RecommenderUserQueryResponse:
+        return RecommenderUserQueryResponse(
+            **self.model_dump(), **self._add_results_kwargs(return_entire_assets)
+        )

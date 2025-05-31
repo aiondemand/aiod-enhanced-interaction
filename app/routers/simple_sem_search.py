@@ -35,8 +35,14 @@ async def submit_simple_query(
 async def get_simple_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
+    return_entire_assets: bool = Query(
+        default=False,
+        description="Whether to return the entire AIoD assets or only their corresponding IDs",
+    ),
 ) -> SimpleUserQueryResponse:
-    return await get_query_results(query_id, database, SimpleUserQuery)
+    return await get_query_results(
+        query_id, database, SimpleUserQuery, return_entire_assets=return_entire_assets
+    )
 
 
 async def _sumbit_simple_query(
@@ -46,6 +52,8 @@ async def _sumbit_simple_query(
     validate_asset_type_or_raise(asset_type, database, apply_filtering=False)
 
     user_query = SimpleUserQuery(
-        search_query=search_query.strip(), asset_type=asset_type, topk=topk
+        search_query=search_query.strip(),
+        asset_type=asset_type,
+        topk=topk,
     )
     return await submit_query(user_query, database)
