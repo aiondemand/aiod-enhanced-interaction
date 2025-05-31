@@ -16,8 +16,8 @@ from app.models.query import (
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import QueryStatus
 from app.schemas.params import VectorSearchParams
-from app.schemas.search_results import SearchResults
-from app.services.aiod import check_aiod_asset
+from app.schemas.search_results import AssetResults, SearchResults
+from app.services.aiod import get_aiod_asset
 from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
@@ -130,22 +130,25 @@ def search_assets_wrapper(
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
     num_search_retries: int = 5,
-) -> SearchResults:
+) -> AssetResults:
     search_params = prepare_search_parameters(model, llm_query_parser, embedding_store, user_query)
     if search_params is None:
-        return SearchResults()
+        return AssetResults()
 
     asset_ids_to_remove_from_db: list[int] = []
-    all_assets_to_return = SearchResults()
+    all_assets_to_return = AssetResults()
 
     for _ in range(num_search_retries):
-        new_results = embedding_store.retrieve_topk_asset_ids(search_params)
-        all_assets_to_return = all_assets_to_return + validate_assets(
-            new_results, search_params, asset_ids_to_remove_from_db
+        new_search_results = embedding_store.retrieve_topk_asset_ids(search_params)
+        new_assets = validate_assets(
+            new_search_results,
+            search_params,
+            asset_ids_to_remove_from_db,
         )
+        all_assets_to_return = all_assets_to_return + new_assets
 
         search_params.topk = user_query.topk - len(all_assets_to_return)
-        if search_params.topk == 0 or len(new_results) == 0:
+        if search_params.topk == 0 or len(new_search_results) == 0:
             break
 
     # delete invalid assets from Milvus => lazy delete
@@ -218,24 +221,28 @@ def validate_assets(
     results: SearchResults,
     search_params: VectorSearchParams,
     asset_ids_to_remove_from_db: list[int],
-) -> SearchResults:
+) -> AssetResults:
     if len(results) == 0:
-        return results
+        return AssetResults()
 
-    # check what assets are still valid
-    exists_mask = np.array(
-        [
-            check_aiod_asset(
-                asset_id,
-                search_params.asset_type,
-                sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
-            )
-            for asset_id in results.asset_ids
-        ]
+    # retrieve assets from AIoD Catalogue
+    assets = [
+        get_aiod_asset(
+            asset_id,
+            search_params.asset_type,
+            sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
+        )
+        for asset_id in results.asset_ids
+    ]
+    exists_mask = np.array([asset is not None for asset in assets])
+    idx_to_keep = np.where(exists_mask)[0]
+    ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
+
+    search_params.asset_ids_to_exclude.extend(results.asset_ids)
+    asset_ids_to_remove_from_db.extend(ids_to_del)
+
+    return AssetResults(
+        asset_ids=[results.asset_ids[idx] for idx in idx_to_keep],
+        distances=[results.distances[idx] for idx in idx_to_keep],
+        assets=[assets[idx] for idx in idx_to_keep],
     )
-
-    asset_ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
-    search_params.asset_ids_to_exclude.extend(asset_ids_to_del)
-    asset_ids_to_remove_from_db.extend(asset_ids_to_del)
-
-    return results.filter_out_assets_by_id(asset_ids_to_del)

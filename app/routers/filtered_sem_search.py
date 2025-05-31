@@ -61,8 +61,14 @@ async def submit_filtered_query(
 async def get_filtered_query_result(
     database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
+    return_entire_assets: bool = Query(
+        default=False,
+        description="Whether to return the entire AIoD assets or only their corresponding IDs",
+    ),
 ) -> FilteredUserQueryResponse:
-    return await get_query_results(query_id, database, FilteredUserQuery)
+    return await get_query_results(
+        query_id, database, FilteredUserQuery, return_entire_assets=return_entire_assets
+    )
 
 
 @router.get("/schemas/get_fields")
