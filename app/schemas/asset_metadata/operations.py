@@ -7,23 +7,23 @@ from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.dataset_metadata import (
     HuggingFaceDatasetMetadataTemplate,
 )
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from pydantic import BaseModel, field_validator
 from pydantic._internal._decorators import Decorator, FieldValidatorDecoratorInfo
 from pydantic.fields import FieldInfo
 
 
 class SchemaOperations:
-    SCHEMA_MAPPING: dict[AssetType, Type[BaseMetadataTemplate]] = {
-        AssetType.DATASETS: HuggingFaceDatasetMetadataTemplate
+    SCHEMA_MAPPING: dict[SupportedAssetType, Type[BaseMetadataTemplate]] = {
+        SupportedAssetType.DATASETS: HuggingFaceDatasetMetadataTemplate
     }
 
     @classmethod
-    def get_asset_schema(cls, asset_type: AssetType) -> Type[BaseMetadataTemplate]:
+    def get_asset_schema(cls, asset_type: SupportedAssetType) -> Type[BaseMetadataTemplate]:
         return cls.SCHEMA_MAPPING[asset_type]
 
     @classmethod
-    def get_supported_asset_types(cls) -> list[AssetType]:
+    def get_supported_asset_types(cls) -> list[SupportedAssetType]:
         return list(cls.SCHEMA_MAPPING.keys())
 
     @classmethod

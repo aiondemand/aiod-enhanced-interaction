@@ -1,17 +1,16 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 
-from app.config import settings
 from app.models.query import RecommenderUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,
-    validate_query_endpoint_arguments_or_raise,
+    validate_asset_type_or_raise,
 )
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam
 from app.schemas.query import RecommenderUserQueryResponse
 from app.services.database import Database
 
@@ -21,9 +20,13 @@ router = APIRouter()
 @router.post("")
 async def submit_recommender_query(
     database: Annotated[Database, Depends(Database)],
-    asset_id: int = Query(..., description="Asset ID"),
-    asset_type: AssetType = Query(..., description="Asset type"),
-    output_asset_type: AssetType = Query(..., description="Output Asset type"),
+    asset_id: int = Query(..., ge=0, description="Asset ID"),
+    asset_type: SupportedAssetType = Query(
+        ..., description="Asset type of an asset to find recommendations to"
+    ),
+    output_asset_type: AssetTypeQueryParam = Query(
+        ..., description="Output asset type of assets to return"
+    ),
     topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
 ) -> RedirectResponse:
     query_id = await _submit_recommender_query(
@@ -53,30 +56,12 @@ async def get_recommender_result(
 async def _submit_recommender_query(
     database: Database,
     asset_id: int,
-    asset_type: AssetType,
-    output_asset_type: AssetType,
+    asset_type: SupportedAssetType,
+    output_asset_type: AssetTypeQueryParam,
     topk: int,
 ) -> str:
-    validate_query_endpoint_arguments_or_raise(
-        query=asset_id,
-        asset_type=asset_type,
-        database=database,
-        apply_filtering=False,
-    )
-
-    # TODO this should be revised too
-    # validation output_asset_type
-    if output_asset_type not in settings.AIOD.ASSET_TYPES:
-        raise HTTPException(
-            status_code=404,
-            detail=f"We currently do not support asset type '{output_asset_type.value}'",
-        )
-    asset_col = database.get_first_asset_collection_by_type(output_asset_type)
-    if asset_col is None:
-        raise HTTPException(
-            status_code=501,
-            detail=f"The database for the asset type '{output_asset_type.value}' has yet to be built. Try again later...",
-        )
+    validate_asset_type_or_raise(asset_type, database, apply_filtering=False)
+    validate_asset_type_or_raise(output_asset_type, database, apply_filtering=False)
 
     user_query = RecommenderUserQuery(
         asset_id=asset_id,
@@ -84,5 +69,4 @@ async def _submit_recommender_query(
         output_asset_type=output_asset_type,
         topk=topk,
     )
-
     return await submit_query(user_query, database)

@@ -13,7 +13,7 @@ from app.config import settings
 from app.models.asset_collection import AssetCollection
 from app.models.db_entity import DatabaseEntity
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
-from app.schemas.enums import AssetType, QueryStatus
+from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 
 
 class NoneSerializer(Serializer):
@@ -38,14 +38,24 @@ class QueryStatusSerializer(Serializer):
         return QueryStatus(s)
 
 
-class AssetTypeSerializer(Serializer):
-    OBJ_CLASS = AssetType
+class SupportedAssetTypeSerializer(Serializer):
+    OBJ_CLASS = SupportedAssetType
 
     def encode(self, obj) -> str:
         return obj.value
 
-    def decode(self, s) -> AssetType:
-        return AssetType(s)
+    def decode(self, s) -> SupportedAssetType:
+        return SupportedAssetType(s)
+
+
+class AssetTypeQueryParamSerializer(Serializer):
+    OBJ_CLASS = AssetTypeQueryParam
+
+    def encode(self, obj) -> str:
+        return obj.value
+
+    def decode(self, s) -> AssetTypeQueryParam:
+        return AssetTypeQueryParam(s)
 
 
 DbEntity = TypeVar("DbEntity", bound=DatabaseEntity)
@@ -65,7 +75,10 @@ class Database:
         serialization.register_serializer(DateTimeSerializer(), "TinyDate")
         serialization.register_serializer(NoneSerializer(), "TinyNone")
         serialization.register_serializer(QueryStatusSerializer(), "TinyQueryStatus")
-        serialization.register_serializer(AssetTypeSerializer(), "TinyAssetType")
+        serialization.register_serializer(SupportedAssetTypeSerializer(), "TinyAssetType")
+        serialization.register_serializer(
+            AssetTypeQueryParamSerializer(), "TinyAssetTypeQueryParam"
+        )
 
         settings.TINYDB_FILEPATH.parent.mkdir(parents=True, exist_ok=True)
         self.db = TinyDB(settings.TINYDB_FILEPATH, storage=serialization)
@@ -106,7 +119,9 @@ class Database:
         with self.db_lock:
             return self.collections[type].search(type, *args, **kwargs)
 
-    def get_first_asset_collection_by_type(self, asset_type: AssetType) -> AssetCollection | None:
+    def get_first_asset_collection_by_type(
+        self, asset_type: SupportedAssetType
+    ) -> AssetCollection | None:
         rs = self.search(AssetCollection, Query().aiod_asset_type == asset_type)
         if len(rs) == 0:
             return None
