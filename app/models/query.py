@@ -9,24 +9,25 @@ from beanie import Document
 from app.config import settings
 from app.models.db_entity import BaseDatabaseEntity
 from app.models.filter import Filter
-from app.schemas.enums import AssetType, QueryStatus
+from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
     FilteredUserQueryResponse,
     RecommenderUserQueryResponse,
+    ReturnedAsset,
     SimpleUserQueryResponse,
 )
-from app.schemas.search_results import SearchResults
 from app.services.helper import utc_now
+from app.schemas.search_results import AssetResults
+
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
 class BaseUserQuery(Document, BaseDatabaseEntity, Generic[Response], ABC):
-    asset_type: AssetType
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
-    result_set: SearchResults | None = None
+    result_set: AssetResults | None = None
     expires_at: datetime | None = None
 
     def update_status(self, status: QueryStatus) -> None:
@@ -39,24 +40,25 @@ class BaseUserQuery(Document, BaseDatabaseEntity, Generic[Response], ABC):
                 + timedelta(minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES)
             ).replace(tzinfo=None)
 
-    def prepare_response_kwargs(self) -> dict:
+    def prepare_response_kwargs(self, return_entire_assets: bool = False) -> dict:
         kwargs = self.model_dump()
         if self.expires_at is not None:
             kwargs["expires_at"] = self.expires_at.replace(tzinfo=timezone.utc)
 
-        kwargs.update(self._add_results_kwargs())
-        return kwargs
-
-    def _add_results_kwargs(self) -> dict:
+        # Add results to response model
         if self.status != QueryStatus.COMPLETED:
-            return {}
-        elif self.result_set is not None:
-            return {
-                "returned_asset_count": len(self.result_set),
-                "result_asset_ids": self.result_set.asset_ids,
-            }
+            return kwargs
+        elif self.result_set is None:
+            raise ValueError("The search results are not available for this completed query")
         else:
-            raise ValueError("SearchResults are not available for this completed query")
+            kwargs.update(
+                {
+                    "results": ReturnedAsset.create_list_from_asset_results(
+                        self.result_set, return_entire_assets
+                    )
+                }
+            )
+            return kwargs
 
     @property
     def is_expired(self) -> bool:
@@ -67,22 +69,24 @@ class BaseUserQuery(Document, BaseDatabaseEntity, Generic[Response], ABC):
         return (query.status != QueryStatus.IN_PROGRESS, query.updated_at.timestamp())
 
     @abstractmethod
-    def map_to_response(self) -> Response:
+    def map_to_response(self, return_entire_assets: bool = False) -> Response:
         raise NotImplementedError
 
 
 class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse]):
     search_query: str
+    asset_type: AssetTypeQueryParam
 
     class Settings:
         name = "simpleUserQueries"
 
-    def map_to_response(self) -> SimpleUserQueryResponse:
-        return SimpleUserQueryResponse(**self.prepare_response_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> SimpleUserQueryResponse:
+        return SimpleUserQueryResponse(**self.prepare_response_kwargs(return_entire_assets))
 
 
 class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
     search_query: str
+    asset_type: SupportedAssetType
     filters: list[Filter] | None = None
 
     class Settings:
@@ -92,16 +96,17 @@ class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse]):
     def invoke_llm_for_parsing(self) -> bool:
         return self.filters is None
 
-    def map_to_response(self) -> FilteredUserQueryResponse:
-        return FilteredUserQueryResponse(**self.prepare_response_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> FilteredUserQueryResponse:
+        return FilteredUserQueryResponse(**self.prepare_response_kwargs(return_entire_assets))
 
 
 class RecommenderUserQuery(BaseUserQuery[RecommenderUserQueryResponse]):
     asset_id: int
-    output_asset_type: AssetType
+    asset_type: SupportedAssetType
+    output_asset_type: AssetTypeQueryParam
 
     class Settings:
         name = "recommenderUserQueries"
 
-    def map_to_response(self) -> RecommenderUserQueryResponse:
-        return RecommenderUserQueryResponse(**self.prepare_response_kwargs())
+    def map_to_response(self, return_entire_assets: bool = False) -> RecommenderUserQueryResponse:
+        return RecommenderUserQueryResponse(**self.prepare_response_kwargs(return_entire_assets))

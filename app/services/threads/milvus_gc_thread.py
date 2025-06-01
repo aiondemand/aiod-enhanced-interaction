@@ -5,7 +5,7 @@ from datetime import datetime
 
 import numpy as np
 from app.config import settings
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import check_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
@@ -59,7 +59,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
 
 
 def delete_asset_embeddings(
-    embedding_store: EmbeddingStore, asset_type: AssetType, to_time: datetime
+    embedding_store: EmbeddingStore, asset_type: SupportedAssetType, to_time: datetime
 ) -> None:
     all_aiod_asset_ids: list[int] = []
     url_params = RequestParams(

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 
 
 class RequestParams(BaseModel):
@@ -27,7 +27,7 @@ class RequestParams(BaseModel):
 class VectorSearchParams(BaseModel, ABC):
     data: list[list[float]]
     topk: int
-    asset_type: AssetType
+    asset_type: SupportedAssetType
 
     # filter related attributes
     metadata_filter: str = ""

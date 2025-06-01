@@ -7,9 +7,10 @@ from beanie import Document
 
 
 from app.config import settings
+
 from app.models.db_entity import BaseDatabaseEntity
-from app.schemas.enums import AssetType
 from app.services.helper import utc_now
+from app.schemas.enums import SupportedAssetType
 
 
 class CollectionUpdate(BaseDatabaseEntity, ABC):
@@ -45,7 +46,7 @@ class RecurringCollectionUpdate(CollectionUpdate):
 
 
 class AssetCollection(Document, BaseDatabaseEntity):
-    aiod_asset_type: AssetType
+    aiod_asset_type: SupportedAssetType
     setup_update: SetupCollectionUpdate = SetupCollectionUpdate()
     recurring_updates: list[RecurringCollectionUpdate] = []
 
@@ -86,7 +87,9 @@ class AssetCollection(Document, BaseDatabaseEntity):
         self.updated_at = utc_now()
 
     @staticmethod
-    async def get_first_object_by_asset_type(asset_type: AssetType) -> AssetCollection | None:
+    async def get_first_object_by_asset_type(
+        asset_type: SupportedAssetType,
+    ) -> AssetCollection | None:
         return await AssetCollection.find(
             AssetCollection.aiod_asset_type == asset_type
         ).first_or_none()

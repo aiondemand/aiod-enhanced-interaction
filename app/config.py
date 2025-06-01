@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 
 
 class Validators:
@@ -74,9 +74,9 @@ class AIoDConfig(BaseModel):
     JSON_SAVEPATH: Path | None = Field(None)
 
     @classmethod
-    def convert_csv_to_asset_types(cls, value: str) -> list[AssetType]:
+    def convert_csv_to_asset_types(cls, value: str) -> list[SupportedAssetType]:
         types = value.lower().split(",")
-        return [AssetType(typ.strip()) for typ in types if len(typ.strip()) > 0]
+        return [SupportedAssetType(typ.strip()) for typ in types if len(typ.strip()) > 0]
 
     @field_validator(
         "COMMA_SEPARATED_ASSET_TYPES",
@@ -109,11 +109,11 @@ class AIoDConfig(BaseModel):
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
 
     @property
-    def ASSET_TYPES(self) -> list[AssetType]:
+    def ASSET_TYPES(self) -> list[SupportedAssetType]:
         return self.convert_csv_to_asset_types(self.COMMA_SEPARATED_ASSET_TYPES)
 
     @property
-    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[AssetType]:
+    def ASSET_TYPES_FOR_METADATA_EXTRACTION(self) -> list[SupportedAssetType]:
         types = self.convert_csv_to_asset_types(
             self.COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION
         )
@@ -124,10 +124,10 @@ class AIoDConfig(BaseModel):
             )
         return types
 
-    def get_assets_url(self, asset_type: AssetType) -> str:
+    def get_assets_url(self, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/v1")
 
-    def get_asset_by_id_url(self, asset_id: int, asset_type: AssetType) -> str:
+    def get_asset_by_id_url(self, asset_id: int, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/v1/{asset_id}")
 
 
@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
     CONNECTION_NUM_RETRIES: int = Field(5, gt=0)
     CONNECTION_SLEEP_TIME: int = Field(30, gt=0)
-    QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(60, gt=0)
+    QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(10, gt=0)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
