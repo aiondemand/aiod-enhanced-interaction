@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal, Type, TypeAlias
+from functools import partial
+from typing import Annotated, Any, Callable, Literal, Type, TypeAlias
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -41,6 +42,10 @@ class Filter(BaseModel):
         return v.upper()
 
     @classmethod
+    def _filter_validator_wrapper(cls, value: Any, func: Callable) -> Any:
+        return func(value)
+
+    @classmethod
     def create_field_specific_filter_type(
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
@@ -75,8 +80,8 @@ class Filter(BaseModel):
         )
         filter_class_dict.update(
             {
-                func_name: field_validator(field_name, mode=decor.info.mode)(
-                    getattr(Filter, func_name)
+                f"{func_name}_wrapper": field_validator(field_name, mode=decor.info.mode)(
+                    partial(cls._filter_validator_wrapper, func=getattr(Filter, func_name))
                 )
                 for (func_name, decor), field_name in zip(
                     field_validators + logical_operator_validators, field_names

@@ -29,9 +29,6 @@ class ReturnedAsset(BaseModel):
         ]
 
 
-# TODO create function for converting model to a schema class within BaseQueryResponse?
-
-
 class BaseUserQueryResponse(BaseModel, ABC):
     status: QueryStatus = QueryStatus.QUEUED
     topk: int

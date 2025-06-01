@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
     CONNECTION_NUM_RETRIES: int = Field(5, gt=0)
     CONNECTION_SLEEP_TIME: int = Field(30, gt=0)
-    QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(60, gt=0)
+    QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(10, gt=0)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
