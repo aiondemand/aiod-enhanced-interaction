@@ -1,12 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend
+  name: backend-service
 spec:
   selector:
-    app: backend
+    app: backend-service
   ports:
     - protocol: TCP
-      port: 80        # Exposed port
-      targetPort: 80  # Port on the container
-  type: ClusterIP     # Change to LoadBa
+      port: 80
+      targetPort: 80
+      NodePort: 31111
+  type: NodePort

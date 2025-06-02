@@ -1,15 +1,17 @@
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: example-cronjob
-spec:
-  schedule: "0 2 * * *"
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          containers:
-          - name: cronjob-runner
-            image: your-registry/your-cronjob-image:latest
-            command: ["python", "scripts/daily_task.py"]
-          restartPolicy: OnFailure
+# TODO Needed later once we have multiple backend pods within the deployment
+
+# apiVersion: batch/v1
+# kind: CronJob
+# metadata:
+#   name: example-cronjob
+# spec:
+#   schedule: "0 2 * * *"
+#   jobTemplate:
+#     spec:
+#       template:
+#         spec:
+#           containers:
+#           - name: cronjob-runner
+#             image: your-registry/your-cronjob-image:latest
+#             command: ["python", "scripts/daily_task.py"]
+#           restartPolicy: OnFailure

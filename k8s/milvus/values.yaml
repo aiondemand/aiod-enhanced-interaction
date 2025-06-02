@@ -1,0 +1,106 @@
+# Values to overwrite Milvus Helm chart values.yaml file with
+
+cluster:
+  enabled: false
+
+standalone:
+
+  persistence:
+    enabled: true
+    persistentVolumeClaim:
+      existingClaim: ""
+      ## Milvus Persistent Volume Storage Class
+      ## If defined, storageClassName: <storageClass>
+      ## If set to "-", storageClassName: "", which disables dynamic provisioning
+      ## If undefined (the default) or set to null, no storageClassName spec is
+      ##   set, choosing the default provisioner.
+      ##
+      storageClass:
+      accessModes: ReadWriteOnce
+      size: 50Gi
+      subPath: ""
+
+minio:
+  mode: standalone
+  accessKey: ${MINIO_ACCESS_KEY}
+  secretKey: ${MINIO_SECRET_KEY}
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 500Gi
+
+etcd:
+  replicaCount: 1
+  extraEnvVars:
+    - name: ETCD_SNAPSHOT_COUNT
+      value: "50000"
+    - name: ETCD_QUOTA_BACKEND_BYTES
+      value: "4294967296"
+  persistence:
+    enabled: true
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+pulsarv3:
+  enabled: false
+
+service:
+  type: NodePort
+  port: 19530
+  portName: milvus
+  nodePort: 30000
+
+log:
+  level: "warn"
+  persistence:
+    enabled: true
+    persistentVolumeClaim:
+      existingClaim: ""
+      ## Milvus Logs Persistent Volume Storage Class
+      ## If defined, storageClassName: <storageClass>
+      ## If set to "-", storageClassName: "", which disables dynamic provisioning
+      ## If undefined (the default) or set to null, no storageClassName spec is
+      ##   set, choosing the default provisioner.
+      ## ReadWriteMany access mode required for milvus cluster.
+      ##
+      storageClass:
+      accessModes: ReadWriteOnce
+      size: 30Gi
+      subPath: ""
+
+
+
+# TODO perhaps we may use the whole milvus.yaml file instead
+##
+## If set, the whole config will be mounted from this custom ConfigMap.
+## The ConfigMap should have a key named `milvus.yaml` which contains the full Milvus config.
+## extraConfigFiles will be ignored if this variable is set.
+##
+customConfigMap: ""
+
+# Extra configs for milvus.yaml
+# If set, this config will merge into milvus.yaml
+# Please follow the config structure in the milvus.yaml
+# at https://github.com/milvus-io/milvus/blob/master/configs/milvus.yaml
+# Note: this config will be the top priority which will override the config
+# in the image and helm chart.
+extraConfigFiles:
+  user.yaml: |+
+    etcd:
+      log:
+        level: warn
+    minio:
+      logLevel: warn
+      accessKeyID: ${MINIO_ACCESS_KEY}
+      secretAccessKey: ${MINIO_SECRET_KEY}
+    log:
+      level: warn
+    queryNode:
+      cache:
+        warmup: async
+    common:
+      security:
+        authorizationEnabled: true

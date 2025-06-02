@@ -1,40 +1,50 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend
+  name: backend-deployment
 spec:
-  replicas: 1
+  replicas: 1 # For now our application is not scalable...
   selector:
     matchLabels:
-      app: backend
+      app: backend-pod
   template:
     metadata:
       labels:
-        app: backend
+        app: backend-pod
     spec:
       containers:
-      - name: backend
-        image: your-registry/your-backend-image:latest
-        command: ["/bin/sh", "-c", "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"]
-        ports:
-        - containerPort: 80
-        envFrom:
-        - configMapRef:
-            name: backend-config
-        - secretRef:
-            name: backend-secrets
-        volumeMounts:
-        - name: tinydb
-          mountPath: /data
-        - name: model
-          mountPath: /model
-        resources:
-          limits:
-            nvidia.com/gpu: 1
-      volumes:
-      - name: tinydb
-        persistentVolumeClaim:
-          claimName: tinydb-pvc
-      - name: model
-        persistentVolumeClaim:
-          claimName: model-pvc
+        - name: backend
+          image: your-registry/your-backend-image:latest #TODO build image beforehand
+          command: ["/bin/sh", "-c", "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"] # TODO questionable
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: backend-configmap
+            # TODO specify secrets (split env vars to config and secrets)
+          env:
+            - name: TINYDB_FILEPATH
+              value: /data/tinydb.json
+            - name: MILVUS__URI
+              value: http://milvus-service:19530 #TODO
+            - name: OLLAMA__URI
+              value: http://ollama-service:11434 #
+          volumeMounts:
+            - name: tinydb
+              mountPath: /data
+            - name: model
+              mountPath: /model
+          # TODO we shall intentionally avoid running deployment with a GPU for now
+          # resources:
+          #   limits:
+          #     nvidia.com/gpu: 1
+          volumes:
+            - name: tinydb
+              persistentVolumeClaim:
+                claimName: backend-tinydb-pvc
+            - name: model
+              persistentVolumeClaim:
+                claimName: backend-model-pvc
+
+
+# TODO healthcheck (readiness, liveness probes)

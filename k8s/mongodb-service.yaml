@@ -1,11 +1,13 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: mongodb
-spec:
-  ports:
-  - port: 27017
-    targetPort: 27017
-  selector:
-    app: mongodb
-  clusterIP: None  # Required for StatefulSets
+# TODO currently we dont have mongodb within the tech stack
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: mongodb
+# spec:
+#   ports:
+#   - port: 27017
+#     targetPort: 27017
+#   selector:
+#     app: mongodb
+#   clusterIP: None  # Required for StatefulSets

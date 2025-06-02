@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ollama
+  name: ollama-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ollama
+      app: ollama-pod
   template:
     metadata:
       labels:
-        app: ollama
+        app: ollama-pod
     spec:
       containers:
       - name: ollama
@@ -20,10 +20,13 @@ spec:
         volumeMounts:
         - name: ollama-data
           mountPath: /root/.ollama
-        resources:
-          limits:
-            nvidia.com/gpu: 1
+        # TODO no gpu for now
+        # resources:
+        #   limits:
+        #     nvidia.com/gpu: 1
       volumes:
       - name: ollama-data
         persistentVolumeClaim:
           claimName: ollama-pvc
+
+# TODO healthcheck (readiness, liveness probes)
