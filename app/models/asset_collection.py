@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.models.db_entity import DatabaseEntity
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 
 
 class CollectionUpdate(DatabaseEntity, ABC):
@@ -40,7 +40,7 @@ class RecurringCollectionUpdate(CollectionUpdate):
 
 
 class AssetCollection(DatabaseEntity):
-    aiod_asset_type: AssetType
+    aiod_asset_type: SupportedAssetType
     setup_update: SetupCollectionUpdate = SetupCollectionUpdate()
     recurring_updates: list[RecurringCollectionUpdate] = []
 
