@@ -132,8 +132,15 @@ class AIoDConfig(BaseModel):
 
 
 class MongoConfig(BaseModel):
-    URI: AnyUrl = Field(...)
+    HOST: str = Field(...)
+    PORT: int = Field(...)
     DBNAME: str = Field("aiod")
+    USER: str = Field(...)
+    PASSWORD: str = Field(...)
+
+    @property
+    def connection_string(self) -> str:
+        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/"
 
 
 class Settings(BaseSettings):

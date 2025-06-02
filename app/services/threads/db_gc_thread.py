@@ -21,11 +21,9 @@ async def mongo_cleanup() -> None:
             )
 
             # delete expired queries
-            logging.info(f"\tDeleting expired queries")
             await delete_expired_queries(current_time)
 
             # delete empty asset collections
-            logging.info(f"\tDeleting empty asset collections")
             await delete_empty_asset_collections()
 
             logging.info(

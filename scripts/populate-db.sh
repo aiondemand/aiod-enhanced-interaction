@@ -16,17 +16,13 @@ if [ -z "$INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH" ]; then
   exit 1
 fi
 
-# Check if INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH is set
-if [ -z "$INITIAL_TINYDB_JSON_FILEPATH" ]; then
-  echo "INITIAL_TINYDB_JSON_FILEPATH is not set"
-  exit 1
-fi
-
 # Check if DATA_DIRPATH is set
 if [ -z "$DATA_DIRPATH" ]; then
   echo "DATA_DIRPATH is not set"
   exit 1
 fi
+
+# TODO change the logic to accommodate the new database technology, MongoDB
 
 # Create path under the current user so that it won't be created automatically by Milvus under root
 mkdir -p ${DATA_DIRPATH}/volumes

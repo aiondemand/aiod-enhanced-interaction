@@ -5,8 +5,11 @@ from app.models.asset_collection import AssetCollection
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 
 
+# TODO wrap mongoDB calls with resilience logic (perform operation for multiple attempts if needed...)
+
+
 async def init_mongodb_client() -> AsyncIOMotorClient:
-    db = AsyncIOMotorClient(str(settings.MONGODB.URI), uuidRepresentation="standard")[
+    db = AsyncIOMotorClient(settings.MONGODB.connection_string, uuidRepresentation="standard")[
         settings.MONGODB.DBNAME
     ]
     # TODO multiprocessing_mode doesn't make the Database connection thread-safe
