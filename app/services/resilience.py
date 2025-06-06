@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from functools import wraps
-from typing import Any, Callable, Type
+from typing import Any, Callable, Type, TypeVar
 
 from tenacity import (
     before_sleep_log,
@@ -59,6 +59,9 @@ class MongoUnavailableException(LocalServiceUnavailableException):
 
     def __init__(self, last_exception: Exception, service_name: str = "[MongoDB Database]") -> None:
         super().__init__(last_exception, service_name)
+
+
+T = TypeVar("T")
 
 
 def retry_loop(

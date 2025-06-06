@@ -3,8 +3,6 @@ from __future__ import annotations
 from abc import ABC
 from datetime import datetime
 
-from beanie import Document
-
 
 from app.config import settings
 
@@ -45,7 +43,7 @@ class RecurringCollectionUpdate(CollectionUpdate):
         super().update(embeddings_added)
 
 
-class AssetCollection(Document, BaseDatabaseEntity):
+class AssetCollection(MongoDocument, BaseDatabaseEntity):
     aiod_asset_type: SupportedAssetType
     setup_update: SetupCollectionUpdate = SetupCollectionUpdate()
     recurring_updates: list[RecurringCollectionUpdate] = []
@@ -90,6 +88,6 @@ class AssetCollection(Document, BaseDatabaseEntity):
     async def get_first_object_by_asset_type(
         asset_type: SupportedAssetType,
     ) -> AssetCollection | None:
-        return await MongoDocument.find_first_or_none(
-            AssetCollection, AssetCollection.aiod_asset_type == asset_type
+        return await AssetCollection.find_first_doc_or_none(
+            AssetCollection.aiod_asset_type == asset_type
         )

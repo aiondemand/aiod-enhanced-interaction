@@ -4,11 +4,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from typing import Generic, TypeVar
 
-from beanie import Document
 
 from app.config import settings
 from app.models.filter import Filter
-from app.models.mongo import BaseDatabaseEntity
+from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
@@ -24,7 +23,7 @@ from app.schemas.search_results import AssetResults
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
-class BaseUserQuery(Document, BaseDatabaseEntity, Generic[Response], ABC):
+class BaseUserQuery(MongoDocument, BaseDatabaseEntity, Generic[Response], ABC):
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
     result_set: AssetResults | None = None

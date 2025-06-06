@@ -8,14 +8,13 @@ from app.models.asset_collection import AssetCollection
 from app.models.query import BaseUserQuery
 from app.schemas.enums import BaseAssetType
 from app.schemas.query import BaseUserQueryResponse
-from app.models.mongo import MongoDocument
 from app.services.threads.search_thread import QUERY_QUEUE
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
 async def submit_query(user_query: BaseUserQuery) -> str:
-    await MongoDocument.create(user_query)
+    await user_query.create_doc()
     QUERY_QUEUE.put((user_query.id, type(user_query)))
     return user_query.id
 
