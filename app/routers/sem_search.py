@@ -1,31 +1,30 @@
 from typing import Type, TypeVar
-from uuid import UUID
 
+from beanie import PydanticObjectId
 from fastapi import HTTPException
 
 from app.config import settings
+from app.models.asset_collection import AssetCollection
 from app.models.query import BaseUserQuery
 from app.schemas.enums import BaseAssetType
 from app.schemas.query import BaseUserQueryResponse
-from app.services.database import Database
 from app.services.threads.search_thread import QUERY_QUEUE
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
-async def submit_query(user_query: BaseUserQuery, database: Database) -> str:
-    database.insert(user_query)
+async def submit_query(user_query: BaseUserQuery) -> str:
+    await user_query.create_doc()
     QUERY_QUEUE.put((user_query.id, type(user_query)))
     return user_query.id
 
 
 async def get_query_results(
-    query_id: UUID,
-    database: Database,
+    query_id: PydanticObjectId,
     query_type: Type[BaseUserQuery],
     return_entire_assets: bool = False,
 ) -> Response:
-    user_query = database.find_by_id(query_type, id=str(query_id))
+    user_query = await query_type.get(query_id)
     if user_query is None:
         raise HTTPException(
             status_code=404, detail="Requested query doesn't exist or has been deleted."
@@ -43,9 +42,7 @@ def validate_query_or_raise(query: str) -> None:
         )
 
 
-def validate_asset_type_or_raise(
-    asset_type: BaseAssetType, database: Database, apply_filtering: bool
-) -> None:
+async def validate_asset_type_or_raise(asset_type: BaseAssetType, apply_filtering: bool) -> None:
     valid_asset_types = (
         settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         if apply_filtering
@@ -65,7 +62,9 @@ def validate_asset_type_or_raise(
                 status_code=404,
                 detail=f"We currently do not support asset type '{supp_asset_type.value}'",
             )
-        if database.get_first_asset_collection_by_type(supp_asset_type) is None:
+
+        asset_col = await AssetCollection.get_first_object_by_asset_type(supp_asset_type)
+        if asset_col is None:
             raise HTTPException(
                 status_code=501,
                 detail=f"The database for the asset type '{supp_asset_type.value}' has yet to be built. Try again later...",

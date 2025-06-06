@@ -13,13 +13,17 @@ services:
     env_file:
       - .env.app
     environment:
-      - TINYDB_FILEPATH=/data/tinydb.json
       - USE_GPU={{ USE_GPU }}
       - MILVUS__URI=http://milvus-standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
       - MILVUS__EXTRACT_METADATA={{ USE_LLM }}
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
+      - MONGODB__HOST=mongo
+      - MONGODB__PORT=27017
+      - MONGODB__USER=${MONGO_USER}
+      - MONGODB__PASSWORD=${MONGO_PASSWORD}
+      - MONGODB__DBNAME=aiod
       {% if USE_LLM == "true" %}
       - OLLAMA__URI=http://ollama:11434
       {% endif %}
@@ -29,13 +33,15 @@ services:
       milvus-standalone:
         condition: service_healthy
         restart: false
+      mongo:
+        condition: service_healthy
+        restart: false
       {% if USE_LLM == "true" %}
       ollama:
         condition: service_healthy
         restart: false
       {% endif %}
     volumes:
-      - ${DATA_DIRPATH}/volumes/tinydb:/data
       - ${DATA_DIRPATH}/model:/model
     healthcheck:
       # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:

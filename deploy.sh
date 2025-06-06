@@ -61,4 +61,4 @@ else
   exit 1
 fi
 
-docker compose -f docker-compose.milvus.yml -f docker-compose.final.yml $COMPOSE_COMMAND
+docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
