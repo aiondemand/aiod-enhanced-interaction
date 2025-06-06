@@ -7,6 +7,7 @@ from app.config import settings
 from app.models.asset_collection import AssetCollection
 from app.models.query import BaseUserQuery, FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.services.helper import utc_now
+from app.models.mongo import MongoDocument
 
 job_lock = threading.Lock()
 
@@ -45,10 +46,11 @@ async def delete_expired_queries(current_time: datetime) -> None:
     ]
 
     for query_type in query_types_to_delete:
-        res = await query_type.find(
+        res = await MongoDocument.delete(
+            query_type,
             query_type.expires_at != None,
             query_type.expires_at < current_time,  # type: ignore[operator]
-        ).delete()
+        )
         if res.deleted_count > 0:
             logging.info(f"\tDeleted {res.deleted_count} {query_type.__name__} queries")
 
@@ -67,4 +69,4 @@ async def delete_empty_asset_collections() -> None:
                 if update.embeddings_added > 0 or update.embeddings_removed > 0
             ] + [asset_collection.recurring_updates[-1]]
 
-            await asset_collection.replace()
+            await MongoDocument.replace(asset_collection)

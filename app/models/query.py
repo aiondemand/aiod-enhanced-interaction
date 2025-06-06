@@ -7,8 +7,8 @@ from typing import Generic, TypeVar
 from beanie import Document
 
 from app.config import settings
-from app.models.db_entity import BaseDatabaseEntity
 from app.models.filter import Filter
+from app.models.mongo import BaseDatabaseEntity
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,

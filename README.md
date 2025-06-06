@@ -123,7 +123,7 @@ If you decide to run these dependencies using our docker-compose files (further 
 The `.env` file and all its environment variables are described in great detail in the *Deployment* section below.
 
 **MongoDB**
-- We ecommend deploying the database using `docker-compose.mongo.yml` file
+- We recommend deploying the database using `docker-compose.mongo.yml` file
 - Required env vars to define in `.env`:
     - Where to store data: `DATA_DIRPATH`
     - Admin username: `MONGO_USER`

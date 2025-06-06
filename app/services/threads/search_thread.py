@@ -24,6 +24,7 @@ from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
+from app.models.mongo import MongoDocument
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
 
@@ -33,9 +34,9 @@ QUERY_QUEUE: Queue[tuple[PydanticObjectId | None, Type[BaseUserQuery] | None]] =
 
 async def fill_query_queue() -> None:
     async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
-        return await typ.find(
-            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
-        ).to_list()
+        return await MongoDocument.find_all(
+            typ, Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
+        )
 
     simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
     filtered_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(FilteredUserQuery)
@@ -84,7 +85,7 @@ async def search_thread() -> None:
             )
             user_query.result_set = results
             user_query.update_status(QueryStatus.COMPLETED)
-            await user_query.replace()
+            await MongoDocument.replace(user_query)
         except LocalServiceUnavailableException as e:
             logging.error(e)
             logging.error(
@@ -94,7 +95,7 @@ async def search_thread() -> None:
             os._exit(1)
         except Exception as e:
             user_query.update_status(QueryStatus.FAILED)
-            await user_query.replace()
+            await MongoDocument.replace(user_query)
             logging.error(e)
             logging.error(
                 f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
@@ -114,7 +115,7 @@ async def fetch_user_query(
         return None
     else:
         user_query.update_status(QueryStatus.IN_PROGRESS)
-        await user_query.replace()
+        await MongoDocument.replace(user_query)
 
         return user_query
 

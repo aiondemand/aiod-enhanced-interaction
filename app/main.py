@@ -1,3 +1,5 @@
+from beanie import init_beanie
+from motor.motor_asyncio import AsyncIOMotorClient
 from functools import partial
 import logging
 from contextlib import asynccontextmanager
@@ -9,10 +11,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.models.asset_collection import AssetCollection
+from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
-from app.services.mongo import init_mongodb_client
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -112,6 +115,23 @@ async def app_init() -> None:
     )
 
 
+async def init_mongodb_client() -> AsyncIOMotorClient:
+    db = AsyncIOMotorClient(settings.MONGODB.connection_string, uuidRepresentation="standard")[
+        settings.MONGODB.DBNAME
+    ]
+    # TODO multiprocessing_mode doesn't make the Database connection thread-safe
+    # We need to move all the threading logic to a separate tasks of the primary thread instead
+    # TODO replace embedding_thread, search_thread and recurring jobs for tasks
+    # Github Issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/103
+    await init_beanie(
+        database=db,
+        document_models=[AssetCollection, SimpleUserQuery, FilteredUserQuery, RecommenderUserQuery],
+        multiprocessing_mode=True,  # temporary patch
+    )
+
+    return db
+
+
 async def app_shutdown() -> None:
     if QUERY_QUEUE:
         QUERY_QUEUE.put((None, None))
@@ -129,4 +149,4 @@ async def app_shutdown() -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, port=8000, host="localhost")
+    uvicorn.run(app, port=8888, host="localhost")

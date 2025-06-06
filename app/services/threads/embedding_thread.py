@@ -20,6 +20,7 @@ from app.services.inference.text_operations import (
     ConvertJsonToString,
     HuggingFaceDatasetExtractMetadata,
 )
+from app.models.mongo import MongoDocument
 from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
 
@@ -104,11 +105,11 @@ async def fetch_asset_collection(
     if asset_collection is None:
         # DB setup
         asset_collection = AssetCollection(aiod_asset_type=asset_type)
-        await asset_collection.create()
+        await MongoDocument.create(asset_collection)
     elif asset_collection.last_update.finished and first_invocation is False:
         # Create a new recurring DB update
         asset_collection.add_recurring_update()
-        await asset_collection.replace()
+        await MongoDocument.replace(asset_collection)
     elif asset_collection.last_update.finished:
         # The last DB update was successful, we skip this asset in the
         # first invocation
@@ -206,7 +207,7 @@ async def process_aiod_assets_wrapper(
             newly_added_asset_ids += asset_ids
 
         asset_collection.update(embeddings_added=num_emb_added, embeddings_removed=num_emb_removed)
-        await asset_collection.replace()
+        await MongoDocument.replace(asset_collection)
 
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
@@ -214,7 +215,7 @@ async def process_aiod_assets_wrapper(
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     asset_collection.finish()
-    await asset_collection.replace()
+    await MongoDocument.replace(asset_collection)
 
 
 def get_assets_to_add_and_delete(

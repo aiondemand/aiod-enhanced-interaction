@@ -8,9 +8,9 @@ from beanie import Document
 
 from app.config import settings
 
-from app.models.db_entity import BaseDatabaseEntity
 from app.services.helper import utc_now
 from app.schemas.enums import SupportedAssetType
+from app.models.mongo import MongoDocument, BaseDatabaseEntity
 
 
 class CollectionUpdate(BaseDatabaseEntity, ABC):
@@ -90,6 +90,6 @@ class AssetCollection(Document, BaseDatabaseEntity):
     async def get_first_object_by_asset_type(
         asset_type: SupportedAssetType,
     ) -> AssetCollection | None:
-        return await AssetCollection.find(
-            AssetCollection.aiod_asset_type == asset_type
-        ).first_or_none()
+        return await MongoDocument.find_first_or_none(
+            AssetCollection, AssetCollection.aiod_asset_type == asset_type
+        )
