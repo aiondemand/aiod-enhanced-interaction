@@ -4,6 +4,7 @@ from langchain.agents import create_openai_tools_agent
 from langchain.agents import AgentExecutor, ZeroShotAgent
 from pydantic import BaseModel, Field
 from langchain.tools import BaseTool
+from langchain_core.tools import tool
 from langchain_core.prompts.chat import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -25,6 +26,8 @@ from nltk import edit_distance
 from urllib.parse import urljoin
 import requests
 
+from prompt_library import *
+
 # load chatbot .env
 load_dotenv(".env.chatbot")
 mistral_key = os.getenv("MISTRAL_KEY")
@@ -45,7 +48,7 @@ client = Mistral(api_key=mistral_key)
 
 # load llm
 llm = ChatMistralAI(
-    model="ministral-8b-latest",
+    model="ministral-8b-latest",  # "mistral-medium-latest",  #
     temperature=0,
     max_retries=2,
     mistral_api_key=mistral_key
@@ -54,15 +57,14 @@ llm = ChatMistralAI(
 # load db
 milvus_db = MilvusClient(uri=milvus_uri, token=milvus_token)
 
+
 def prepare_embedding_model() -> Basic_EmbeddingModel:
     transformer = SentenceTransformerToHF(embedding_llm, trust_remote_code=True)
     if torch.cuda.is_available() and use_gpu:
-            # print("use cuda")
         transformer.cuda()
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-            # print("use cpu")
     em_model = Basic_EmbeddingModel(
             transformer,
             transformer.tokenizer,
@@ -84,21 +86,11 @@ store = {}
 embedding_model = prepare_embedding_model()
 
 
-def get_session_history(session_id: str) -> BaseChatMessageHistory:
-    if session_id not in store:
-        store[session_id] = ChatMessageHistory()
-    return store[session_id]
-
-
-def reset_history(session_id):
-    history = ChatMessageHistory(session_id=session_id)
-    history.clear()
-
-
 class SearchInput(BaseModel):  # https://python.langchain.com/docs/modules/tools/custom_tools/
     query: str = Field(description="should be a search query")
 
 
+@tool("website_search-tool", args_schema=SearchInput, return_direct=False)
 def aiod_page_search(query: str) -> str:
     """Used to explain the AIoD website."""
     print("aiod_page_search:", str(datetime.now()), "query:", query)
@@ -113,11 +105,14 @@ def aiod_page_search(query: str) -> str:
     result = ""
     for index, doc in enumerate(docs):
         result += "Result "+str(index) + ":\n" + doc['content'] + "\nlink:" + doc['url'] + "\n"
-    # print("tool output", result)
+    print("aiod_page_search output", result)
     return result
 
 
 def map_asset(asset: str) -> str:
+    """
+    Map the asset named by the LLM to the closest existing asset using the edit distance.
+    """
     lower_asset = asset.lower()
     dist_list = []
     for a in asset_types:
@@ -134,21 +129,28 @@ def map_asset(asset: str) -> str:
 
 
 def get_asset_from_aiod(asset_id: int, asset: str):
-    url = urljoin(str(aiod_url), f"{asset}/v1/{str(asset_id)}")
-    # print(url)
+    """
+    Load content from metadata database for the asset with id asset_id.
+    """
+    url = urljoin(str(aiod_url), f"/v2/{asset}/{str(asset_id)}")
     result = requests.get(url)
     return result.json()
 
 
+class AssetSearchInput(BaseModel):
+    query: str = Field(description="the input query")
+    asset: str = Field(description=f"the type of asset searched for. Options are {asset_types}")
+
+
+@tool("asset_search-tool", args_schema=AssetSearchInput, return_direct=False)
 def asset_search(query: str, asset: str) -> str:
     """
-        Used to search for resources a user needs.
-        :param query: user input
-        :param asset: the type of asset searched for from
-        :return:
-        """
+    Used to search for resources a user needs.
+    :param query: what to search for
+    :param asset: the type of asset searched for.
+    :return:
+    """
     embedding_vector = embed_query(embedding_model, query)
-
     mapped_asset = map_asset(asset)
     # print("mapped_asset: ", mapped_asset)
     collection_to_search = collection_prefix+"_"+mapped_asset
@@ -160,81 +162,38 @@ def asset_search(query: str, asset: str) -> str:
         output_fields=["id", "asset_id"],
         limit=3
     )
-    # print(docs)
+    print(docs)
 
     result = ""
     for index, doc in enumerate(docs):
         content = get_asset_from_aiod(doc['asset_id'], mapped_asset)
-        new_addition = f'name: {content["name"]}, publication date:{ content["date_published"]}, url: {content["same_as"]}' \
+        # print(content)
+        try:
+            new_addition = f'name: {content["name"]}, publication date:{ content["date_published"]}, url: {content["same_as"]}' \
                        f'\ncontent: {content["description"]["plain"]}\n'
         # print(content)
-        result += new_addition
+            result += new_addition
+        except KeyError:
+            print(content)
+            pass
 
-    print(result)
+    print("asset_search output", result)
     return result
 
 
-ps_desc = """Use the unmodified user input to get information about specific webpages on the AIoD website."""
+class CalculatorInput(BaseModel):
+    a: int = Field(description="first number")
+    b: int = Field(description="second number")
 
 
-class PageSearch(BaseTool):
-    name: str = "page_search"
-    description: str = ps_desc
-    # args_schema: Type[BaseModel] = SearchInput
-
-    def _run(
-        self,
-        query: str,
-    ) -> str: return aiod_page_search(query)
-
-    async def _arun(
-        self,
-        query: str,
-        data_type: Optional[str] = None,
-    ) -> str:
-        """Use the tool asynchronously."""
-        raise NotImplementedError("custom_search does not support async")
+@tool("multiplication-tool", args_schema=CalculatorInput, return_direct=False)
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
 
 
-asset_search_desc = f"Use this to search for assets that fit to the users requests. Available asset types are: {asset_types}."
-
-
-class AssetSearch(BaseTool):
-    name: str = "asset_search"
-    description: str = asset_search_desc
-    # args_schema: Type[BaseModel] = SearchInput
-
-    def _run(
-        self,
-        query: str,
-        asset: str,
-    ) -> str: return asset_search(query, asset)
-
-    async def _arun(
-        self,
-        query: str,
-    ) -> str:
-        """Use the tool asynchronously."""
-        raise NotImplementedError("custom_search does not support async")
-
-
-tools = [PageSearch(), AssetSearch()]
-
-
-prefix = """You are an intelligent interactive assistant that manages the AI on Demand (AIoD) website. 
-The AIoD website consists of multiple parts. It has been created to facilitate collaboration, exchange and development of AI in Europe.
-For example, users can up/download pre-trained AI models, find/upload scientific publications and access/provide a number of datasets.
-It is your job to help the user navigate the website using the page_search or help the user find resources using the resource_search providing links to the websites/sources you are talking about.
-Always provide links to the resources and websites you talk about. After your search, check carefully if the results contain the information you need to answer the question. If you cannot find the information you are searching for, reformulate the query by removing stop words or using synonyms.
-Only if you have exhausted all other options, say: 'I found no results answering your question, can you reformulate it?'
-You have access to the following tools:
-"""
-suffix = """Begin!"
-
-{chat_history}
-Question: {input}
-{agent_scratchpad}"""
-
+# tools = [PageSearch(), AssetSearch(), multiply()]
+tools = [multiply, asset_search, aiod_page_search]
 
 prompt = ZeroShotAgent.create_prompt(
     tools,
@@ -246,6 +205,17 @@ prompt = ZeroShotAgent.create_prompt(
 final_prompt = prompt
 
 # print(final_prompt.template)
+
+
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
+
+def reset_history(session_id):
+    history = ChatMessageHistory(session_id=session_id)
+    history.clear()
 
 
 def add_outside_info_into_context(interests, publication_history):
@@ -361,27 +331,21 @@ def agent_response(input_query, session_identifier, personalization=None):
         history_messages_key='chat_history'
     )
 
-    print("input query", input_query)
+    print("input query:", input_query)
     answer_question = moderate_input(input_query)
+    print("moderation result:", answer_question)
     if answer_question:
         response = repeatedly_invoke(agent_with_chat_history, input_query, config={'configurable': {"session_id": session_identifier}})
-        """try:
-            response = agent_with_chat_history.invoke({'input': input_query},
-                                                       config={'configurable': {"session_id": session_identifier}})
-        except Exception as e:
-            response = {"output": "Something went wrong, please try again."}
-            print(datetime.now(), e)"""
-
-        final_response = response['output']  # .split("Final Answer:")[-1]
+        print(response)
+        final_response = response['output']
+        # print("final_response:", final_response)
 
         if final_response == 'Agent stopped due to max iterations.':
             final_response = response['intermediate_steps']
 
         if isinstance(final_response, list):
-
             try:
                 new_input = final_response[-1][1]
-
                 exception_prompt = ChatPromptTemplate.from_messages(
                     [
                         (
@@ -415,5 +379,7 @@ def agent_response(input_query, session_identifier, personalization=None):
 
 # a = agent_response("how can I get in contact with the aiod community", -1)
 a = agent_response("find machine learning models for image classification", -1)
+# a = agent_response("multiply 500*12341345", -1)
+print("###Agent result: ###")
 print(a)
 

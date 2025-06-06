@@ -2,7 +2,7 @@ import asyncio
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
-from crawl4ai.deep_crawling.filters import FilterChain, ContentTypeFilter  # URLPatternFilter, DomainFilter
+from crawl4ai.deep_crawling.filters import FilterChain, ContentTypeFilter, DomainFilter  # URLPatternFilter
 from pymilvus import MilvusClient, DataType
 from uuid import uuid4
 import pandas as pd
@@ -19,21 +19,24 @@ milvus_token = os.getenv('MILVUS__USER')+":"+os.getenv('MILVUS__PASS')
 embedding_llm = os.getenv('MODEL_LOADPATH')
 use_gpu = os.getenv('USE_GPU')
 
+load_dotenv(".env.chatbot")
+collection_name = os.getenv("WEBSITE_COLLECTION")
+
 c = MilvusClient(
         uri=milvus_uri,
         token=milvus_token
     )
 
-
+relevant_pages = ["https://www.aiodp.ai/", "aiod.eu"]
 filter_chain = FilterChain([
     # Only follow URLs with specific patterns
     # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
 
     # Only crawl specific domains
-    # DomainFilter(
-        # allowed_domains=["docs.example.com"],
-        # blocked_domains=["old.docs.example.com"]
-    # ),
+    DomainFilter(
+        #allowed_domains=["docs.example.com"],
+        blocked_domains=["https://auth.aiod.eu"]
+    ),
 
     # Only include specific content types
     ContentTypeFilter(allowed_types=["text/html"])
@@ -48,9 +51,9 @@ async def scraper():
 
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
-            max_depth=0,  # configure crawl level as needed
+            max_depth=2,  # configure crawl level as needed
             include_external=False,
-            # filter_chain=filter_chain
+            filter_chain=filter_chain
         ),
         scraping_strategy=LXMLWebScrapingStrategy(),
         verbose=False,
@@ -71,22 +74,23 @@ async def scraper():
             # print(f"URL: {result.url}")
             # print(f"Depth: {result.metadata.get('depth', 0)}")
             # relevant_info_list.append((result.markdown, result.url, hash(result.markdown)))
-            print(hash(result.html))
-            print(result.html)
+            # print(hash(result.html))
+            # print(result.html)
             print(result.metadata)
             content_list.append(result.markdown)
             url_list.append(result.url)
-            hash_list.append(hash(result.html))  # TODO hashing doesn't work -420105403813510547, -2706637908361790186
+            # hash_list.append(hash(result.html))  # TODO hashing doesn't work -420105403813510547, -2706637908361790186
             id_list.append(str(uuid4()))
         print(url_list)
         data = {
             "content": content_list,
             'url': url_list,
-            'hash': hash_list,
+            # 'hash': hash_list,
             'id': id_list
         }
+        print(len(content_list), len(url_list), len(id_list))
         df = pd.DataFrame(data)
-        df.to_csv("test_3.csv", sep=",", index=False)
+        df.to_csv("test_6.csv", sep=",", index=False)
         df.to_json()
         return df
 
@@ -213,7 +217,7 @@ def prepare_data(website_content: pd.DataFrame):
 
 def populate_webcontent_collection(collection_name: str, client: MilvusClient):
     # website_content = scraper()
-    website_content = pd.read_csv("test_2.csv")
+    website_content = pd.read_csv("test_5.csv")
     # print(website_content.head())
     # client.drop_collection(collection_name=collection_name)
     if client.has_collection(collection_name):
@@ -237,10 +241,10 @@ def populate_webcontent_collection(collection_name: str, client: MilvusClient):
 
 
 
-asyncio.run(scraper())
+# asyncio.run(scraper())
 
 
-# populate_webcontent_collection("test", c)
+populate_webcontent_collection(collection_name, c)
 
 
 #collection, results = Collection.construct_from_dataframe  # -> there is an error in the pymilvus
