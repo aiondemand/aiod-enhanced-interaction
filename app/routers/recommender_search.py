@@ -11,7 +11,7 @@ from app.routers.sem_search import (
     validate_asset_type_or_raise,
 )
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam
-from app.schemas.query import RecommenderUserQueryResponse
+from app.schemas.query import OldRecommenderUserQueryResponse, RecommenderUserQueryResponse
 from app.services.database import Database
 
 router = APIRouter()
@@ -49,7 +49,50 @@ async def get_recommender_result(
     ),
 ) -> RecommenderUserQueryResponse:
     return await get_query_results(
-        query_id, database, RecommenderUserQuery, return_entire_assets=return_entire_assets
+        query_id,
+        database,
+        RecommenderUserQuery,
+        return_entire_assets=return_entire_assets,
+        old_schema=False,
+    )
+
+
+####################################
+############ OLD ROUTER ############
+####################################
+
+old_router = APIRouter()
+
+
+@old_router.post("")
+async def old_submit_recommender_query(
+    database: Annotated[Database, Depends(Database)],
+    asset_id: int = Query(..., ge=0, description="Asset ID"),
+    asset_type: SupportedAssetType = Query(
+        ..., description="Asset type of an asset to find recommendations to"
+    ),
+    output_asset_type: SupportedAssetType = Query(
+        ..., description="Output asset type of assets to return"
+    ),
+    topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
+) -> RedirectResponse:
+    query_id = await _submit_recommender_query(
+        database,
+        asset_id,
+        asset_type,
+        AssetTypeQueryParam(output_asset_type.value),
+        topk,
+    )
+    return RedirectResponse(url=f"/recommender/{query_id}/result", status_code=202)
+
+
+@old_router.get("/{query_id}/result", response_model=OldRecommenderUserQueryResponse)
+async def old_get_recommender_result(
+    database: Annotated[Database, Depends(Database)],
+    query_id: UUID,
+) -> OldRecommenderUserQueryResponse:
+    return await get_query_results(
+        query_id, database, RecommenderUserQuery, return_entire_assets=False, old_schema=True
     )
 
 

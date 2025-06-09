@@ -51,3 +51,34 @@ class RecommenderUserQueryResponse(BaseUserQueryResponse):
     asset_type: SupportedAssetType
     asset_id: int
     output_asset_type: AssetTypeQueryParam
+
+
+# Old deprecated schemas
+###############################################################
+###############################################################
+###############################################################
+
+
+class OldBaseUserQueryResponse(BaseModel, ABC):
+    status: QueryStatus = QueryStatus.QUEUED
+    topk: int
+    returned_asset_count: int = -1
+    result_asset_ids: list[int] | None = None
+    expires_at: datetime | None = None
+
+
+class OldSimpleUserQueryResponse(OldBaseUserQueryResponse):
+    asset_type: SupportedAssetType
+    search_query: str
+
+
+class OldFilteredUserQueryResponse(OldBaseUserQueryResponse):
+    asset_type: SupportedAssetType
+    search_query: str
+    filters: list[Filter] | None = None
+
+
+class OldRecommenderUserQueryResponse(OldBaseUserQueryResponse):
+    asset_type: SupportedAssetType
+    asset_id: int
+    output_asset_type: SupportedAssetType
