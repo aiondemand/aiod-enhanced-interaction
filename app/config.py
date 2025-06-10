@@ -145,7 +145,7 @@ class MongoConfig(BaseModel):
 
 class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
-    MONGODB: MongoConfig = Field(...)
+    MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
 

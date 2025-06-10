@@ -82,11 +82,11 @@ In this file you find the following ENV variables:
 - `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database
 - `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings of the individual chunks of each document or to have only one embedding representing the entire asset.
 - `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
-- `MONGODB__HOST`: Hostname of MongoDB database. *(Is overwritten in docker-compose.yml)*
-- `MONGODB__PORT`: Port of the database within MongoDB to store our data in *(Is overwritten in docker-compose.yml)*
-- `MONGODB__USER`: Username of the admin of the database within MongoDB to store our data in
-- `MONGODB__PASSWORD`: Password of the admin of the database within MongoDB to store our data in
-- `MONGODB__DBNAME`: Name of the database within MongoDB to store our data in
+- `MONGO__HOST`: Hostname of MongoDB database. *(Is overwritten in docker-compose.yml)*
+- `MONGO__PORT`: Port of the database within MongoDB to store our data in *(Is overwritten in docker-compose.yml)*
+- `MONGO__USER`: Username of the admin of the database within MongoDB to store our data in
+- `MONGO__PASSWORD`: Password of the admin of the database within MongoDB to store our data in
+- `MONGO__DBNAME`: Name of the database within MongoDB to store our data in
 - Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False))
     - `OLLAMA__URI`: URI of the Ollama server.
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
@@ -132,12 +132,12 @@ The `.env` file and all its environment variables are described in great detail 
     - Localhost port: `MONGO_HOST_PORT`
 - Command to run: `docker compose -f docker-compose.mongo.yml up -d`
 - Set the following env vars defined in `.env.app`:
-    - `MONGODB__HOST=localhost`
-    - `MONGODB__PORT=<PLACEHOLDER>`
+    - `MONGO__HOST=localhost`
+    - `MONGO__PORT=<PLACEHOLDER>`
         - Replace the placeholder with the localhost port you have assigned to the Mongo container's 27017 port (specified in the `MONGO_HOST_PORT` env var)
-    - `MONGODB__USER=<PLACEHOLDER>`
+    - `MONGO__USER=<PLACEHOLDER>`
         - Replace the placeholder with the value in `MONGO_USER` env var
-    - `MONGODB__PASSWORD=<PLACEHOLDER>`
+    - `MONGO__PASSWORD=<PLACEHOLDER>`
         - Replace the placeholder with the value in `MONGO_PASSWORD` env var
 
 **Milvus**
@@ -177,7 +177,8 @@ Perform the following steps to deploy the service:
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
-    - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`": An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
+    - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`: An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
+    - `MONGO_ASSETCOLS_DUMP_FILEPATH`: An optional variable representing a filepath to a JSON file containing a list of documents used for populating MongoDB database, more specifically the `assetCollections` collection. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
 
     - Milvus credentials to use/initiate services with:
         - `MILVUS_NEW_ROOT_PASS`: New root password used to replace a default one. The password change is only performed during the first initialization of the Milvus service.
@@ -204,8 +205,9 @@ Perform the following steps to deploy the service:
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
     1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
-1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` variable and then execute the following bash script that takes care of populating the database: `./scripts/populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
+1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `MONGO_ASSETCOLS_DUMP_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `./scripts/populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
+    - **Notice**: We don't advise using this step unless you're fairly familiar with the project and know the format the data is supposed to have for populating the databases.
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `USE_LLM` ENV variables: `./deploy.sh`
 

@@ -70,8 +70,8 @@ def setup_logger():
 async def app_init() -> None:
     setup_logger()
 
-    # Initialize mongoDB database
-    app.db = await init_mongodb_client()
+    # Initialize MongoDB database
+    app.db = await init_mongo_client()
 
     global QUERY_THREAD
     QUERY_THREAD = start_async_thread(search_thread)
@@ -115,9 +115,9 @@ async def app_init() -> None:
     )
 
 
-async def init_mongodb_client() -> AsyncIOMotorClient:
-    db = AsyncIOMotorClient(settings.MONGODB.connection_string, uuidRepresentation="standard")[
-        settings.MONGODB.DBNAME
+async def init_mongo_client() -> AsyncIOMotorClient:
+    db = AsyncIOMotorClient(settings.MONGO.connection_string, uuidRepresentation="standard")[
+        settings.MONGO.DBNAME
     ]
     # TODO multiprocessing_mode doesn't make the Database connection thread-safe
     # We need to move all the threading logic to a separate tasks of the primary thread instead

@@ -19,11 +19,11 @@ services:
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
       - MILVUS__EXTRACT_METADATA={{ USE_LLM }}
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
-      - MONGODB__HOST=mongo
-      - MONGODB__PORT=27017
-      - MONGODB__USER=${MONGO_USER}
-      - MONGODB__PASSWORD=${MONGO_PASSWORD}
-      - MONGODB__DBNAME=aiod
+      - MONGO__HOST=mongo
+      - MONGO__PORT=27017
+      - MONGO__USER=${MONGO_USER}
+      - MONGO__PASSWORD=${MONGO_PASSWORD}
+      - MONGO__DBNAME=aiod
       {% if USE_LLM == "true" %}
       - OLLAMA__URI=http://ollama:11434
       {% endif %}

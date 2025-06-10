@@ -40,7 +40,6 @@ if [ "$#" -eq 0 ]; then
 
   # Create folders for holding Docker volumes if they don't exist
   # otherwise Milvus would create them under the root user...
-  mkdir -p ${DATA_DIRPATH}/volumes/tinydb
   mkdir -p ${DATA_DIRPATH}/model
 
   if [ $EXIT_CODE -ne 0 ]; then
