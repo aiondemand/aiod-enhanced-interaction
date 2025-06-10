@@ -29,12 +29,6 @@ class SupportedAssetType(BaseAssetType, Enum):
     EXPERIMENTS = "experiments"
     SERVICES = "services"
 
-    # def to_SupportedAssetType(self) -> SupportedAssetType:
-    #     return self
-
-    # def is_all(self) -> bool:
-    #     return False
-
 
 # TODO come up with a way to get rid of this duplication of enum values
 class AssetTypeQueryParam(BaseAssetType, Enum):
@@ -46,11 +40,3 @@ class AssetTypeQueryParam(BaseAssetType, Enum):
     EDUCATIONAL_RESOURCES = "educational_resources"
     EXPERIMENTS = "experiments"
     SERVICES = "services"
-
-    # def to_SupportedAssetType(self) -> SupportedAssetType:
-    #     if self == AssetTypeQueryParam.ALL:
-    #         raise ValueError("ALL value cannot be converted")
-    #     return SupportedAssetType(self.value)
-
-    # def is_all(self) -> bool:
-    #     return self == AssetTypeQueryParam.ALL

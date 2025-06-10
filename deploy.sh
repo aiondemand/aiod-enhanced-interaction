@@ -40,7 +40,6 @@ if [ "$#" -eq 0 ]; then
 
   # Create folders for holding Docker volumes if they don't exist
   # otherwise Milvus would create them under the root user...
-  mkdir -p ${DATA_DIRPATH}/volumes/tinydb
   mkdir -p ${DATA_DIRPATH}/model
 
   if [ $EXIT_CODE -ne 0 ]; then
@@ -61,4 +60,4 @@ else
   exit 1
 fi
 
-docker compose -f docker-compose.milvus.yml -f docker-compose.final.yml $COMPOSE_COMMAND
+docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND

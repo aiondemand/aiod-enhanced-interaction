@@ -7,8 +7,6 @@ from app.services.inference.model import AiModel
 from app.services.inference.text_operations import ConvertJsonToString
 
 
-# TODO I don't think there's a need for this file to exist
-# just to host one function
 def get_precomputed_embeddings_for_recommender(
     model: AiModel,
     embedding_store: EmbeddingStore,
