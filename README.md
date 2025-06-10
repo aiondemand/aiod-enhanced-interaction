@@ -68,6 +68,8 @@ Unlike the former process, the extraction of metadata from assets, that can be p
 In this section, we describe the necessary steps to take to set up this repository for either development or deployment purposes.
 
 ## Environment variables and configs
+*When specifying a path to a file or a directory, either specify the fullpath or prepend the relative path with `./` so that it is clear it's an actual path and it will be resolved as such.*
+
 Regardless whether you want to further develop this codespace or deploy the service, you need to create `.env.app` file that can be created from the `.env.app.sample` template.
 In this file you find the following ENV variables:
 - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not. *(Is overwritten in docker-compose.yml)*
@@ -167,6 +169,8 @@ To start the application you can either:
 ## Deployment
 
 For deploying purposes, we use a Docker compose config enabling us to deploy not only FastAPI service, but also Milvus vector database, and Ollama service if need be.
+
+*When specifying a path to a file or a directory, either specify the fullpath or prepend the relative path with `./` so that it is clear it's an actual path and it will be resolved as such.*
 
 Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:

@@ -28,13 +28,12 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
-# TODO change the logic to accommodate the new database technology, MongoDB
-
 # Create path under the current user so that it won't be created automatically by Milvus under root
 mkdir -p ${DATA_DIRPATH}/volumes
 
 # Run Milvus and Mongo databases
-docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.populate.yml up populate-db --build
+docker compose -f docker-compose.mongo.yml up -d
+docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml up populate-db --build
 CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-populate-db-1"
 EXIT_CODE=$(docker inspect $CONTAINER_NAME --format='{{.State.ExitCode}}')
 
@@ -57,6 +56,5 @@ else
   echo "Population of vector DB has encountered some ERRORS."
 fi
 
-# TODO not sure whether milvus and mongo is still running or not...
 # Shutdown databases
 docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.populate.yml down
