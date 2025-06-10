@@ -64,6 +64,7 @@ async def get_recommender_result(
 old_router = APIRouter()
 
 
+# v1 endpoint that doesn't support searching across asset types
 @old_router.post("")
 async def old_submit_recommender_query(
     database: Annotated[Database, Depends(Database)],
@@ -86,6 +87,7 @@ async def old_submit_recommender_query(
     return RedirectResponse(url=f"/recommender/{query_id}/result", status_code=202)
 
 
+# v1 endpoint that doesn't support returning the entire assets nor assets of different types
 @old_router.get("/{query_id}/result", response_model=OldRecommenderUserQueryResponse)
 async def old_get_recommender_result(
     database: Annotated[Database, Depends(Database)],

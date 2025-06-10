@@ -56,6 +56,7 @@ async def get_simple_query_result(
 old_router = APIRouter()
 
 
+# v1 endpoint that doesn't support searching across asset types
 @old_router.post("")
 async def old_submit_simple_query(
     database: Annotated[Database, Depends(Database)],
@@ -71,6 +72,7 @@ async def old_submit_simple_query(
     return RedirectResponse(f"/query/{query_id}/result", status_code=202)
 
 
+# v1 endpoint that doesn't support returning the entire assets nor assets of different types
 @old_router.get("/{query_id}/result")
 async def old_get_simple_query_result(
     database: Annotated[Database, Depends(Database)],

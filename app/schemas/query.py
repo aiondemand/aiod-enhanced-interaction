@@ -53,7 +53,7 @@ class RecommenderUserQueryResponse(BaseUserQueryResponse):
     output_asset_type: AssetTypeQueryParam
 
 
-# Old deprecated schemas
+# Old schemas (v1)
 ###############################################################
 ###############################################################
 ###############################################################
