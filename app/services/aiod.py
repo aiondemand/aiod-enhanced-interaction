@@ -61,7 +61,9 @@ def get_aiod_asset(
         response = perform_url_request(settings.AIOD.get_asset_by_id_url(asset_id, asset_type))
         return response.json()
     except HTTPError as e:
-        if e.response.status_code == 404:
+        # Some assets may eventually get hidden rather than deleted hence why we don't check for
+        # one specific status code only
+        if 400 <= e.response.status_code < 500:
             return None
         raise
 
