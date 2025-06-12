@@ -43,12 +43,38 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-app.include_router(query_router.router, prefix="/query", tags=["query"])
-app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
+app.include_router(query_router.old_router, prefix="/query", tags=["query"])
+app.include_router(query_router.old_router, prefix="/v1/query", tags=["query"], deprecated=True)
+app.include_router(query_router.router, prefix="/v2/query", tags=["query"])
+
+app.include_router(recommender_router.old_router, prefix="/recommender", tags=["recommender_query"])
+app.include_router(
+    recommender_router.old_router,
+    prefix="/v1/recommender",
+    tags=["recommender_query"],
+    deprecated=True,
+)
+app.include_router(recommender_router.router, prefix="/v2/recommender", tags=["recommender_query"])
+
 if settings.PERFORM_LLM_QUERY_PARSING:
+    # Common endpoints across versions
     app.include_router(
         filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
     )
+    app.include_router(
+        filtered_query_router.router,
+        prefix="/v1/experimental/filtered_query",
+        tags=["filtered_query"],
+        deprecated=True,
+    )
+    app.include_router(
+        filtered_query_router.router,
+        prefix="/v2/experimental/filtered_query",
+        tags=["filtered_query"],
+    )
+
+    # GET endpoint that is different across versions
+    app.include_router(filtered_query_router.router_diff, tags=["filtered_query"])
 
 
 app.add_middleware(
