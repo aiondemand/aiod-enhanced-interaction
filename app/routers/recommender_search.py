@@ -20,7 +20,7 @@ router = APIRouter()
 @router.post("")
 async def submit_recommender_query(
     database: Annotated[Database, Depends(Database)],
-    asset_id: int = Query(..., ge=0, description="Asset ID"),
+    asset_id: str = Query(..., max_length=50, description="Asset ID"),
     asset_type: SupportedAssetType = Query(
         ..., description="Asset type of an asset to find recommendations to"
     ),
@@ -68,7 +68,7 @@ old_router = APIRouter()
 @old_router.post("")
 async def old_submit_recommender_query(
     database: Annotated[Database, Depends(Database)],
-    asset_id: int = Query(..., ge=0, description="Asset ID"),
+    asset_id: str = Query(..., max_length=50, description="Asset ID"),
     asset_type: SupportedAssetType = Query(
         ..., description="Asset type of an asset to find recommendations to"
     ),
@@ -100,7 +100,7 @@ async def old_get_recommender_result(
 
 async def _submit_recommender_query(
     database: Database,
-    asset_id: int,
+    asset_id: str,
     asset_type: SupportedAssetType,
     output_asset_type: AssetTypeQueryParam,
     topk: int,

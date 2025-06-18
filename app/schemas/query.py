@@ -11,7 +11,7 @@ from app.schemas.search_results import AssetResults
 
 
 class ReturnedAsset(BaseModel):
-    asset_id: int
+    asset_id: str
     asset_type: SupportedAssetType
     asset: dict | None = None
 
@@ -49,7 +49,7 @@ class FilteredUserQueryResponse(BaseUserQueryResponse):
 
 class RecommenderUserQueryResponse(BaseUserQueryResponse):
     asset_type: SupportedAssetType
-    asset_id: int
+    asset_id: str
     output_asset_type: AssetTypeQueryParam
 
 
@@ -63,7 +63,7 @@ class OldBaseUserQueryResponse(BaseModel, ABC):
     status: QueryStatus = QueryStatus.QUEUED
     topk: int
     returned_asset_count: int = -1
-    result_asset_ids: list[int] | None = None
+    result_asset_ids: list[str] | None = None
     expires_at: datetime | None = None
 
 
@@ -80,5 +80,5 @@ class OldFilteredUserQueryResponse(OldBaseUserQueryResponse):
 
 class OldRecommenderUserQueryResponse(OldBaseUserQueryResponse):
     asset_type: SupportedAssetType
-    asset_id: int
+    asset_id: str
     output_asset_type: SupportedAssetType

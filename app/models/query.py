@@ -136,7 +136,7 @@ class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse, OldFilteredUser
 class RecommenderUserQuery(
     BaseUserQuery[RecommenderUserQueryResponse, OldRecommenderUserQueryResponse]
 ):
-    asset_id: int
+    asset_id: str
     asset_type: SupportedAssetType
     output_asset_type: AssetTypeQueryParam
 
