@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from datetime import datetime
 from beanie import Document
+from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from pymongo.results import DeleteResult
 from app.services.helper import utc_now
@@ -15,6 +16,8 @@ class BaseDatabaseEntity(BaseModel, ABC):
 
 
 class MongoDocument(Document):
+    id: UUID = Field(default_factory=uuid4)
+
     @classmethod
     @retry_loop(MongoUnavailableException)
     async def get_doc_by_id(cls, *args, **kwargs) -> MongoDocument | None:

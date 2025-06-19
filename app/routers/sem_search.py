@@ -1,6 +1,6 @@
 from typing import Type, TypeVar
 
-from beanie import PydanticObjectId
+from uuid import UUID
 from fastapi import HTTPException
 
 from app.config import settings
@@ -13,14 +13,14 @@ from app.services.threads.search_thread import QUERY_QUEUE
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
-async def submit_query(user_query: BaseUserQuery) -> str:
+async def submit_query(user_query: BaseUserQuery) -> UUID:
     await user_query.create_doc()
     QUERY_QUEUE.put((user_query.id, type(user_query)))
     return user_query.id
 
 
 async def get_query_results(
-    query_id: PydanticObjectId,
+    query_id: UUID,
     query_type: Type[BaseUserQuery],
     return_entire_assets: bool = False,
 ) -> Response:

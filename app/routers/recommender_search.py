@@ -1,4 +1,4 @@
-from beanie import PydanticObjectId
+from uuid import UUID
 from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
@@ -36,7 +36,7 @@ async def submit_recommender_query(
 
 @router.get("/{query_id}/result", response_model=RecommenderUserQueryResponse)
 async def get_recommender_result(
-    query_id: PydanticObjectId,
+    query_id: UUID,
     return_entire_assets: bool = Query(
         default=False,
         description="Whether to return the entire AIoD assets or only their corresponding IDs",
@@ -52,7 +52,7 @@ async def _submit_recommender_query(
     asset_type: SupportedAssetType,
     output_asset_type: AssetTypeQueryParam,
     topk: int,
-) -> str:
+) -> UUID:
     await validate_asset_type_or_raise(asset_type, apply_filtering=False)
     await validate_asset_type_or_raise(output_asset_type, apply_filtering=False)
 

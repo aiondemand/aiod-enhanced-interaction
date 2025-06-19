@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Type
 
-from beanie import PydanticObjectId
+from uuid import UUID
 from fastapi import APIRouter, Body, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -58,7 +58,7 @@ async def submit_filtered_query(
 
 @router.get("/{query_id}/result")
 async def get_filtered_query_result(
-    query_id: PydanticObjectId = Path(..., description="Valid query ID"),
+    query_id: UUID = Path(..., description="Valid query ID"),
     return_entire_assets: bool = Query(
         default=False,
         description="Whether to return the entire AIoD assets or only their corresponding IDs",
@@ -136,7 +136,7 @@ async def _sumbit_filtered_query(
     asset_type: SupportedAssetType,
     filters: list[Filter] | None,
     topk: int,
-) -> str:
+) -> UUID:
     validate_query_or_raise(search_query)
     await validate_asset_type_or_raise(asset_type, apply_filtering=True)
 

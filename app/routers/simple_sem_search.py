@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Path, Query
 from fastapi.responses import RedirectResponse
-from beanie import PydanticObjectId
+from uuid import UUID
 
 from app.models.query import SimpleUserQuery
 from app.routers.sem_search import (
@@ -29,7 +29,7 @@ async def submit_simple_query(
 
 @router.get("/{query_id}/result")
 async def get_simple_query_result(
-    query_id: PydanticObjectId = Path(..., description="Valid query ID"),
+    query_id: UUID = Path(..., description="Valid query ID"),
     return_entire_assets: bool = Query(
         default=False,
         description="Whether to return the entire AIoD assets or only their corresponding IDs",
@@ -42,7 +42,7 @@ async def get_simple_query_result(
 
 async def _sumbit_simple_query(
     search_query: str, asset_type: AssetTypeQueryParam, topk: int
-) -> str:
+) -> UUID:
     validate_query_or_raise(search_query)
     await validate_asset_type_or_raise(asset_type, apply_filtering=False)
 

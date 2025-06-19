@@ -6,7 +6,7 @@ import os
 from queue import Queue
 from typing import Type
 
-from beanie import PydanticObjectId
+from uuid import UUID
 from beanie.odm.operators.find.logical import Or
 import numpy as np
 from app.config import settings
@@ -28,7 +28,7 @@ from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
 
 
-QUERY_QUEUE: Queue[tuple[PydanticObjectId | None, Type[BaseUserQuery] | None]] = Queue()
+QUERY_QUEUE: Queue[tuple[UUID | None, Type[BaseUserQuery] | None]] = Queue()
 
 
 async def fill_query_queue() -> None:
@@ -101,9 +101,7 @@ async def search_thread() -> None:
             )
 
 
-async def fetch_user_query(
-    query_id: PydanticObjectId, query_type: Type[BaseUserQuery]
-) -> BaseUserQuery | None:
+async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:
     if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
         return None
 
