@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import os
 from pymilvus import MilvusClient, DataType
 import pandas as pd
@@ -121,7 +122,9 @@ def update_milvus_collections(
             old_collection_name, batch_size=1000, output_fields=field_names
         )
 
+        pbar = tqdm()
         while True:
+            pbar.update(1)
             batch = iterator.next()
             if not batch:
                 iterator.close()
