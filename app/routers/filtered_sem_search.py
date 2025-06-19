@@ -1,7 +1,7 @@
 from typing import Annotated, Any, Type
-from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from uuid import UUID
+from fastapi import APIRouter, Body, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,6 @@ from app.routers.sem_search import (
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
 from app.schemas.query import FilteredUserQueryResponse
-from app.services.database import Database
 
 router = APIRouter()
 
@@ -39,7 +38,6 @@ def get_body_examples_argument() -> dict:
 
 @router.post("")
 async def submit_filtered_query(
-    database: Annotated[Database, Depends(Database)],
     search_query: str = Query(
         ..., max_length=200, min_length=1, description="User search query with filters"
     ),
@@ -54,13 +52,12 @@ async def submit_filtered_query(
     ),
     topk: int = Query(default=10, gt=0, le=100, description="Number of assets to return"),
 ) -> RedirectResponse:
-    query_id = await _sumbit_filtered_query(database, search_query, asset_type, filters, topk=topk)
+    query_id = await _sumbit_filtered_query(search_query, asset_type, filters, topk=topk)
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
 
 
 @router.get("/{query_id}/result")
 async def get_filtered_query_result(
-    database: Annotated[Database, Depends(Database)],
     query_id: UUID = Path(..., description="Valid query ID"),
     return_entire_assets: bool = Query(
         default=False,
@@ -68,7 +65,7 @@ async def get_filtered_query_result(
     ),
 ) -> FilteredUserQueryResponse:
     return await get_query_results(
-        query_id, database, FilteredUserQuery, return_entire_assets=return_entire_assets
+        query_id, FilteredUserQuery, return_entire_assets=return_entire_assets
     )
 
 
@@ -135,14 +132,13 @@ async def get_filter_schema(
 
 
 async def _sumbit_filtered_query(
-    database: Database,
     search_query: str,
     asset_type: SupportedAssetType,
     filters: list[Filter] | None,
     topk: int,
-) -> str:
+) -> UUID:
     validate_query_or_raise(search_query)
-    validate_asset_type_or_raise(asset_type, database, apply_filtering=True)
+    await validate_asset_type_or_raise(asset_type, apply_filtering=True)
 
     if filters:
         for filter in filters:
@@ -154,4 +150,4 @@ async def _sumbit_filtered_query(
         topk=topk,
         filters=filters if filters else None,
     )
-    return await submit_query(user_query, database)
+    return await submit_query(user_query)
