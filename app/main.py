@@ -12,6 +12,7 @@ from app.config import settings
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
+from app.routers import chatbot_endpoint as chatbot_router
 from app.services.database import Database
 from app.services.threads import threads
 from app.services.threads.embedding_thread import (
@@ -49,6 +50,7 @@ if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(
         filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
     )
+app.include_router(chatbot_router.router, prefix="/chat", tags=["chatbot"])
 
 
 app.add_middleware(

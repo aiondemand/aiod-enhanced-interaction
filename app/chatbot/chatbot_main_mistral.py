@@ -4,21 +4,23 @@ import os
 from mistralai import Mistral, FunctionResultEntry
 from dotenv import load_dotenv
 import torch
-from pymilvus import MilvusClient, DataType
+from pymilvus import MilvusClient
 from app.services.inference.architecture import Basic_EmbeddingModel, SentenceTransformerToHF
 # from app.services.aiod import perform_url_request, get_aiod_asset -> importing this produces a lot of errors
 from nltk import edit_distance
 from urllib.parse import urljoin
 import requests
-from datetime import datetime
 from app.chatbot.prompt_library import *
 
-load_dotenv(".env.chatbot")
+# load_dotenv(".env.chatbot")   # run directly
+load_dotenv("app/chatbot/.env.chatbot")  # run through chatbot endpoint
 mistral_key = os.getenv("MISTRAL_KEY")
 website_collection = os.getenv("WEBSITE_COLLECTION")
+api_collection = os.getenv("API_COLLECTION")
 
 # load app .env
-load_dotenv("../../.env.app")
+# load_dotenv("../../.env.app")  # run directly
+load_dotenv(".env.app")  # run through chatbot endpoint
 milvus_uri = os.getenv("MILVUS__URI")
 milvus_token = os.getenv('MILVUS__USER')+":"+os.getenv('MILVUS__PASS')
 embedding_llm = os.getenv('MODEL_LOADPATH')
@@ -56,7 +58,6 @@ def embed_query(model, query: str) -> list[list[float]]:
     return embedding
 
 
-# store = {'-1': ChatMessageHistory(messages=[HumanMessage(content='mushroom dataset'), AIMessage(content="Question: mushroom dataset\nThought: I should use the resource_search tool to find datasets related to mushrooms.\nAction: resource_search\nAction Input: mushroom dataset\nObservation: \ndatasets 1:\nhttps://www.openml.org/search?type=data&id=43922\nmushroom\n['machine learning', 'meteorology']\nMushroom records drawn from The Audubon Society Field Guide to North American Mushrooms (1981). G. H. Lincoff (Pres.), New York: Alfred A. Knopf\nlink:https://www.openml.org/search?type=data&id=43922\n\ndatasets 2:\nhttps://www.openml.org/search?type=data&id=43923\nmushroom\n['machine learning', 'medicine']\nNursery Database was derived from a hierarchical decision model originally developed to rank applications for nursery schools.\nlink:https://www.openml.org/search?type=data&id=43923\n\ndatasets 3:\nhttps://zenodo.org/api/records/8212067\nA new species of smooth-spored Inocybe from Coniferous forests of Pakistan\n['taxonomy', 'mushroom', 'mycology', 'inocybe', 'pakistan']\nInocybe bhurbanensis is described and illustrated as a new species from Himalayan Moist Temperate forests of Pakistan. It is characterized by fibrillose, conical to convex, umbonate, brown to dark brown pileus, non-pruinose, fibrillose stipe with whitish tomentum at the base and smooth basidiospores that are larger (9 × 5.2 µm) and thicker caulocystidia (up to 21 m) as compared to the sister species Inocybe demetris. Phylogenetic analyses of a nuclear rDNA region encompassing the internal transcribed spacers 1 and 2 along with 5.8S rDNA (ITS) and the 28S rDNA D1–D2 domains (28S) also confirmed its novelty.\nlink:https://zenodo.org/api/records/8212067\n\ndatasets 4:\nhttps://zenodo.org/api/records/7797389\nData from: Effects of fungicides on aquatic fungi and bacteria: a comparison of morphological and molecular approaches from a microcosm experiment\n['dna metabarcoding', 'streams', 'community composition', 'stress response', 'leaf decomposition']\nData files and R code for the manuscript: Effects of fungicides on aquatic fungi and bacteria: a comparison of morphological and molecular approaches from a microcosm experiment. Published in Environmental Sciences Europe.\nlink:https://zenodo.org/api/records/7797389\n\ndatasets 5:\nhttps://zenodo.org/api/records/8210711\nSupplementary material 4 from: Jung P, Werner L, Briegel-Williams L, Emrich D, Lakatos M (2023) Roccellinastrum, Cenozosia and Heterodermia: Ecology and phylogeny of fog lichens and their photobionts from the coastal Atacama Desert. MycoKeys 98: 317- [...]\n['niebla', 'symbiochloris', 'pan de azucar', 'heterodermia', 'chlorolichens', 'trebouxia']\nSpot tests and TLC\nlink:https://zenodo.org/api/records/8210711\n\nThought: I now know the final answer\nFinal Answer: Here are some datasets related to mushrooms:\n\n1. [Mushroom records from The Audubon Society Field Guide to North American Mushrooms (1981)](https://www.openml.org/search?type=data&id=43922)\n2. [Nursery Database derived from a hierarchical decision model](https://www.openml.org/search?type=data&id=43923)\n3. [A new species of smooth-spored Inocybe from Coniferous forests of Pakistan](https://zenodo.org/api/records/8212067)\n4. [Effects of fungicides on aquatic fungi and bacteria](https://zenodo.org/api/records/7797389)\n5. [Supplementary material on fog lichens and their photobionts from the coastal Atacama Desert](https://zenodo.org/api/records/8210711)")])}
 store = {}
 embedding_model = prepare_embedding_model()
 
@@ -67,6 +68,23 @@ def aiod_page_search(query: str) -> str:
     embedding_vector = embed_query(embedding_model, query)
     docs = milvus_db.query(
         collection_name=website_collection,
+        anns_field=[embedding_vector],
+        output_fields=["url", "content"],
+        limit=3
+    )
+    # print(docs[0])
+    result = ""
+    for index, doc in enumerate(docs):
+        result += "Result "+str(index) + ":\n" + doc['content'] + "\nlink:" + doc['url'] + "\n"
+    # print("aiod_page_search output", result)
+    return result
+
+
+def aiod_api_search(query: str) -> str:
+    """Used to explain the AIoD API."""
+    embedding_vector = embed_query(embedding_model, query)
+    docs = milvus_db.query(
+        collection_name=api_collection,
         anns_field=[embedding_vector],
         output_fields=["url", "content"],
         limit=3
@@ -154,27 +172,6 @@ tools = [
     {
         "type": "function",
         "function": {
-            "name": "multiply",
-            "description": "Multiply two numbers",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "a": {
-                        "type": "integer",
-                        "description": "The first number to multiply.",
-                    },
-                    "b": {
-                        "type": "integer",
-                        "description": "The second number to multiply.",
-                    }
-                },
-                "required": ["a", "b"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "asset_search",
             "description": "Used to search for resources a user needs",
             "parameters": {
@@ -209,31 +206,48 @@ tools = [
                 "required": ["query"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "aiod_api_search",
+            "description": "Used to search for information on the api of AIoD and to guide the user through it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to search for",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
     }
 ]
 
 names_to_functions = {
-    'multiply': functools.partial(multiply),
     'asset_search': functools.partial(asset_search),
-    'aiod_page_search': functools.partial(aiod_page_search)
+    'aiod_page_search': functools.partial(aiod_page_search),
+    'aiod_api_search': functools.partial(aiod_api_search)
 }
 
 
 def handle_function_call(input_response):
     if input_response.outputs[-1].type == "function.call":
-        print("function.call")
-        if input_response.outputs[-1].name == "multiply":
-            print("multiply")
-            function_result = json.dumps(multiply(**json.loads(input_response.outputs[-1].arguments)))
+        # print("function.call")
+        if input_response.outputs[-1].name == "aiod_api_search":
+            # print("multiply")
+            function_result = json.dumps(aiod_api_search(**json.loads(input_response.outputs[-1].arguments)))
         elif input_response.outputs[-1].name == "asset_search":
-            print('asset_search')
+            # print('asset_search')
             function_result = json.dumps(asset_search(**json.loads(input_response.outputs[-1].arguments)))
         elif input_response.outputs[-1].name == "aiod_page_search":
-            print("aiod_page_search")
+            # print("aiod_page_search")
             function_result = json.dumps(aiod_page_search(**json.loads(input_response.outputs[-1].arguments)))
         else:
-            print("return 1", input_response.outputs[-1].content)
-            return input_response.outputs[-1].content
+            print("return 1", input_response.outputs[-1])
+            return input_response.outputs[-1].content  # no content in response outputs
 
         # print("function result", function_result)
         # Providing the result to our Agent
@@ -248,11 +262,26 @@ def handle_function_call(input_response):
             conversation_id=input_response.conversation_id,
             inputs=[user_function_calling_entry]
         )
-        print("tool response", tool_response)
+        # print("tool response", tool_response)
         return handle_function_call(tool_response)
     else:
-        print("return 2", input_response.outputs[-1].content)  # TODO result is not always correctly returned through the recursions
         return input_response.outputs[-1].content
+
+
+def moderate_input(input_query, conversation=None):
+    response = client.classifiers.moderate_chat(
+        model="mistral-moderation-latest",
+        inputs=[
+            {"role": "user", "content": input_query},
+            {"role": "assistant", "content": "...assistant response..."},
+        ],
+    )
+    respond = True
+    for category in response.results[0].categories.keys():
+        if response.results[0].categories[category]:
+            respond = False
+
+    return respond
 
 
 talk2aiod = client.beta.agents.create(
@@ -266,26 +295,36 @@ talk2aiod = client.beta.agents.create(
 )
 
 
+# TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
 def start_conversation(user_query: str):
     response = client.beta.conversations.start(
         agent_id=talk2aiod.id,
         inputs=user_query
         )
-    result = handle_function_call(response)
-    return result, response.conversation_id
-
-
-a = start_conversation("How can I contact AIoD")
-print("aaaaaaaaa", a[0], a[1])
+    if moderate_input(user_query):
+        result = handle_function_call(response)
+        return result, response.conversation_id
+    else:
+        return "I can not answer this question."
 
 
 def continue_conversation(user_query: str, conversation_id: str):
     response = client.beta.conversations.append(
         conversation_id=conversation_id, inputs=user_query
     )
-    print(response)
-    result = handle_function_call(response)
-    return result
+    if moderate_input(user_query):
+        result = handle_function_call(response)
+        return result
+    else:
+        return "I can not answer this question."
 
 
-b = continue_conversation("who is jennifer renoux", a[1])
+# a = start_conversation("How can I contact AIoD")
+# print("start conversation", a[0], a[1])
+
+
+# b = continue_conversation("who is jennifer renoux", a[1])
+# print("continue conversation", b)
+
+# c = continue_conversation("what did I ask for previously?", a[1])
+# print("continue conversation2", c)
