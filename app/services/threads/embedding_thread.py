@@ -134,7 +134,7 @@ def process_aiod_assets_wrapper(
     asset_type: SupportedAssetType,
 ) -> None:
     existing_asset_ids_from_past = embedding_store.get_all_asset_ids(asset_type)
-    newly_added_asset_ids: list[int] = []
+    newly_added_asset_ids: list[str] = []
 
     last_update = asset_collection.last_update
     last_db_sync_datetime: datetime | None = getattr(last_update, "from_time", None)
@@ -224,10 +224,10 @@ def process_aiod_assets_wrapper(
 def get_assets_to_add_and_delete(
     asset_type: SupportedAssetType,
     url_params: RequestParams,
-    existing_asset_ids_from_past: list[int],
-    newly_added_asset_ids: list[int],
+    existing_asset_ids_from_past: list[str],
+    newly_added_asset_ids: list[str],
     last_db_sync_datetime: datetime | None,
-) -> tuple[list[dict] | None, list[int] | None]:
+) -> tuple[list[dict] | None, list[str] | None]:
     mark_recursions: list[int] = []
     assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 

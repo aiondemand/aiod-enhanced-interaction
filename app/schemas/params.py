@@ -31,7 +31,7 @@ class VectorSearchParams(BaseModel, ABC):
 
     # filter related attributes
     metadata_filter: str = ""
-    asset_ids_to_exclude: list[int] = Field(default_factory=list)
+    asset_ids_to_exclude: list[str] = Field(default_factory=list)
 
     @abstractmethod
     def get_params(self) -> dict:
