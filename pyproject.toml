@@ -22,7 +22,7 @@ dependencies = [
     "tinydb==4.8.0",
     "tinydb-serialization==2.1.1",
     "apscheduler==3.10.4",
-    "langchain-core==0.3.47",
+    "langchain-core==0.3.66",
     "langchain-ollama==0.2.3",
     "ollama==0.4.7"
 ]
