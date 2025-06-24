@@ -125,11 +125,6 @@ def get_asset_from_aiod(asset_id: int, asset: str):
     return result.json()
 
 
-def multiply(a: int, b: int) -> str:
-    """Multiply two numbers."""
-    return json.dumps({'result': str(a * b)})
-
-
 def asset_search(query: str, asset: str) -> str:
     """
     Used to search for resources a user needs.
@@ -234,16 +229,17 @@ names_to_functions = {
 
 
 def handle_function_call(input_response):
+    print("handle_function_call", input_response)
     if input_response.outputs[-1].type == "function.call":
-        # print("function.call")
+        print("function.call")
         if input_response.outputs[-1].name == "aiod_api_search":
-            # print("multiply")
+            print("aiod_api_search", input_response.outputs[-1].arguments)
             function_result = json.dumps(aiod_api_search(**json.loads(input_response.outputs[-1].arguments)))
         elif input_response.outputs[-1].name == "asset_search":
-            # print('asset_search')
+            print('asset_search', input_response.outputs[-1].arguments)
             function_result = json.dumps(asset_search(**json.loads(input_response.outputs[-1].arguments)))
         elif input_response.outputs[-1].name == "aiod_page_search":
-            # print("aiod_page_search")
+            print("aiod_page_search", input_response.outputs[-1].arguments)
             function_result = json.dumps(aiod_page_search(**json.loads(input_response.outputs[-1].arguments)))
         else:
             print("return 1", input_response.outputs[-1])
@@ -289,7 +285,12 @@ talk2aiod = client.beta.agents.create(
     description="The Talk2AIoD chatbot",
     name="Talk2AIoD",
     tools=tools,
-    instructions=prefix
+    instructions=master_prompt,
+    completion_args={
+        "temperature": 0.3,
+        "top_p": 0.95,
+    }
+
     # tool_choice = "any",
     # parallel_tool_calls = True,
 )

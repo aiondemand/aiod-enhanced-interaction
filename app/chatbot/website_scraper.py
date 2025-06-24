@@ -1,4 +1,6 @@
 import asyncio
+
+import pandas
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
@@ -123,7 +125,7 @@ async def scraper(anchor_url):
                 'id': id_list
                 }
         df = pd.DataFrame(data)
-        df.to_csv("test_8.csv", sep=",", index=False)
+        df.to_csv("test_9.csv", sep=",", index=False)
         # df.to_json()
 
         api_data = {
@@ -289,9 +291,9 @@ def prepare_data(website_content: pd.DataFrame):
     return result_df.to_dict(orient='records')
 
 
-def populate_webcontent_collection(collection_name: str, client: MilvusClient):
-    # website_content = scraper()
-    website_content = pd.read_csv("test_8.csv")
+def populate_webcontent_collection(collection_name: str, client: MilvusClient, website_content: pandas.DataFrame):
+    # website_content = scraper("https://aiod.eu")
+    # website_content = pd.read_csv("test_8.csv")
     client.drop_collection(collection_name)
     # print(website_content.head())
     # client.drop_collection(collection_name=collection_name)
@@ -313,9 +315,9 @@ def populate_webcontent_collection(collection_name: str, client: MilvusClient):
         return res
 
 
-def populate_api_collection(api_collection_name: str, client: MilvusClient):
+def populate_api_collection(api_collection_name: str, client: MilvusClient, website_content: pandas.DataFrame):
     # website_content = scraper()
-    website_content = pd.read_csv("api_test_8.csv")
+    # website_content = pd.read_csv("api_test_8.csv")
     client.drop_collection(api_collection_name)
     # print(website_content.head())
     # client.drop_collection(collection_name=collection_name)
@@ -339,11 +341,12 @@ def populate_api_collection(api_collection_name: str, client: MilvusClient):
 
 def populate_collections():
     print("populate website:")
-    populate_webcontent_collection(web_collection_name, c)
+    website_df, api_df = asyncio.run(scraper("https://aiod.eu"))
+    populate_webcontent_collection(web_collection_name, c, website_df)
     print("populate api:")
-    populate_api_collection(api_collection_name, c)
+    populate_api_collection(api_collection_name, c, api_df)
 
 
-# asyncio.run(scraper("https://aiod.eu"))
-populate_collections()
+asyncio.run(scraper("https://aiod.eu"))
+# populate_collections()
 
