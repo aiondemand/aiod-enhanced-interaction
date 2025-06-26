@@ -135,7 +135,7 @@ async def scraper(anchor_url):
             'id': api_id_list
         }
         api_df = pd.DataFrame(api_data)
-        api_df.to_csv("api_test_8.csv", sep=",", index=False)
+        api_df.to_csv("api_test_9.csv", sep=",", index=False)
         # api_df.to_json()
         return df, api_df
 
@@ -181,7 +181,6 @@ def update_content_collection(collection_name: str, client: MilvusClient, conten
         filter=where_clause,
         output_fields=["id", "url", "last_modified"]
     )
-    print(entries_to_examine[0])
     entries_to_delete = []
     entries_to_add = []
 
@@ -193,10 +192,17 @@ def update_content_collection(collection_name: str, client: MilvusClient, conten
                 entries_to_delete.append(entry['id'])
                 entries_to_add += subset['id'].tolist()
 
+    # find pages that have no representation in the milvus db and add them to the add list
     urls_to_examine = [x['url'] for x in entries_to_examine]
-    for new_entry in content['url'].tolist():
+    content_url_list = content['url'].tolist()
+    for new_entry in content_url_list:
         if new_entry not in urls_to_examine:
             entries_to_add += content[content['url'] == new_entry]['id'].tolist()
+
+    # find pages that are not reachable on the web anymore and add their ids to the delete list
+    for index, element in enumerate(urls_to_examine):  # TODO test this
+        if element not in content_url_list:
+            entries_to_delete.append(entries_to_examine[index]['id'])
 
     # delete entries
     print("del", len(entries_to_delete), entries_to_delete)
