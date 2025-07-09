@@ -120,8 +120,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-**/.env
-**/.env-dev
 .venv
 env/
 venv/
@@ -189,8 +187,8 @@ temp/
 tmp/
 db/
 
-
-.env.*
+.env
+.env.app
 !.env.*.sample
 
 # Generated Dockerfile/compose for a particular env var combination

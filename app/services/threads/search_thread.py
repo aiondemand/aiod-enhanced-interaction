@@ -151,7 +151,7 @@ def search_asset_collection(
     user_query: BaseUserQuery,
     num_search_retries: int = 5,
 ) -> AssetResults:
-    asset_ids_to_remove_from_db: list[int] = []
+    asset_ids_to_remove_from_db: list[str] = []
     all_assets_to_return = AssetResults()
 
     for _ in range(num_search_retries):
@@ -241,7 +241,7 @@ def prepare_search_parameters(
 def validate_assets(
     results: SearchResults,
     search_params: VectorSearchParams,
-    asset_ids_to_remove_from_db: list[int],
+    asset_ids_to_remove_from_db: list[str],
 ) -> AssetResults:
     if len(results) == 0:
         return AssetResults()

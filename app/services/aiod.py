@@ -20,7 +20,7 @@ from app.services.resilience import AIoDUnavailableException
 
 def recursive_aiod_asset_fetch(
     asset_type: SupportedAssetType, url_params: RequestParams, mark_recursions: list[int]
-) -> list:
+) -> list[dict]:
     sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
     url = settings.AIOD.get_assets_url(asset_type)
     queries = _build_aiod_url_queries(url_params)
@@ -54,20 +54,22 @@ def recursive_aiod_asset_fetch(
 
 
 def get_aiod_asset(
-    asset_id: int, asset_type: SupportedAssetType, sleep_time: float = 0.1
+    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
 ) -> dict | None:
     try:
         sleep(sleep_time)
         response = perform_url_request(settings.AIOD.get_asset_by_id_url(asset_id, asset_type))
         return response.json()
     except HTTPError as e:
-        if e.response.status_code == 404:
+        # Some assets may eventually get hidden rather than deleted hence why we don't check for
+        # one specific status code only
+        if 400 <= e.response.status_code < 500:
             return None
         raise
 
 
 def check_aiod_asset(
-    asset_id: int, asset_type: SupportedAssetType, sleep_time: float = 0.1
+    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
 ) -> bool:
     return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
