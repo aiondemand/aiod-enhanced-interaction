@@ -114,10 +114,10 @@ class AIoDConfig(BaseModel):
         return types
 
     def get_assets_url(self, asset_type: SupportedAssetType) -> str:
-        return urljoin(str(self.URL), f"{asset_type.value}/v1")
+        return urljoin(str(self.URL), f"{asset_type.value}")
 
-    def get_asset_by_id_url(self, asset_id: int, asset_type: SupportedAssetType) -> str:
-        return urljoin(str(self.URL), f"{asset_type.value}/v1/{asset_id}")
+    def get_asset_by_id_url(self, asset_id: str, asset_type: SupportedAssetType) -> str:
+        return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
 
 
 class Settings(BaseSettings):

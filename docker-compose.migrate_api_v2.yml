@@ -1,0 +1,16 @@
+services:
+  migrate-ids:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate_api_v2
+    environment:
+      - TSV_DIRPATH=/data/id_tsv_files
+      - MILVUS_URI=http://milvus-standalone:19530
+      - MILVUS_TOKEN=${MILVUS_TOKEN}
+      - MILVUS_CSV_COLLECTIONS=${MILVUS_CSV_COLLECTIONS}
+      - MILVUS_PREFIX=${MILVUS_PREFIX}
+    volumes:
+      - ${TSV_DIRPATH}:/data/id_tsv_files
+    depends_on:
+      milvus-standalone:
+        condition: service_healthy

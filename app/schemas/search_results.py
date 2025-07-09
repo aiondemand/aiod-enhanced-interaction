@@ -8,7 +8,7 @@ from app.schemas.enums import SupportedAssetType
 
 
 class SearchResults(BaseModel):
-    asset_ids: list[int] = Field(default_factory=list)
+    asset_ids: list[str] = Field(default_factory=list)
     distances: list[float] = Field(default_factory=list)
     asset_types: list[SupportedAssetType] = Field(default_factory=list)
 
@@ -52,7 +52,7 @@ class AssetResults(SearchResults):
         else:
             raise TypeError("Invalid index type")
 
-    def filter_out_assets_by_id(self, asset_ids_to_del: list[int]) -> AssetResults:
+    def filter_out_assets_by_id(self, asset_ids_to_del: list[str]) -> AssetResults:
         idx_to_keep = np.where(~np.isin(self.asset_ids, asset_ids_to_del))[0].tolist()
         return self[idx_to_keep]
 

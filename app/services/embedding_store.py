@@ -41,7 +41,7 @@ class EmbeddingStore(Generic[SearchParams], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def remove_embeddings(self, asset_ids: list[int], asset_type: SupportedAssetType) -> int:
+    def remove_embeddings(self, asset_ids: list[str], asset_type: SupportedAssetType) -> int:
         raise NotImplementedError
 
     @abstractmethod
@@ -49,7 +49,7 @@ class EmbeddingStore(Generic[SearchParams], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_all_asset_ids(self, asset_type: SupportedAssetType) -> list[int]:
+    def get_all_asset_ids(self, asset_type: SupportedAssetType) -> list[str]:
         raise NotImplementedError
 
     @abstractmethod
@@ -58,7 +58,7 @@ class EmbeddingStore(Generic[SearchParams], ABC):
 
     @abstractmethod
     def get_asset_embeddings(
-        self, asset_id: int, asset_type: SupportedAssetType
+        self, asset_id: str, asset_type: SupportedAssetType
     ) -> list[list[float]] | None:
         raise NotImplementedError
 
@@ -123,7 +123,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             schema = self.client.create_schema(auto_id=True)
             schema.add_field("id", DataType.INT64, is_primary=True)
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
-            schema.add_field("asset_id", DataType.INT64)
+            schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
 
             if self.extract_metadata:
                 if asset_type == SupportedAssetType.DATASETS:
@@ -193,7 +193,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
     def exists_collection(self, asset_type: SupportedAssetType) -> bool:
         return self.client.has_collection(self.get_collection_name(asset_type))
 
-    def get_all_asset_ids(self, asset_type: SupportedAssetType) -> list[int]:
+    def get_all_asset_ids(self, asset_type: SupportedAssetType) -> list[str]:
         collection_name = self.get_collection_name(asset_type)
 
         if self.client.has_collection(collection_name) is False:
@@ -222,7 +222,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         self._create_collection(asset_type)
 
         all_embeddings: list[list[float]] = []
-        all_asset_ids: list[int] = []
+        all_asset_ids: list[str] = []
         all_metadata: list[dict] = []
 
         total_inserted = 0
@@ -270,7 +270,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         return total_inserted
 
-    def remove_embeddings(self, asset_ids: list[int], asset_type: SupportedAssetType) -> int:
+    def remove_embeddings(self, asset_ids: list[str], asset_type: SupportedAssetType) -> int:
         collection_name = self.get_collection_name(asset_type)
 
         return self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
@@ -288,7 +288,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             self.client.search(collection_name=collection_name, **search_params.get_params())
         )
 
-        asset_ids: list[int] = []
+        asset_ids: list[str] = []
         distances: list[float] = []
         for results in query_results:
             asset_ids.extend([match["entity"]["asset_id"] for match in results])
@@ -309,14 +309,14 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         )
 
     def get_asset_embeddings(
-        self, asset_id: int, asset_type: SupportedAssetType
+        self, asset_id: str, asset_type: SupportedAssetType
     ) -> list[list[float]] | None:
         collection_name = self.get_collection_name(asset_type)
 
         try:
             data = self.client.query(
                 collection_name=collection_name,
-                filter=f"asset_id == {asset_id}",
+                filter=f"asset_id == '{asset_id}'",
                 output_fields=["vector"],
             )
             if not data:
