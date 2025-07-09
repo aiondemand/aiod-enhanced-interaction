@@ -1,3 +1,10 @@
+<!-- TODO -->
+
+### Helper notes for myself
+- Command for performing env var substitution in YAML file:
+    - `set -a && source .env && set +a && envsubst < k8s/milvus/values.yaml.template > k8s/milvus/values.yaml
+`
+
 # Semantic search module
 
 <!-- TODO UPDATE (account for other services besides sem search when describing this repo) -->

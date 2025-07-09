@@ -195,3 +195,7 @@ db/
 # but for the sake of keeping the reposiroty clean we may as well ignore them
 Dockerfile.final
 docker-compose.final.yml
+
+
+# Kubernetes secrets
+k8s/milvus/values.yaml

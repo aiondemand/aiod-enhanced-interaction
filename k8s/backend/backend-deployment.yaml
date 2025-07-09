@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: your-registry/your-backend-image:latest #TODO build image beforehand
+          image: enhanced-search-backend:latest #TODO build image beforehand
+          # TODO later on an initContainer should be used for setting up credentials
           command: ["/bin/sh", "-c", "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"] # TODO questionable
           ports:
             - containerPort: 80
@@ -26,9 +27,9 @@ spec:
             - name: TINYDB_FILEPATH
               value: /data/tinydb.json
             - name: MILVUS__URI
-              value: http://milvus-service:19530 #TODO
+              value: http://milvus:19530
             - name: OLLAMA__URI
-              value: http://ollama-service:11434 #
+              value: http://ollama-service:11434
           volumeMounts:
             - name: tinydb
               mountPath: /data

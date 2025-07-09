@@ -22,8 +22,8 @@ standalone:
 
 minio:
   mode: standalone
-  accessKey: minio_access_very_secret
-  secretKey: minio_key_very_secret
+  accessKey: ${MINIO_ACCESS_KEY}
+  secretKey: ${MINIO_SECRET_KEY}
   persistence:
     enabled: true
     existingClaim: ""
@@ -94,8 +94,8 @@ extraConfigFiles:
         level: warn
     minio:
       logLevel: warn
-      accessKeyID: minio_access_very_secret
-      secretAccessKey: minio_key_very_secret
+      accessKeyID: ${MINIO_ACCESS_KEY}
+      secretAccessKey: ${MINIO_SECRET_KEY}
     log:
       level: warn
     queryNode:
@@ -104,4 +104,4 @@ extraConfigFiles:
     common:
       security:
         authorizationEnabled: true
-        defaultRootPassword: "testingSecret"
+        defaultRootPassword: "${MILVUS_SECRET}"
