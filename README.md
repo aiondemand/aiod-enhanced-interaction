@@ -210,6 +210,10 @@ Perform the following steps to deploy the service:
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
     1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
 1. [Optional] If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `MONGO_ASSETCOLS_DUMP_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `./scripts/populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
+    - **Prerequisites for populating databases:**
+        - Precomputed asset embeddings and their associated metadata fields for each Milvus collection all stored in multiple JSON files that follow a specific file-hierarchy
+        - MongoDB documents of `assetCollections` collection stored in a JSON format
+
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
     - **Notice**: We don't advise using this step unless you're fairly familiar with the project and know the format the data is supposed to have for populating the databases.
     - *This script may take up to 15 minutes.*

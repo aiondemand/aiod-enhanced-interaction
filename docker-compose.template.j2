@@ -24,6 +24,7 @@ services:
       - MONGO__USER=${MONGO_USER}
       - MONGO__PASSWORD=${MONGO_PASSWORD}
       - MONGO__DBNAME=aiod
+      - AIOD__JSON_SAVEPATH=/cold_data
       {% if USE_LLM == "true" %}
       - OLLAMA__URI=http://ollama:11434
       {% endif %}
@@ -43,6 +44,7 @@ services:
       {% endif %}
     volumes:
       - ${DATA_DIRPATH}/model:/model
+      - ${DATA_DIRPATH}/cold_data:/cold_data
     healthcheck:
       # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
       # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76

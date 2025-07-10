@@ -118,7 +118,7 @@ class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse, OldSimpleUserQueryR
         return SimpleUserQueryResponse(
             **self.prepare_response_kwargs(return_entire_assets, old_schema=False)
         )
-        
+
 
 class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse, OldFilteredUserQueryResponse]):
     search_query: str
