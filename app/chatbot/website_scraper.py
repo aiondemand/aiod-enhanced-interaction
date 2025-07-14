@@ -14,6 +14,7 @@ import os
 from app.services.inference.architecture import Basic_EmbeddingModel, SentenceTransformerToHF
 from bs4 import BeautifulSoup
 
+
 load_dotenv("../../.env.app")
 
 milvus_uri = os.getenv("MILVUS__URI")
@@ -48,6 +49,20 @@ filter_chain= FilterChain([
 ])
 
 
+def last_modified_time(html_content: str) -> str | None:
+    metadata_time = extract_meta_content(html_content, "article:modified_time")
+    if metadata_time:
+        return metadata_time
+    else:
+        span_time = extract_span_content(html_content, "git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime")
+        if span_time:
+            return span_time
+        else:
+            return ""
+
+
+
+
 def extract_meta_content(html_content: str, property_name: str) -> str | None:
     """
     Extracts the content of a meta tag with a specific 'property' attribute.
@@ -73,12 +88,26 @@ def extract_meta_content(html_content: str, property_name: str) -> str | None:
         return ""
 
 
+def extract_span_content(html_content: str, class_name: str) -> str|None:
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # Find the meta tag with the specified clas
+    span_tag = soup.find('span', attrs={'class': class_name})
+    # If the meta tag is found, return its 'content' attribute
+    if span_tag.text:
+        return span_tag.text
+    else:
+        return ""
+
+
+
 async def scraper(anchor_url):
     #ignore_images =True
 
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
-            max_depth=2,  # configure crawl level as needed
+            max_depth=0,  # configure crawl level as needed
             include_external=False,
             filter_chain=filter_chain
         ),
@@ -105,13 +134,13 @@ async def scraper(anchor_url):
         for result in results:  # Show first 3 results
             if result.url not in url_list:  # make sure no duplicates are stored
                 if "api.aiod.eu" in result.url:
-                    last_modified = str(extract_meta_content(result.html, "article:modified_time"))
+                    last_modified = str(last_modified_time(result.html))
                     api_modified_time_list.append(last_modified)
                     api_content_list.append(result.markdown)
                     api_url_list.append(result.url)
                     api_id_list.append(str(uuid4()))
                 else:
-                    last_modified = str(extract_meta_content(result.html, "article:modified_time"))
+                    last_modified = str(last_modified_time(result.html))
                     modified_time_list.append(last_modified)
                     content_list.append(result.markdown)
                     url_list.append(result.url)
@@ -353,6 +382,7 @@ def populate_collections():
     populate_api_collection(api_collection_name, c, api_df)
 
 
-asyncio.run(scraper("https://aiod.eu"))
+# asyncio.run(scraper("https://aiod.eu"))
+asyncio.run(scraper("https://aiondemand.github.io/AIOD-rest-api/"))
 # populate_collections()
 
