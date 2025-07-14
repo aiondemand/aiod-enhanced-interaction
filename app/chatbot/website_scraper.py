@@ -61,8 +61,6 @@ def last_modified_time(html_content: str) -> str | None:
             return ""
 
 
-
-
 def extract_meta_content(html_content: str, property_name: str) -> str | None:
     """
     Extracts the content of a meta tag with a specific 'property' attribute.
@@ -101,7 +99,6 @@ def extract_span_content(html_content: str, class_name: str) -> str|None:
         return ""
 
 
-
 async def scraper(anchor_url):
     #ignore_images =True
 
@@ -133,18 +130,20 @@ async def scraper(anchor_url):
         api_modified_time_list = []
         for result in results:  # Show first 3 results
             if result.url not in url_list:  # make sure no duplicates are stored
-                if "api.aiod.eu" in result.url:
-                    last_modified = str(last_modified_time(result.html))
-                    api_modified_time_list.append(last_modified)
-                    api_content_list.append(result.markdown)
-                    api_url_list.append(result.url)
-                    api_id_list.append(str(uuid4()))
-                else:
-                    last_modified = str(last_modified_time(result.html))
-                    modified_time_list.append(last_modified)
-                    content_list.append(result.markdown)
-                    url_list.append(result.url)
-                    id_list.append(str(uuid4()))
+                if str(extract_meta_content(result.html, "x-dont-crawl")).lower() != "true":
+                    # only index pages that should be crawled
+                    if "api.aiod.eu" in result.url:
+                        last_modified = str(last_modified_time(result.html))
+                        api_modified_time_list.append(last_modified)
+                        api_content_list.append(result.markdown)
+                        api_url_list.append(result.url)
+                        api_id_list.append(str(uuid4()))
+                    else:
+                        last_modified = str(last_modified_time(result.html))
+                        modified_time_list.append(last_modified)
+                        content_list.append(result.markdown)
+                        url_list.append(result.url)
+                        id_list.append(str(uuid4()))
         print("url_list", len(url_list), url_list)
         print("api_url_list", len(api_url_list), api_url_list)
         data = {
