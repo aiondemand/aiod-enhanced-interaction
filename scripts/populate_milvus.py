@@ -105,7 +105,7 @@ def create_new_collection(
     schema = client.create_schema(auto_id=True)
     schema.add_field("id", DataType.INT64, is_primary=True)
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
-    schema.add_field("asset_id", DataType.INT64)
+    schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
 
     if extract_metadata and collection_name.endswith("_datasets"):
         # TODO for now this is a duplicate code to the index creation process found

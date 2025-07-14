@@ -2,7 +2,7 @@ import gc
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import partial
 from typing import Callable, Literal
 
@@ -13,8 +13,8 @@ from app.models.asset_collection import AssetCollection
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
-from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.helper import utc_now
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import (
     ConvertJsonToString,
@@ -54,12 +54,11 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
 
 async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: bool) -> None:
-    database = Database()
     embedding_store = MilvusEmbeddingStore()
 
     asset_types = settings.AIOD.ASSET_TYPES
     for asset_type in asset_types:
-        asset_collection = fetch_asset_collection(database, asset_type, first_invocation)
+        asset_collection = await fetch_asset_collection(asset_type, first_invocation)
         if asset_collection is None:
             continue
 
@@ -70,18 +69,16 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
                 HuggingFaceDatasetExtractMetadata.extract_huggingface_dataset_metadata,
                 asset_type=asset_type,
             )
-
         logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
         try:
-            process_aiod_assets_wrapper(
+            await process_aiod_assets_wrapper(
                 model=model,
                 stringify_function=partial(
                     ConvertJsonToString.extract_relevant_info, asset_type=asset_type
                 ),
                 extract_metadata_function=extract_metadata_func,
                 embedding_store=embedding_store,
-                database=database,
                 asset_collection=asset_collection,
                 asset_type=asset_type,
             )
@@ -99,19 +96,19 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
             logging.error("The above error has been encountered in the embedding thread.")
 
 
-def fetch_asset_collection(
-    database: Database, asset_type: SupportedAssetType, first_invocation: bool
+async def fetch_asset_collection(
+    asset_type: SupportedAssetType, first_invocation: bool
 ) -> AssetCollection | None:
-    asset_collection = database.get_first_asset_collection_by_type(asset_type)
+    asset_collection = await AssetCollection.get_first_object_by_asset_type(asset_type)
 
     if asset_collection is None:
         # DB setup
         asset_collection = AssetCollection(aiod_asset_type=asset_type)
-        database.insert(asset_collection)
+        await asset_collection.create_doc()
     elif asset_collection.last_update.finished and first_invocation is False:
         # Create a new recurring DB update
         asset_collection.add_recurring_update()
-        database.upsert(asset_collection)
+        await asset_collection.replace_doc()
     elif asset_collection.last_update.finished:
         # The last DB update was successful, we skip this asset in the
         # first invocation
@@ -124,12 +121,11 @@ def fetch_asset_collection(
     return asset_collection
 
 
-def process_aiod_assets_wrapper(
+async def process_aiod_assets_wrapper(
     model: AiModel,
     stringify_function: Callable[[dict], str],
     extract_metadata_function: Callable[[dict], dict] | None,
     embedding_store: EmbeddingStore,
-    database: Database,
     asset_collection: AssetCollection,
     asset_type: SupportedAssetType,
 ) -> None:
@@ -210,7 +206,7 @@ def process_aiod_assets_wrapper(
             newly_added_asset_ids += asset_ids
 
         asset_collection.update(embeddings_added=num_emb_added, embeddings_removed=num_emb_removed)
-        database.upsert(asset_collection)
+        await asset_collection.replace_doc()
 
         # during the traversal of AIoD assets, some of them may be deleted in between
         # which would make us skip some assets if we were to use tradinational
@@ -218,7 +214,7 @@ def process_aiod_assets_wrapper(
         url_params.offset += settings.AIOD.OFFSET_INCREMENT
 
     asset_collection.finish()
-    database.upsert(asset_collection)
+    await asset_collection.replace_doc()
 
 
 def get_assets_to_add_and_delete(
@@ -277,13 +273,13 @@ def parse_aiod_asset_date(
     string_time = asset.get("aiod_entry", {}).get(field, None)
 
     if string_time is not None:
-        return datetime.fromisoformat(string_time).replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(string_time).replace(tzinfo=None)
     else:
         if none_value == "none":
             return None
         elif none_value == "now":
-            return datetime.now(tz=timezone.utc)
+            return utc_now()
         elif none_value == "zero":
-            return datetime.fromtimestamp(0, tz=timezone.utc)
+            return datetime.fromtimestamp(0)
         else:
             return None
