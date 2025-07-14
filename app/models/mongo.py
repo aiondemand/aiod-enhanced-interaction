@@ -33,6 +33,11 @@ class MongoDocument(Document):
     async def find_all_docs(cls, *args, **kwargs) -> list[MongoDocument]:
         return await cls.find(*args, **kwargs).to_list()
 
+    @classmethod
+    @retry_loop(MongoUnavailableException)
+    async def delete_doc(cls, *args, **kwargs) -> DeleteResult:
+        return await cls.find(*args, **kwargs).delete()
+
     @retry_loop(MongoUnavailableException)
     async def create_doc(self, *args, **kwargs) -> MongoDocument:
         return await self.create(*args, **kwargs)
@@ -40,7 +45,3 @@ class MongoDocument(Document):
     @retry_loop(MongoUnavailableException)
     async def replace_doc(self, *args, **kwargs) -> MongoDocument:
         return await self.replace(*args, **kwargs)
-
-    @retry_loop(MongoUnavailableException)
-    async def delete_doc(self, *args, **kwargs) -> DeleteResult:
-        return await self.find(*args, **kwargs).delete()
