@@ -20,7 +20,7 @@ from app.schemas.enums import SupportedAssetType
 from app.schemas.params import MilvusSearchParams, VectorSearchParams
 from app.schemas.search_results import SearchResults
 from app.services.inference.model import AiModel
-from app.services.resilience import with_retry_sync
+from app.services.resilience import retry_loop
 
 SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
@@ -74,7 +74,7 @@ class MilvusClientResilientWrapper(MilvusClient):
             return attr
         if "timeout" in inspect.signature(attr).parameters:
             attr = partial(attr, timeout=settings.MILVUS.TIMEOUT)
-        return with_retry_sync(output_exception_cls=MilvusUnavailableException)(attr)
+        return retry_loop(output_exception_cls=MilvusUnavailableException)(attr)
 
 
 class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
@@ -250,12 +250,12 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
                 # Store data locally into JSON files as well if we wish to do so
                 # Used for storing cold start data in JSON format
-                if settings.AIOD.STORE_DATA_IN_JSON:
+                if settings.AIOD.STORE_DATA_IN_JSON and settings.AIOD.JSON_SAVEPATH is not None:
                     for i in range(len(data)):
                         data[i]["vector"] = data[i]["vector"].tolist()
 
                     full_json_filepath = (
-                        settings.TINYDB_FILEPATH.parent
+                        settings.AIOD.JSON_SAVEPATH
                         / f"jsons/{collection_name}"
                         / f"{str(uuid4())}.json"
                     )

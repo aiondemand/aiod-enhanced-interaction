@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urljoin
 
-from pydantic import AnyUrl, BaseModel, Field, field_validator
+from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from app.schemas.enums import SupportedAssetType
@@ -69,6 +71,7 @@ class AIoDConfig(BaseModel):
     DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS: int = Field(5, ge=1, le=31)
     TESTING: bool = Field(False)
     STORE_DATA_IN_JSON: bool = Field(False)
+    JSON_SAVEPATH: Path | None = Field(None)
 
     @classmethod
     def convert_csv_to_asset_types(cls, value: str) -> list[SupportedAssetType]:
@@ -92,6 +95,14 @@ class AIoDConfig(BaseModel):
     @classmethod
     def validate_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
+
+    @model_validator(mode="after")
+    def check_json_savepath(self) -> AIoDConfig:
+        if self.STORE_DATA_IN_JSON and self.JSON_SAVEPATH is None:
+            raise ValueError(
+                "You need to specify 'JSON_SAVEPATH' env var if 'STORE_DATA_IN_JSON' env var is set to True."
+            )
+        return self
 
     @property
     def OFFSET_INCREMENT(self) -> int:
@@ -120,13 +131,25 @@ class AIoDConfig(BaseModel):
         return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
 
 
+class MongoConfig(BaseModel):
+    HOST: str = Field(...)
+    PORT: int = Field(...)
+    DBNAME: str = Field("aiod")
+    USER: str = Field(...)
+    PASSWORD: str = Field(...)
+
+    @property
+    def connection_string(self) -> str:
+        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/"
+
+
 class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
+    MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
 
     USE_GPU: bool = Field(False)
-    TINYDB_FILEPATH: Path = Field(...)
     MODEL_LOADPATH: str = Field(...)
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
     CONNECTION_NUM_RETRIES: int = Field(5, gt=0)

@@ -6,6 +6,8 @@ import os
 from queue import Queue
 from typing import Type
 
+from uuid import UUID
+from beanie.odm.operators.find.logical import Or
 import numpy as np
 from app.config import settings
 from app.models.query import (
@@ -19,36 +21,32 @@ from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
-from app.services.database import Database
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
-from tinydb import Query
 
 
-QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
+QUERY_QUEUE: Queue[tuple[UUID | None, Type[BaseUserQuery] | None]] = Queue()
 
 
-def fill_query_queue(database: Database) -> None:
-    condition = (Query().status == QueryStatus.IN_PROGRESS) | (Query().status == QueryStatus.QUEUED)
-    simple_queries_to_process: list[BaseUserQuery] = database.search(SimpleUserQuery, condition)
-    filtered_queries_to_process: list[BaseUserQuery] = database.search(FilteredUserQuery, condition)
-    similar_queries_to_process: list[BaseUserQuery] = database.search(
-        RecommenderUserQuery, condition
-    )
+async def fill_query_queue() -> None:
+    async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
+        return await typ.find_all_docs(
+            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
+        )
 
-    if (
-        len(simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process)
-        == 0
-    ):
-        return
+    simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
+    filtered_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(FilteredUserQuery)
+    similar_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(RecommenderUserQuery)
 
     queries_to_process: list[BaseUserQuery] = sorted(
         simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
+    if len(queries_to_process) == 0:
+        return
     for query in queries_to_process:
         QUERY_QUEUE.put((query.id, type(query)))
 
@@ -58,9 +56,7 @@ def fill_query_queue(database: Database) -> None:
 
 
 async def search_thread() -> None:
-    # Singleton - already instantialized
-    database = Database()
-    fill_query_queue(database)
+    await fill_query_queue()
 
     model = AiModel("cpu")
     embedding_store = MilvusEmbeddingStore()
@@ -74,10 +70,10 @@ async def search_thread() -> None:
         if query_id is None or query_type is None:
             break
 
-        user_query = fetch_user_query(query_id, query_type, database)
+        user_query = await fetch_user_query(query_id, query_type)
         if user_query is None:
             continue
-        logging.info(f"Searching relevant assets for query ID: {query_id}")
+        logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
 
         try:
             results = search_across_assets_wrapper(
@@ -88,7 +84,7 @@ async def search_thread() -> None:
             )
             user_query.result_set = results
             user_query.update_status(QueryStatus.COMPLETED)
-            database.upsert(user_query)
+            await user_query.replace_doc()
         except LocalServiceUnavailableException as e:
             logging.error(e)
             logging.error(
@@ -98,27 +94,25 @@ async def search_thread() -> None:
             os._exit(1)
         except Exception as e:
             user_query.update_status(QueryStatus.FAILED)
-            database.upsert(user_query)
+            await user_query.replace_doc()
             logging.error(e)
             logging.error(
-                f"The above error has been encountered in the query processing thread while processing query ID: {query_id}"
+                f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
             )
 
 
-def fetch_user_query(
-    query_id: str, query_type: Type[BaseUserQuery], database: Database
-) -> BaseUserQuery | None:
+async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:
     if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
         return None
 
-    user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
+    user_query: BaseUserQuery | None = await query_type.get(query_id)
     if user_query is None:
         err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
         logging.error(err_msg)
         return None
     else:
         user_query.update_status(QueryStatus.IN_PROGRESS)
-        database.upsert(user_query)
+        await user_query.replace_doc()
 
         return user_query
 

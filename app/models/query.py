@@ -7,8 +7,8 @@ from typing import Generic, TypeVar
 from fastapi import HTTPException
 
 from app.config import settings
-from app.models.db_entity import DatabaseEntity
 from app.models.filter import Filter
+from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
     BaseUserQueryResponse,
@@ -21,14 +21,16 @@ from app.schemas.query import (
     ReturnedAsset,
     SimpleUserQueryResponse,
 )
+from app.services.helper import utc_now
 from app.schemas.search_results import AssetResults
+
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 # TODO get rid of these types later on
 OldResponse = TypeVar("OldResponse", bound=OldBaseUserQueryResponse)
 
 
-class BaseUserQuery(DatabaseEntity, Generic[Response, OldResponse], ABC):
+class BaseUserQuery(MongoDocument, BaseDatabaseEntity, Generic[Response, OldResponse], ABC):
     topk: int
     status: QueryStatus = QueryStatus.QUEUED
     result_set: AssetResults | None = None
@@ -36,17 +38,20 @@ class BaseUserQuery(DatabaseEntity, Generic[Response, OldResponse], ABC):
 
     def update_status(self, status: QueryStatus) -> None:
         self.status = status
-        self.updated_at = datetime.now(tz=timezone.utc)
+        self.updated_at = utc_now()
 
         if self.status in (QueryStatus.COMPLETED, QueryStatus.FAILED):
-            self.expires_at = datetime.now(tz=timezone.utc) + timedelta(
-                minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES
-            )
+            self.expires_at = (
+                datetime.now(tz=timezone.utc)
+                + timedelta(minutes=settings.QUERY_EXPIRATION_TIME_IN_MINUTES)
+            ).replace(tzinfo=None)
 
     def prepare_response_kwargs(
         self, return_entire_assets: bool = False, old_schema: bool = False
     ) -> dict:
         kwargs = self.model_dump()
+        if self.expires_at is not None:
+            kwargs["expires_at"] = self.expires_at.replace(tzinfo=timezone.utc)
 
         if old_schema:
             if kwargs.get("asset_type", None) is not None:
@@ -78,7 +83,7 @@ class BaseUserQuery(DatabaseEntity, Generic[Response, OldResponse], ABC):
 
     @property
     def is_expired(self) -> bool:
-        return self.expires_at is not None and self.expires_at < datetime.now(tz=timezone.utc)
+        return self.expires_at is not None and self.expires_at < utc_now()
 
     @staticmethod
     def sort_function_to_populate_queue(query: BaseUserQuery) -> tuple[bool, float]:
@@ -94,6 +99,9 @@ class BaseUserQuery(DatabaseEntity, Generic[Response, OldResponse], ABC):
 class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse, OldSimpleUserQueryResponse]):
     search_query: str
     asset_type: AssetTypeQueryParam
+
+    class Settings:
+        name = "simpleUserQueries"
 
     def map_to_response(
         self, return_entire_assets: bool = False, old_schema: bool = False
@@ -117,6 +125,9 @@ class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse, OldFilteredUser
     asset_type: SupportedAssetType
     filters: list[Filter] | None = None
 
+    class Settings:
+        name = "filteredUserQueries"
+
     @property
     def invoke_llm_for_parsing(self) -> bool:
         return self.filters is None
@@ -139,6 +150,9 @@ class RecommenderUserQuery(
     asset_id: str
     asset_type: SupportedAssetType
     output_asset_type: AssetTypeQueryParam
+
+    class Settings:
+        name = "recommenderUserQueries"
 
     def map_to_response(
         self, return_entire_assets: bool = False, old_schema: bool = False

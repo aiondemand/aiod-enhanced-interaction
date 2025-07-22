@@ -104,7 +104,6 @@ def perform_url_request(
     limit = 0 if params is None else params.get("limit", 0)
     request_timeout = sleep_time + int(limit * 0.06)
 
-    last_exception = None
     for attempt in range(num_retries):
         try:
             response = requests.get(url, params, timeout=request_timeout)
@@ -117,7 +116,5 @@ def perform_url_request(
             )
             if attempt < num_retries - 1:
                 sleep(sleep_time)
-
-    raise AIoDUnavailableException(
-        f"{AIoDUnavailableException.__name__}: Service appears to be down or unresponsive after {num_retries} attempts. Last error: {str(last_exception)}"
-    )
+    else:
+        raise AIoDUnavailableException(last_exception)

@@ -19,12 +19,14 @@ dependencies = [
     "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
-    "tinydb==4.8.0",
-    "tinydb-serialization==2.1.1",
     "apscheduler==3.10.4",
     "langchain-core==0.3.47",
     "langchain-ollama==0.2.3",
-    "ollama==0.4.7"
+    "ollama==0.4.7",
+    "beanie==1.29.0",
+    "motor==3.7.1",
+    "pymongo==4.13.0",
+    "tenacity==9.1.2"
 ]
 readme = "README.md"
 
@@ -43,7 +45,6 @@ py-modules = []
 [tool.ruff]
 line-length = 100
 exclude = [
-    # TODO: Remove once refactored
     "experiments",
 ]
 
