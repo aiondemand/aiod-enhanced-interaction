@@ -26,7 +26,8 @@ dependencies = [
     "beanie==1.29.0",
     "motor==3.7.1",
     "pymongo==4.13.0",
-    "tenacity==9.1.2"
+    "tenacity==9.1.2",
+    "pydantic-ai-slim==0.4.4"
 ]
 readme = "README.md"
 

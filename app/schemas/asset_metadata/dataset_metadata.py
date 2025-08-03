@@ -36,40 +36,52 @@ class DatasetInnerAnnotations(BaseInnerAnnotations):
     DatePublished = Annotated[
         str,
         Field(
-            description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'.",
+            description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'. Don't forget to convert the date to appropriate format if necessary.",
             pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$",
         ),
     ]
     SizeInMb = Annotated[
-        int, Field(description="The total size of the dataset in megabytes.", ge=0)
+        int,
+        Field(
+            description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
+            ge=0,
+        ),
     ]
     License = Annotated[
         str,
         Field(
-            description="The license of the dataset. Only a subset of licenses are recognized.",
+            description="The license of the dataset, e.g., 'mit', 'apache', etc...",
             enum=_ALL_VALID_VALUES["license"],
         ),
     ]
     TaskType = Annotated[
         str,
         Field(
-            description="The machine learning tasks corresponding to this dataset. Only a subset of task types are recognized.",
+            description="The machine learning tasks corresponding to this dataset. Acceptable values may include task categories or task ids found on HuggingFace platform (e.g., 'token-classification', 'question-answering', ...)",
             enum=_ALL_VALID_VALUES["task_types"],
         ),
     ]
     Language = Annotated[
         str,
         Field(
-            description="The language of the dataset specified as an ISO 639-1 two-letter code.",
+            description="The language of the dataset specified as an ISO 639-1 two-letter code (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...).",
             min_length=2,
             max_length=2,
         ),
     ]
     DatapointsLowerBound = Annotated[
-        int, Field(description="The lower bound of the number of datapoints in the dataset.", ge=0)
+        int,
+        Field(
+            description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset.",
+            ge=0,
+        ),
     ]
     DatapointsUpperBound = Annotated[
-        int, Field(description="The upper bound of the number of datapoints in the dataset.", ge=0)
+        int,
+        Field(
+            description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
+            ge=0,
+        ),
     ]
 
 
@@ -80,31 +92,56 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
 
     date_published: DatasetInnerAnnotations.DatePublished | None = Field(
         None,
-        description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'. Don't forget to convert the date to appropriate format if necessary.",
+        # description="The publication date of the dataset in the format 'YYYY-MM-DDTHH:MM:SSZ'.",
     )
     size_in_mb: DatasetInnerAnnotations.SizeInMb | None = Field(
         None,
-        description="The total size of the dataset in megabytes. Don't forget to convert the sizes to MBs if necessary.",
+        # description="The total size of the dataset in megabytes. .",
     )
     license: DatasetInnerAnnotations.License | None = Field(
-        None, description="The license of the dataset, e.g., 'mit', 'apache'"
+        None,
+        # description="The license of the dataset, e.g., 'mit', 'apache'"
     )
     task_types: list[DatasetInnerAnnotations.TaskType] | None = Field(
         None,
-        description="The machine learning tasks suitable for this dataset. Acceptable values may include task categories or task ids found on HuggingFace platform (e.g., 'token-classification', 'question-answering', ...)",
+        # description="The machine learning tasks suitable for this dataset.",
     )
     languages: list[DatasetInnerAnnotations.Language] | None = Field(
         None,
-        description="Languages present in the dataset, specified in ISO 639-1 two-letter codes (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc ...).",
+        # description="[OUTER] Languages present in the dataset, specified in ISO 639-1 two-letter codes ",
     )
     datapoints_lower_bound: DatasetInnerAnnotations.DatapointsLowerBound | None = Field(
         None,
-        description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset.",
+        # description="The lower bound of the number of datapoints in the dataset. This value represents the minimum number of datapoints found in the dataset.",
     )
     datapoints_upper_bound: DatasetInnerAnnotations.DatapointsUpperBound | None = Field(
         None,
-        description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
+        # description="The upper bound of the number of datapoints in the dataset. This value represents the maximum number of datapoints found in the dataset.",
     )
+
+    # TODO I shall keep this here for now
+    # def __init__(self, **data):
+    #     try:
+    #         return super().__init__(**data)
+    #     except ValidationError as e:
+    #         # This is a hack how we can pass "/no_think" token to the model once
+    #         # it fails to validate the schema. This way, the reasoning step will be skipped
+    #         # as it has already been performed in the first pass, making the latter invocation
+    #         # cheaper.
+    #         new_error = InitErrorDetails(
+    #             type=PydanticCustomError(
+    #                 "/no_think",
+    #                 "/no_think",
+    #                 {"": ""}
+    #             ),
+    #             input="",
+    #         )
+    #         raise ValidationError.from_exception_data(
+    #             title=self.__class__.__name__,
+    #             line_errors=e.errors() + [new_error]
+    #         ) from None
+
+    # TODO move some of these validators to the class below
 
     @field_validator("license", "task_types", "languages", mode="before")
     @classmethod
@@ -115,6 +152,8 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
     @classmethod
     def convert_strings_to_uppercase(cls, value: Any) -> Any:
         return cls.apply_string_function_recursively(value, str.upper)
+
+    # TODO these validators that check the values against enums should be moved to the class below
 
     # FieldInfo enum argument is only used for documentation purposes (OpenAPI schema generation)
     # It doesn't affect the validation logic, hence the need to check the fields manually
@@ -147,3 +186,14 @@ class HuggingFaceDatasetMetadataTemplate(BaseMetadataTemplate[DatasetInnerAnnota
             return match_operators + range_operators
         else:
             raise ValueError(f"Invalid field name: {field_name}")
+
+
+class HuggingFaceDatasetMetadataTemplateWithValidators(HuggingFaceDatasetMetadataTemplate):
+    # TODO We might wish to check the values against an enum later on => so that listing of all the values of a particular field doesn't take that much input
+    # TODO We could retrieve some crude values first that may not be within an enum, this could be done for each asset
+    # and then we could process a whole batch one at a time by converting rough values to the enum values
+    # This should be feasibile even when processing multiple assets at once
+
+    # TODO This is somewhat similar to the 3rd step in our original Langchain user query parsing pipeline
+
+    pass
