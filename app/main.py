@@ -18,6 +18,7 @@ from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
 from app.routers import chatbot_endpoint as chatbot_router
 
+from app.services.chatbot.website_scraper import scraping_wrapper
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -26,6 +27,7 @@ from app.services.threads.db_gc_thread import mongo_cleanup
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
+IMMEDIATE_CRAWLER_THREAD: Thread | None = None
 SCHEDULER: BackgroundScheduler | None = None
 
 
@@ -136,7 +138,16 @@ async def app_init() -> None:
         ),
         CronTrigger(hour=0, minute=0),
     )
-    # TODO add crawler to scheduler
+    # Recurring scraping of AIoD websites
+
+    # TODO check whether recurring scraping works properly
+    SCHEDULER.add_job(
+        partial(
+            run_async_in_thread,
+            target_func=scraping_wrapper,
+        ),
+        CronTrigger(hour=0, minute=0),
+    )
     SCHEDULER.start()
 
     # Immediate computation of AIoD asset embeddings
@@ -144,6 +155,11 @@ async def app_init() -> None:
     IMMEDIATE_EMB_THREAD = start_async_thread(
         target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=True)
     )
+    # Immediate crawling of AIoD websites
+    global IMMEDIATE_CRAWLER_THREAD
+
+    # TODO for the first crawling we can allow GPU
+    IMMEDIATE_CRAWLER_THREAD = start_async_thread(target_func=scraping_wrapper)
 
 
 async def init_mongo_client() -> AsyncIOMotorClient:
@@ -170,6 +186,8 @@ async def app_shutdown() -> None:
         QUERY_THREAD.join(timeout=5)
     if IMMEDIATE_EMB_THREAD:
         IMMEDIATE_EMB_THREAD.join(timeout=5)
+    if IMMEDIATE_CRAWLER_THREAD:
+        IMMEDIATE_CRAWLER_THREAD.join(timeout=5)
     if SCHEDULER:
         SCHEDULER.shutdown(wait=False)
 

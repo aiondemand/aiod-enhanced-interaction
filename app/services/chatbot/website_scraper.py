@@ -18,7 +18,7 @@ from app.config import settings
 job_lock = threading.Lock()
 
 
-async def scaping_wrapper() -> None:
+async def scraping_wrapper() -> None:
     if job_lock.acquire(blocking=False):
         logging.info(
             "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
@@ -36,7 +36,9 @@ async def scaping_wrapper() -> None:
 async def populate_collections_wrapper() -> None:
     # TODO we should use MilvusEmbeedingStore instead
     client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
-    model = AiModel(device="cuda")
+    model = AiModel(
+        device="cuda"
+    )  # TODO device is specified based on whether its the initial crawling or not
 
     website_df, api_df = await scraper("https://aiod.eu")
     # TODO should we crawl this website as well?
