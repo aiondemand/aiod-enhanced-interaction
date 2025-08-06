@@ -7,7 +7,7 @@ from requests import Response
 from requests.exceptions import HTTPError, Timeout
 
 from app.config import settings
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.resilience import AIoDUnavailableException
 
@@ -19,8 +19,8 @@ from app.services.resilience import AIoDUnavailableException
 
 
 def recursive_aiod_asset_fetch(
-    asset_type: AssetType, url_params: RequestParams, mark_recursions: list[int]
-) -> list:
+    asset_type: SupportedAssetType, url_params: RequestParams, mark_recursions: list[int]
+) -> list[dict]:
     sleep(settings.AIOD.JOB_WAIT_INBETWEEN_REQUESTS_SEC)
     url = settings.AIOD.get_assets_url(asset_type)
     queries = _build_aiod_url_queries(url_params)
@@ -53,18 +53,24 @@ def recursive_aiod_asset_fetch(
     return data
 
 
-def get_aiod_asset(asset_id: int, asset_type: AssetType, sleep_time: float = 0.1) -> dict | None:
+def get_aiod_asset(
+    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
+) -> dict | None:
     try:
         sleep(sleep_time)
         response = perform_url_request(settings.AIOD.get_asset_by_id_url(asset_id, asset_type))
         return response.json()
     except HTTPError as e:
-        if e.response.status_code == 404:
+        # Some assets may eventually get hidden rather than deleted hence why we don't check for
+        # one specific status code only
+        if 400 <= e.response.status_code < 500:
             return None
         raise
 
 
-def check_aiod_asset(asset_id: int, asset_type: AssetType, sleep_time: float = 0.1) -> bool:
+def check_aiod_asset(
+    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
+) -> bool:
     return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
 
@@ -98,7 +104,6 @@ def perform_url_request(
     limit = 0 if params is None else params.get("limit", 0)
     request_timeout = sleep_time + int(limit * 0.06)
 
-    last_exception = None
     for attempt in range(num_retries):
         try:
             response = requests.get(url, params, timeout=request_timeout)
@@ -111,7 +116,5 @@ def perform_url_request(
             )
             if attempt < num_retries - 1:
                 sleep(sleep_time)
-
-    raise AIoDUnavailableException(
-        f"{AIoDUnavailableException.__name__}: Service appears to be down or unresponsive after {num_retries} attempts. Last error: {str(last_exception)}"
-    )
+    else:
+        raise AIoDUnavailableException(last_exception)

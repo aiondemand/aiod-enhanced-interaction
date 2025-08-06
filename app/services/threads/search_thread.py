@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 import os
 from queue import Queue
 from typing import Type
 
+from uuid import UUID
+from beanie.odm.operators.find.logical import Or
 import numpy as np
 from app.config import settings
 from app.models.query import (
@@ -14,42 +17,36 @@ from app.models.query import (
     SimpleUserQuery,
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import QueryStatus
+from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
-from app.schemas.search_results import SearchResults
-from app.services.aiod import check_aiod_asset
-from app.services.database import Database
+from app.schemas.search_results import AssetResults, SearchResults
+from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
-from tinydb import Query
-
-# SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
 
-QUERY_QUEUE: Queue[tuple[str | None, Type[BaseUserQuery] | None]] = Queue()
+QUERY_QUEUE: Queue[tuple[UUID | None, Type[BaseUserQuery] | None]] = Queue()
 
 
-def fill_query_queue(database: Database) -> None:
-    condition = (Query().status == QueryStatus.IN_PROGRESS) | (Query().status == QueryStatus.QUEUED)
-    simple_queries_to_process: list[BaseUserQuery] = database.search(SimpleUserQuery, condition)
-    filtered_queries_to_process: list[BaseUserQuery] = database.search(FilteredUserQuery, condition)
-    similar_queries_to_process: list[BaseUserQuery] = database.search(
-        RecommenderUserQuery, condition
-    )
+async def fill_query_queue() -> None:
+    async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
+        return await typ.find_all_docs(
+            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
+        )
 
-    if (
-        len(simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process)
-        == 0
-    ):
-        return
+    simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
+    filtered_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(FilteredUserQuery)
+    similar_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(RecommenderUserQuery)
 
     queries_to_process: list[BaseUserQuery] = sorted(
         simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
         key=BaseUserQuery.sort_function_to_populate_queue,
     )
+    if len(queries_to_process) == 0:
+        return
     for query in queries_to_process:
         QUERY_QUEUE.put((query.id, type(query)))
 
@@ -59,9 +56,7 @@ def fill_query_queue(database: Database) -> None:
 
 
 async def search_thread() -> None:
-    # Singleton - already instantialized
-    database = Database()
-    fill_query_queue(database)
+    await fill_query_queue()
 
     model = AiModel("cpu")
     embedding_store = MilvusEmbeddingStore()
@@ -75,13 +70,13 @@ async def search_thread() -> None:
         if query_id is None or query_type is None:
             break
 
-        user_query = fetch_user_query(query_id, query_type, database)
+        user_query = await fetch_user_query(query_id, query_type)
         if user_query is None:
             continue
-        logging.info(f"Searching relevant assets for query ID: {query_id}")
+        logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
 
         try:
-            results = search_assets_wrapper(
+            results = search_across_assets_wrapper(
                 model,
                 llm_query_parser,
                 embedding_store,
@@ -89,7 +84,7 @@ async def search_thread() -> None:
             )
             user_query.result_set = results
             user_query.update_status(QueryStatus.COMPLETED)
-            database.upsert(user_query)
+            await user_query.replace_doc()
         except LocalServiceUnavailableException as e:
             logging.error(e)
             logging.error(
@@ -99,51 +94,73 @@ async def search_thread() -> None:
             os._exit(1)
         except Exception as e:
             user_query.update_status(QueryStatus.FAILED)
-            database.upsert(user_query)
+            await user_query.replace_doc()
             logging.error(e)
             logging.error(
-                f"The above error has been encountered in the query processing thread while processing query ID: {query_id}"
+                f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
             )
 
 
-def fetch_user_query(
-    query_id: str, query_type: Type[BaseUserQuery], database: Database
-) -> BaseUserQuery | None:
+async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:
     if query_type == FilteredUserQuery and settings.PERFORM_LLM_QUERY_PARSING is False:
         return None
 
-    user_query: BaseUserQuery | None = database.find_by_id(type=query_type, id=query_id)
+    user_query: BaseUserQuery | None = await query_type.get(query_id)
     if user_query is None:
         err_msg = f"UserQuery id={query_id} doesn't exist even though it should."
         logging.error(err_msg)
         return None
     else:
         user_query.update_status(QueryStatus.IN_PROGRESS)
-        database.upsert(user_query)
+        await user_query.replace_doc()
 
         return user_query
 
 
-def search_assets_wrapper(
+def search_across_assets_wrapper(
     model: AiModel,
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-    num_search_retries: int = 5,
-) -> SearchResults:
-    search_params = prepare_search_parameters(model, llm_query_parser, embedding_store, user_query)
+) -> AssetResults:
+    search_params, all_asset_types = prepare_search_parameters(
+        model, llm_query_parser, embedding_store, user_query
+    )
     if search_params is None:
-        return SearchResults()
+        return AssetResults()
+    asset_type_list: list[SupportedAssetType] = (
+        [search_params.asset_type] if all_asset_types is False else settings.AIOD.ASSET_TYPES
+    )
 
-    asset_ids_to_remove_from_db: list[int] = []
-    all_assets_to_return = SearchResults()
+    # perform multiple semantic searches in separate asset_type collections if
+    # the user has requested to go over ALL the asset types
+    search_results: list[AssetResults] = []
+    for asset_type in asset_type_list:
+        temp_search_params = deepcopy(search_params)
+        temp_search_params.asset_type = asset_type
+        search_results.append(
+            search_asset_collection(embedding_store, temp_search_params, user_query)
+        )
+
+    return AssetResults.merge_results(search_results, k=user_query.topk)
+
+
+def search_asset_collection(
+    embedding_store: EmbeddingStore,
+    search_params: VectorSearchParams,
+    user_query: BaseUserQuery,
+    num_search_retries: int = 5,
+) -> AssetResults:
+    asset_ids_to_remove_from_db: list[str] = []
+    all_assets_to_return = AssetResults()
 
     for _ in range(num_search_retries):
         new_results = embedding_store.retrieve_topk_asset_ids(search_params)
-        all_assets_to_return = all_assets_to_return + validate_assets(
+        validated_new_results = validate_assets(
             new_results, search_params, asset_ids_to_remove_from_db
-        )
+        ).filter_out_assets_by_id(all_assets_to_return.asset_ids)
 
+        all_assets_to_return = all_assets_to_return + validated_new_results
         search_params.topk = user_query.topk - len(all_assets_to_return)
         if search_params.topk == 0 or len(new_results) == 0:
             break
@@ -163,7 +180,7 @@ def prepare_search_parameters(
     llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
-) -> VectorSearchParams | None:
+) -> tuple[VectorSearchParams | None, bool]:
     # apply metadata filtering
     metadata_filter_str = ""
     if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
@@ -185,17 +202,23 @@ def prepare_search_parameters(
             model, embedding_store, user_query
         )
         if query_embeddings is None:
-            return None
+            return None, False
     elif isinstance(user_query, (SimpleUserQuery, FilteredUserQuery)):
         query_embeddings = model.compute_query_embeddings(user_query.search_query)
     else:
         raise ValueError("We don't support other types of user queries yet")
 
     # select asset type to search for
-    target_asset_type = (
+    target_asset_type_temp = (
         user_query.output_asset_type
         if isinstance(user_query, RecommenderUserQuery)
         else user_query.asset_type
+    )
+    all_asset_types = target_asset_type_temp.is_all()
+    target_asset_type = (
+        target_asset_type_temp.to_SupportedAssetType()
+        if all_asset_types is False
+        else SupportedAssetType.DATASETS  # a placeholder value that will be replaced
     )
     # ignore the asset itself from the search if necessary
     asset_ids_to_exclude_from_search = (
@@ -205,37 +228,43 @@ def prepare_search_parameters(
         else []
     )
 
-    return embedding_store.create_search_params(
+    search_params = embedding_store.create_search_params(
         data=query_embeddings,
         topk=user_query.topk,
         asset_type=target_asset_type,
         metadata_filter=metadata_filter_str,
         asset_ids_to_exclude=asset_ids_to_exclude_from_search,
     )
+    return search_params, all_asset_types
 
 
 def validate_assets(
     results: SearchResults,
     search_params: VectorSearchParams,
-    asset_ids_to_remove_from_db: list[int],
-) -> SearchResults:
+    asset_ids_to_remove_from_db: list[str],
+) -> AssetResults:
     if len(results) == 0:
-        return results
+        return AssetResults()
 
-    # check what assets are still valid
-    exists_mask = np.array(
-        [
-            check_aiod_asset(
-                asset_id,
-                search_params.asset_type,
-                sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
-            )
-            for asset_id in results.asset_ids
-        ]
+    # retrieve assets from AIoD Catalogue
+    assets = [
+        get_aiod_asset(
+            asset_id,
+            search_params.asset_type,
+            sleep_time=settings.AIOD.SEARCH_WAIT_INBETWEEN_REQUESTS_SEC,
+        )
+        for asset_id in results.asset_ids
+    ]
+    exists_mask = np.array([asset is not None for asset in assets])
+    idx_to_keep = np.where(exists_mask)[0]
+    ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
+
+    search_params.asset_ids_to_exclude.extend(results.asset_ids)
+    asset_ids_to_remove_from_db.extend(ids_to_del)
+
+    return AssetResults(
+        asset_ids=[results.asset_ids[idx] for idx in idx_to_keep],
+        distances=[results.distances[idx] for idx in idx_to_keep],
+        asset_types=[results.asset_types[idx] for idx in idx_to_keep],
+        assets=[assets[idx] for idx in idx_to_keep],
     )
-
-    asset_ids_to_del = [results.asset_ids[idx] for idx in np.where(~exists_mask)[0]]
-    search_params.asset_ids_to_exclude.extend(asset_ids_to_del)
-    asset_ids_to_remove_from_db.extend(asset_ids_to_del)
-
-    return results.filter_out_assets_by_id(asset_ids_to_del)

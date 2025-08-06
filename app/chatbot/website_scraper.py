@@ -4,8 +4,12 @@ import pandas
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
-from crawl4ai.deep_crawling.filters import FilterChain, ContentTypeFilter, DomainFilter  # URLPatternFilter
-from pymilvus import MilvusClient, DataType, utility
+from crawl4ai.deep_crawling.filters import (
+    FilterChain,
+    ContentTypeFilter,
+    DomainFilter,
+)  # URLPatternFilter
+from pymilvus import MilvusClient, DataType
 from uuid import uuid4
 import pandas as pd
 import torch
@@ -18,9 +22,9 @@ from bs4 import BeautifulSoup
 load_dotenv("../../.env.app")
 
 milvus_uri = os.getenv("MILVUS__URI")
-milvus_token = os.getenv('MILVUS__USER')+":"+os.getenv('MILVUS__PASS')
-embedding_llm = os.getenv('MODEL_LOADPATH')
-use_gpu = os.getenv('USE_GPU')
+milvus_token = os.getenv("MILVUS__USER") + ":" + os.getenv("MILVUS__PASS")
+embedding_llm = os.getenv("MODEL_LOADPATH")
+use_gpu = os.getenv("USE_GPU")
 window_size = int(os.getenv("AIOD__WINDOW_SIZE"))
 window_overlap = float(os.getenv("AIOD__WINDOW_OVERLAP"))
 
@@ -28,25 +32,22 @@ load_dotenv(".env.chatbot")
 web_collection_name = os.getenv("WEBSITE_COLLECTION")
 api_collection_name = os.getenv("API_COLLECTION")
 
-c = MilvusClient(
-        uri=milvus_uri,
-        token=milvus_token
-    )
+c = MilvusClient(uri=milvus_uri, token=milvus_token)
 
 relevant_pages = ["https://www.aiodp.ai/", "aiod.eu"]
-filter_chain= FilterChain([
-    # Only follow URLs with specific patterns
-    # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
-
-    # Only crawl specific domains
-    DomainFilter(
-        #allowed_domains=["docs.example.com"],
-        blocked_domains=["https://auth.aiod.eu"]
-    ),
-
-    # Only include specific content types
-    ContentTypeFilter(allowed_types=["text/html"])
-])
+filter_chain = FilterChain(
+    [
+        # Only follow URLs with specific patterns
+        # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
+        # Only crawl specific domains
+        DomainFilter(
+            # allowed_domains=["docs.example.com"],
+            blocked_domains=["https://auth.aiod.eu"]
+        ),
+        # Only include specific content types
+        ContentTypeFilter(allowed_types=["text/html"]),
+    ]
+)
 
 
 def last_modified_time(html_content: str) -> str | None:
@@ -54,7 +55,10 @@ def last_modified_time(html_content: str) -> str | None:
     if metadata_time:
         return metadata_time
     else:
-        span_time = extract_span_content(html_content, "git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime")
+        span_time = extract_span_content(
+            html_content,
+            "git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime",
+        )
         if span_time:
             return span_time
         else:
@@ -74,24 +78,23 @@ def extract_meta_content(html_content: str, property_name: str) -> str | None:
         str | None: The value of the 'content' attribute if found, otherwise None.
     """
     # Parse the HTML content
-    soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(html_content, "html.parser")
 
     # Find the meta tag with the specified property
-    meta_tag = soup.find('meta', attrs={'property': property_name})
+    meta_tag = soup.find("meta", attrs={"property": property_name})
 
     # If the meta tag is found, return its 'content' attribute
-    if meta_tag and 'content' in meta_tag.attrs:
-        return meta_tag['content']
+    if meta_tag and "content" in meta_tag.attrs:
+        return meta_tag["content"]
     else:
         return ""
 
 
-def extract_span_content(html_content: str, class_name: str) -> str|None:
-
-    soup = BeautifulSoup(html_content, 'html.parser')
+def extract_span_content(html_content: str, class_name: str) -> str | None:
+    soup = BeautifulSoup(html_content, "html.parser")
 
     # Find the meta tag with the specified clas
-    span_tag = soup.find('span', attrs={'class': class_name})
+    span_tag = soup.find("span", attrs={"class": class_name})
     # If the meta tag is found, return its 'content' attribute
     if span_tag.text:
         return span_tag.text
@@ -100,13 +103,13 @@ def extract_span_content(html_content: str, class_name: str) -> str|None:
 
 
 async def scraper(anchor_url):
-    #ignore_images =True
+    # ignore_images =True
 
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
             max_depth=0,  # configure crawl level as needed
             include_external=False,
-            filter_chain=filter_chain
+            filter_chain=filter_chain,
         ),
         scraping_strategy=LXMLWebScrapingStrategy(),
         verbose=False,
@@ -147,20 +150,20 @@ async def scraper(anchor_url):
         print("url_list", len(url_list), url_list)
         print("api_url_list", len(api_url_list), api_url_list)
         data = {
-                "content": content_list,
-                'url': url_list,
-                'last_modified': modified_time_list,
-                'id': id_list
-                }
+            "content": content_list,
+            "url": url_list,
+            "last_modified": modified_time_list,
+            "id": id_list,
+        }
         df = pd.DataFrame(data)
         df.to_csv("test_9.csv", sep=",", index=False)
         # df.to_json()
 
         api_data = {
             "content": api_content_list,
-            'url': api_url_list,
-            'last_modified': api_modified_time_list,
-            'id': api_id_list
+            "url": api_url_list,
+            "last_modified": api_modified_time_list,
+            "id": api_id_list,
         }
         api_df = pd.DataFrame(api_data)
         api_df.to_csv("api_test_9.csv", sep=",", index=False)
@@ -176,9 +179,11 @@ def create_content_collection(collection_name: str, client: MilvusClient):
     # content, url, hash, embeddings
     schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True, auto_id=True)
     schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=1024)
-    schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)  # max_length = between 1 and 65535 bytes
+    schema.add_field(
+        field_name="content", datatype=DataType.VARCHAR, max_length=65535
+    )  # max_length = between 1 and 65535 bytes
     schema.add_field(field_name="url", datatype=DataType.VARCHAR, max_length=256)
-    schema.add_field(field_name='last_modified', datatype=DataType.VARCHAR, max_length=256)
+    schema.add_field(field_name="last_modified", datatype=DataType.VARCHAR, max_length=256)
     # schema.add_field(field_name="hash", datatype=DataType.INT64)
 
     schema.verify()
@@ -201,36 +206,38 @@ def create_content_collection(collection_name: str, client: MilvusClient):
 
 def update_content_collection(collection_name: str, client: MilvusClient, content: pd.DataFrame):
     # not useful as long as there is no consistent way to figure out if something on the webpage has changed
-    formatted_urls = ", ".join(f"'{url}'" for url in content['url'].tolist())
+    formatted_urls = ", ".join(f"'{url}'" for url in content["url"].tolist())
     where_clause = f"url in [{formatted_urls}]"
 
     entries_to_examine = client.query(
         collection_name=collection_name,
         filter=where_clause,
-        output_fields=["id", "url", "last_modified"]
+        output_fields=["id", "url", "last_modified"],
     )
     entries_to_delete = []
     entries_to_add = []
 
     for entry in entries_to_examine:
-        subset = content[content['url'] == entry['url']]  # the url exists in the db already
+        subset = content[content["url"] == entry["url"]]  # the url exists in the db already
         if not subset.empty:
-            print('last_modified', entry['last_modified'], subset['last_modified'].tolist())
-            if entry['last_modified'] not in subset['last_modified'].tolist():  # the content has changed
-                entries_to_delete.append(entry['id'])
-                entries_to_add += subset['id'].tolist()
+            print("last_modified", entry["last_modified"], subset["last_modified"].tolist())
+            if (
+                entry["last_modified"] not in subset["last_modified"].tolist()
+            ):  # the content has changed
+                entries_to_delete.append(entry["id"])
+                entries_to_add += subset["id"].tolist()
 
     # find pages that have no representation in the milvus db and add them to the add list
-    urls_to_examine = [x['url'] for x in entries_to_examine]
-    content_url_list = content['url'].tolist()
+    urls_to_examine = [x["url"] for x in entries_to_examine]
+    content_url_list = content["url"].tolist()
     for new_entry in content_url_list:
         if new_entry not in urls_to_examine:
-            entries_to_add += content[content['url'] == new_entry]['id'].tolist()
+            entries_to_add += content[content["url"] == new_entry]["id"].tolist()
 
     # find pages that are not reachable on the web anymore and add their ids to the delete list
     for index, element in enumerate(urls_to_examine):  # TODO test this
         if element not in content_url_list:
-            entries_to_delete.append(entries_to_examine[index]['id'])
+            entries_to_delete.append(entries_to_examine[index]["id"])
 
     # delete entries
     print("del", len(entries_to_delete), entries_to_delete)
@@ -242,7 +249,7 @@ def update_content_collection(collection_name: str, client: MilvusClient, conten
     # insert entries
     print("add", len(entries_to_add), entries_to_add)
     if entries_to_add:
-        content_to_add = content[content['id'].isin(entries_to_add)]
+        content_to_add = content[content["id"].isin(entries_to_add)]
         new_data = prepare_data(content_to_add)
         res = client.insert(collection_name=collection_name, data=new_data)
         print(res)
@@ -271,13 +278,15 @@ def embed_content(content_list: list[str]):
     )
     embedded_content = []
     for content in content_list:
-        embedded_content.append(model.forward(content)[0].cpu())  # 31:architecture.py -> hopefully does the embeddings
+        embedded_content.append(
+            model.forward(content)[0].cpu()
+        )  # 31:architecture.py -> hopefully does the embeddings
 
     return embedded_content
 
 
 class SlidingWindowChunking:
-    def __init__(self, window_size=window_size, step=window_size*window_overlap):
+    def __init__(self, window_size=window_size, step=window_size * window_overlap):
         self.window_size = window_size
         self.step = int(step)
 
@@ -287,7 +296,7 @@ class SlidingWindowChunking:
         if len(words) < self.window_size:
             return [text]
         for i in range(0, len(words) - self.window_size + 1, self.step):
-            chunks.append(' '.join(words[i:i + self.window_size]))
+            chunks.append(" ".join(words[i : i + self.window_size]))
         return chunks
 
 
@@ -307,9 +316,9 @@ def prepare_data(website_content: pd.DataFrame):
     result_last_modified = []
     for index, row in website_content.iterrows():
         content = website_content["content"].iloc[index]
-        url = website_content['url'].iloc[index]
+        url = website_content["url"].iloc[index]
         print("prep", url)
-        last_modified = website_content['last_modified'].iloc[index]
+        last_modified = website_content["last_modified"].iloc[index]
         chunked = chunking(content)
         embedd_chunks = embed_content(chunked)
         result_vectors += embedd_chunks
@@ -318,14 +327,16 @@ def prepare_data(website_content: pd.DataFrame):
         result_last_modified += [str(last_modified) for x in chunked]
 
     result_df["vector"] = result_vectors
-    result_df['content'] = result_content
-    result_df['url'] = result_url
-    result_df['last_modified'] = result_last_modified
+    result_df["content"] = result_content
+    result_df["url"] = result_url
+    result_df["last_modified"] = result_last_modified
 
-    return result_df.to_dict(orient='records')
+    return result_df.to_dict(orient="records")
 
 
-def populate_webcontent_collection(collection_name: str, client: MilvusClient, website_content: pandas.DataFrame):
+def populate_webcontent_collection(
+    collection_name: str, client: MilvusClient, website_content: pandas.DataFrame
+):
     # website_content = scraper("https://aiod.eu")
     # website_content = pd.read_csv("test_8.csv")
     client.drop_collection(collection_name)
@@ -349,7 +360,9 @@ def populate_webcontent_collection(collection_name: str, client: MilvusClient, w
         return res
 
 
-def populate_api_collection(api_collection_name: str, client: MilvusClient, website_content: pandas.DataFrame):
+def populate_api_collection(
+    api_collection_name: str, client: MilvusClient, website_content: pandas.DataFrame
+):
     # website_content = scraper()
     # website_content = pd.read_csv("api_test_8.csv")
     client.drop_collection(api_collection_name)
@@ -384,4 +397,3 @@ def populate_collections():
 # asyncio.run(scraper("https://aiod.eu"))
 asyncio.run(scraper("https://aiondemand.github.io/AIOD-rest-api/"))
 # populate_collections()
-

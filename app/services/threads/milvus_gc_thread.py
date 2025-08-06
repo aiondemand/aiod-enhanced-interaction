@@ -1,14 +1,15 @@
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 import numpy as np
 from app.config import settings
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import check_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.helper import utc_now
 from app.services.resilience import MilvusUnavailableException
 from app.services.threads.embedding_thread import get_assets_to_add_and_delete
 
@@ -18,7 +19,7 @@ job_lock = threading.Lock()
 async def delete_embeddings_of_aiod_assets_wrapper() -> None:
     # Achieving sufficient robustness of the embedding deletion process
     # is not that important in contrast to the process of updating the assets
-    # Thus, there is no need to store metadata information in tinyDB regarding this
+    # Thus, there is no need to store metadata information in MongoDB regarding this
     # process. You should rather view this process as some sort of garbage collector
     # that is run once a month
     # the immediate incorrect embeddings retrieved for a specific user query are dealt
@@ -29,7 +30,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
                 "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
             )
             embedding_store = MilvusEmbeddingStore()
-            to_time = datetime.now(tz=timezone.utc)
+            to_time = utc_now()
 
             for asset_type in settings.AIOD.ASSET_TYPES:
                 logging.info(f"\tDeleting embeddings of asset type: {asset_type.value}")
@@ -58,9 +59,9 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
 
 
 def delete_asset_embeddings(
-    embedding_store: EmbeddingStore, asset_type: AssetType, to_time: datetime
+    embedding_store: EmbeddingStore, asset_type: SupportedAssetType, to_time: datetime
 ) -> None:
-    all_aiod_asset_ids: list[int] = []
+    all_aiod_asset_ids: list[str] = []
     url_params = RequestParams(
         offset=0,
         limit=settings.AIOD.WINDOW_SIZE,

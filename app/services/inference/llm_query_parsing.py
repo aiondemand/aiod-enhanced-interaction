@@ -24,8 +24,8 @@ from app.config import settings
 from app.models.filter import Filter
 from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import AssetType
-from app.services.resilience import OllamaUnavailableException, with_retry_sync
+from app.schemas.enums import SupportedAssetType
+from app.services.resilience import OllamaUnavailableException, retry_loop
 
 # TODO refactor code to consolidate logic of LLM invocations into one service, one class
 # That class then can be extended with the resilience wrapper
@@ -240,8 +240,8 @@ class UserQueryParsing:
         "app/data/fewshot_examples/user_query_stage1/datasets.json"
     )
 
+    @retry_loop(output_exception_cls=OllamaUnavailableException)
     @staticmethod
-    @with_retry_sync(output_exception_cls=OllamaUnavailableException)
     def invoke_with_resilience(chain: RunnableSequence, input: dict) -> Any:
         return chain.invoke(input)
 
@@ -274,7 +274,7 @@ class UserQueryParsing:
             validation_step=UserQueryParsingStages.init_stage_3(llm=llm),
         )
 
-    def __call__(self, user_query: str, asset_type: AssetType) -> dict:
+    def __call__(self, user_query: str, asset_type: SupportedAssetType) -> dict:
         def expand_topic_query(
             topic_list: list[str], new_objects: list[dict], content_key: str
         ) -> list[str]:

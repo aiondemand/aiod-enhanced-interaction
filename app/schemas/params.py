@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 
 
 class RequestParams(BaseModel):
@@ -27,11 +27,11 @@ class RequestParams(BaseModel):
 class VectorSearchParams(BaseModel, ABC):
     data: list[list[float]]
     topk: int
-    asset_type: AssetType
+    asset_type: SupportedAssetType
 
     # filter related attributes
     metadata_filter: str = ""
-    asset_ids_to_exclude: list[int] = Field(default_factory=list)
+    asset_ids_to_exclude: list[str] = Field(default_factory=list)
 
     @abstractmethod
     def get_params(self) -> dict:
@@ -57,7 +57,7 @@ class MilvusSearchParams(VectorSearchParams):
     def get_params(self) -> dict:
         return {
             "data": self.data,
-            "topk": self.topk,
+            "limit": self.topk,
             "group_by_field": self.group_by_field,
             "output_fields": self.output_fields,
             "search_params": self.search_params,

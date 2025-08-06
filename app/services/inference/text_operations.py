@@ -7,7 +7,7 @@ from app.schemas.asset_metadata.dataset_metadata import (
     HuggingFaceDatasetMetadataTemplate,
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
-from app.schemas.enums import AssetType
+from app.schemas.enums import SupportedAssetType
 
 
 class HuggingFaceDatasetExtractMetadata:
@@ -124,12 +124,14 @@ class HuggingFaceDatasetExtractMetadata:
         return None, None
 
     @classmethod
-    def extract_huggingface_dataset_metadata(cls, obj: dict, asset_type: AssetType) -> dict:
+    def extract_huggingface_dataset_metadata(
+        cls, obj: dict, asset_type: SupportedAssetType
+    ) -> dict:
         # For now we only support extracting of metadata information from HuggingFace
         # As other platforms have their metadata more spread out and we would need
         # an LLM to extract the same information that we can currently easily parse
         # from HuggingFace keywords
-        if asset_type != AssetType.DATASETS:
+        if asset_type != SupportedAssetType.DATASETS:
             return {}
         if obj["platform"] != "huggingface":
             return {}
@@ -247,7 +249,7 @@ class ConvertJsonToString:
     # "RELEVANT INFO"
     @classmethod
     def extract_relevant_info(
-        cls, data: dict, asset_type: AssetType, stringify: bool = False
+        cls, data: dict, asset_type: SupportedAssetType, stringify: bool = False
     ) -> str:
         simple_data = cls._extract_relevant_fields(data, asset_type)
         if stringify:
@@ -303,15 +305,15 @@ class ConvertJsonToString:
         return new_object
 
     @classmethod
-    def _extract_relevant_fields(cls, data: dict, asset_type: AssetType) -> dict:
+    def _extract_relevant_fields(cls, data: dict, asset_type: SupportedAssetType) -> dict:
         new_object = {}
 
         flat_fields = cls.orig_flat_fields
-        if asset_type == AssetType.EDUCATIONAL_RESOURCES:
+        if asset_type == SupportedAssetType.EDUCATIONAL_RESOURCES:
             flat_fields.extend(cls.educational_flat_fields)
-        elif asset_type == AssetType.EXPERIMENTS:
+        elif asset_type == SupportedAssetType.EXPERIMENTS:
             flat_fields.extend(cls.experiment_flat_fields)
-        elif asset_type == AssetType.SERVICES:
+        elif asset_type == SupportedAssetType.SERVICES:
             flat_fields.extend(cls.service_flat_fields)
 
         for field_name in flat_fields:
@@ -326,7 +328,7 @@ class ConvertJsonToString:
             new_object["day_published"] = dt.day
 
         array_fields = cls.orig_array_fields
-        if asset_type == AssetType.EDUCATIONAL_RESOURCES:
+        if asset_type == SupportedAssetType.EDUCATIONAL_RESOURCES:
             array_fields.extend(cls.educational_array_fields)
         for field_name in array_fields:
             x = data.get(field_name, None)
@@ -346,9 +348,9 @@ class ConvertJsonToString:
             "content_size_kb",
             "encoding_format",
         ]
-        if asset_type == AssetType.ML_MODELS:
+        if asset_type == SupportedAssetType.ML_MODELS:
             dist_relevant_fields.extend(["hardware_requirement", "os_requirement"])
-        elif asset_type == AssetType.EXPERIMENTS:
+        elif asset_type == SupportedAssetType.EXPERIMENTS:
             dist_relevant_fields.extend(
                 [
                     "hardware_requirement",
@@ -379,7 +381,7 @@ class ConvertJsonToString:
             new_object["note"] = [note["value"] for note in notes if "value" in note]
 
         # Size
-        if asset_type == AssetType.DATASETS:
+        if asset_type == SupportedAssetType.DATASETS:
             size = data.get("size", None)
             if size is not None and "unit" in size and "value" in size:
                 new_object["size"] = f"{size['value']} {size['unit']}"

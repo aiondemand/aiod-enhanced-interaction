@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import torch
 from pymilvus import MilvusClient
 from app.services.inference.architecture import Basic_EmbeddingModel, SentenceTransformerToHF
+
 # from app.services.aiod import perform_url_request, get_aiod_asset -> importing this produces a lot of errors
 from nltk import edit_distance
 from urllib.parse import urljoin
@@ -22,9 +23,9 @@ api_collection = os.getenv("API_COLLECTION")
 # load_dotenv("../../.env.app")  # run directly
 load_dotenv(".env.app")  # run through chatbot endpoint
 milvus_uri = os.getenv("MILVUS__URI")
-milvus_token = os.getenv('MILVUS__USER')+":"+os.getenv('MILVUS__PASS')
-embedding_llm = os.getenv('MODEL_LOADPATH')
-use_gpu = os.getenv('USE_GPU')
+milvus_token = os.getenv("MILVUS__USER") + ":" + os.getenv("MILVUS__PASS")
+embedding_llm = os.getenv("MODEL_LOADPATH")
+use_gpu = os.getenv("USE_GPU")
 asset_types = os.getenv("AIOD__COMMA_SEPARATED_ASSET_TYPES").split(",")
 collection_prefix = os.getenv("MILVUS__COLLECTION_PREFIX")
 aiod_url = os.getenv("AIOD__URL")
@@ -43,12 +44,12 @@ def prepare_embedding_model() -> Basic_EmbeddingModel:
     else:
         device = torch.device("cpu")
     em_model = Basic_EmbeddingModel(
-            transformer,
-            transformer.tokenizer,
-            pooling="none",
-            document_max_length=4096,
-            dev=device,
-        )
+        transformer,
+        transformer.tokenizer,
+        pooling="none",
+        document_max_length=4096,
+        dev=device,
+    )
     return em_model
 
 
@@ -70,12 +71,12 @@ def aiod_page_search(query: str) -> str:
         collection_name=website_collection,
         anns_field=[embedding_vector],
         output_fields=["url", "content"],
-        limit=3
+        limit=3,
     )
     # print(docs[0])
     result = ""
     for index, doc in enumerate(docs):
-        result += "Result "+str(index) + ":\n" + doc['content'] + "\nlink:" + doc['url'] + "\n"
+        result += "Result " + str(index) + ":\n" + doc["content"] + "\nlink:" + doc["url"] + "\n"
     # print("aiod_page_search output", result)
     return result
 
@@ -87,12 +88,12 @@ def aiod_api_search(query: str) -> str:
         collection_name=api_collection,
         anns_field=[embedding_vector],
         output_fields=["url", "content"],
-        limit=3
+        limit=3,
     )
     # print(docs[0])
     result = ""
     for index, doc in enumerate(docs):
-        result += "Result "+str(index) + ":\n" + doc['content'] + "\nlink:" + doc['url'] + "\n"
+        result += "Result " + str(index) + ":\n" + doc["content"] + "\nlink:" + doc["url"] + "\n"
     # print("aiod_page_search output", result)
     return result
 
@@ -135,25 +136,27 @@ def asset_search(query: str, asset: str) -> str:
     embedding_vector = embed_query(embedding_model, query)
     mapped_asset = map_asset(asset)
     # print("mapped_asset: ", mapped_asset)
-    collection_to_search = collection_prefix+"_"+mapped_asset
+    collection_to_search = collection_prefix + "_" + mapped_asset
     # print(collection_to_search)
 
     docs = milvus_db.query(
         collection_name=collection_to_search,
         anns_field=[embedding_vector],
         output_fields=["id", "asset_id"],
-        limit=3
+        limit=3,
     )
     # print(docs)
 
     result = ""
     for index, doc in enumerate(docs):
-        content = get_asset_from_aiod(doc['asset_id'], mapped_asset)
+        content = get_asset_from_aiod(doc["asset_id"], mapped_asset)
         # print(content)
         try:
-            new_addition = f'name: {content["name"]}, publication date:{ content["date_published"]}, url: {content["same_as"]}' \
-                       f'\ncontent: {content["description"]["plain"]}\n'
-        # print(content)
+            new_addition = (
+                f"name: {content['name']}, publication date:{content['date_published']}, url: {content['same_as']}"
+                f"\ncontent: {content['description']['plain']}\n"
+            )
+            # print(content)
             result += new_addition
         except KeyError:
             # print(content)
@@ -179,7 +182,7 @@ tools = [
                     "asset": {
                         "type": "string",
                         "description": f"The type of asset searched for. Available options are {asset_types}.",
-                    }
+                    },
                 },
                 "required": ["query", "asset"],
             },
@@ -218,13 +221,13 @@ tools = [
                 "required": ["query"],
             },
         },
-    }
+    },
 ]
 
 names_to_functions = {
-    'asset_search': functools.partial(asset_search),
-    'aiod_page_search': functools.partial(aiod_page_search),
-    'aiod_api_search': functools.partial(aiod_api_search)
+    "asset_search": functools.partial(asset_search),
+    "aiod_page_search": functools.partial(aiod_page_search),
+    "aiod_api_search": functools.partial(aiod_api_search),
 }
 
 
@@ -234,13 +237,19 @@ def handle_function_call(input_response):
         print("function.call")
         if input_response.outputs[-1].name == "aiod_api_search":
             print("aiod_api_search", input_response.outputs[-1].arguments)
-            function_result = json.dumps(aiod_api_search(**json.loads(input_response.outputs[-1].arguments)))
+            function_result = json.dumps(
+                aiod_api_search(**json.loads(input_response.outputs[-1].arguments))
+            )
         elif input_response.outputs[-1].name == "asset_search":
-            print('asset_search', input_response.outputs[-1].arguments)
-            function_result = json.dumps(asset_search(**json.loads(input_response.outputs[-1].arguments)))
+            print("asset_search", input_response.outputs[-1].arguments)
+            function_result = json.dumps(
+                asset_search(**json.loads(input_response.outputs[-1].arguments))
+            )
         elif input_response.outputs[-1].name == "aiod_page_search":
             print("aiod_page_search", input_response.outputs[-1].arguments)
-            function_result = json.dumps(aiod_page_search(**json.loads(input_response.outputs[-1].arguments)))
+            function_result = json.dumps(
+                aiod_page_search(**json.loads(input_response.outputs[-1].arguments))
+            )
         else:
             print("return 1", input_response.outputs[-1])
             return input_response.outputs[-1].content  # no content in response outputs
@@ -255,8 +264,7 @@ def handle_function_call(input_response):
         # Retrieving the final response
         # print(user_function_calling_entry)
         tool_response = client.beta.conversations.append(
-            conversation_id=input_response.conversation_id,
-            inputs=[user_function_calling_entry]
+            conversation_id=input_response.conversation_id, inputs=[user_function_calling_entry]
         )
         # print("tool response", tool_response)
         return handle_function_call(tool_response)
@@ -289,8 +297,7 @@ talk2aiod = client.beta.agents.create(
     completion_args={
         "temperature": 0.3,
         "top_p": 0.95,
-    }
-
+    },
     # tool_choice = "any",
     # parallel_tool_calls = True,
 )
@@ -298,10 +305,7 @@ talk2aiod = client.beta.agents.create(
 
 # TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
 def start_conversation(user_query: str):
-    response = client.beta.conversations.start(
-        agent_id=talk2aiod.id,
-        inputs=user_query
-        )
+    response = client.beta.conversations.start(agent_id=talk2aiod.id, inputs=user_query)
     if moderate_input(user_query):
         result = handle_function_call(response)
         return result, response.conversation_id
@@ -310,9 +314,7 @@ def start_conversation(user_query: str):
 
 
 def continue_conversation(user_query: str, conversation_id: str):
-    response = client.beta.conversations.append(
-        conversation_id=conversation_id, inputs=user_query
-    )
+    response = client.beta.conversations.append(conversation_id=conversation_id, inputs=user_query)
     if moderate_input(user_query):
         result = handle_function_call(response)
         return result

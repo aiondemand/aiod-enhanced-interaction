@@ -1,7 +1,6 @@
 from typing import Optional
-from fastapi import FastAPI, Cookie, APIRouter, Response, Request
+from fastapi import APIRouter, Response, Request
 from app.chatbot.chatbot_main_mistral import start_conversation, continue_conversation
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -37,7 +36,7 @@ async def answer_query(request_body: QueryRequest, request: Request):
         response_content, new_conversation_id = start_conversation(query)
 
         # Create the Response object here
-        final_response = Response(content=response_content, media_type='text/plain')
+        final_response = Response(content=response_content, media_type="text/plain")
 
         # Set the new conversation ID as a cookie directly on the final_response object
         # Set the cookie path to match the router prefix
@@ -46,17 +45,17 @@ async def answer_query(request_body: QueryRequest, request: Request):
             value=new_conversation_id,
             httponly=True,
             samesite="lax",
-            path=cookie_path, # Using the explicit cookie_path
-            secure=False # Set to True if deploying with HTTPS
+            path=cookie_path,  # Using the explicit cookie_path
+            secure=False,  # Set to True if deploying with HTTPS
         )
     else:
         # If a conversation ID cookie exists, continue the existing conversation
         response_content = continue_conversation(query, conversation_id)
         # For subsequent requests, if you need to return a Response object
         # but don't need to set a *new* cookie, you can create it here:
-        final_response = Response(content=response_content, media_type='text/plain')
+        final_response = Response(content=response_content, media_type="text/plain")
 
-    return final_response # Return the Response object on which the cookie was set
+    return final_response  # Return the Response object on which the cookie was set
 
 
 @router.get("/clear_conversation")  # Changed to POST as clearing is an action
@@ -71,9 +70,6 @@ async def clear_conversation(response: Response):
         httponly=True,
         samesite="lax",
         path=cookie_path,  # Using the explicit cookie_path
-        secure=False  # Set to True if deploying with HTTPS
+        secure=False,  # Set to True if deploying with HTTPS
     )
     return "Cookie removed"
-
-
-
