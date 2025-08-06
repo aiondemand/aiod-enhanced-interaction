@@ -26,6 +26,10 @@ class AiModel:
         self.use_chunking = settings.MILVUS.STORE_CHUNKS
         self.model = AiModel.load_model(self.use_chunking, device)
 
+    @property
+    def text_splitter(self) -> TokenizerTextSplitter | None:
+        return self.model.text_splitter if self.use_chunking else None
+
     @staticmethod
     def load_model(use_chunking: bool, device: torch.device = "cpu") -> EmbeddingModel:
         transformer = SentenceTransformerToHF(settings.MODEL_LOADPATH, trust_remote_code=True)

@@ -94,6 +94,9 @@ In this file you find the following ENV variables:
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
     - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
     - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
+- `CHATBOT__USE_CHATBOT`: Boolean value that denotes whether you wish to enable the chatbot functionality
+- `CHATBOT__MISTRAL_KEY`: API key required to access the Mistral AI API for chatbot functionality
+- `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
 - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)

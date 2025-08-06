@@ -1,53 +1,60 @@
-import asyncio
+import logging
+import threading
 
 import pandas
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
-from crawl4ai.deep_crawling.filters import (
-    FilterChain,
-    ContentTypeFilter,
-    DomainFilter,
-)  # URLPatternFilter
+from crawl4ai.deep_crawling.filters import FilterChain, ContentTypeFilter, DomainFilter
 from pymilvus import MilvusClient, DataType
 from uuid import uuid4
 import pandas as pd
-import torch
-from dotenv import load_dotenv
-import os
-from app.services.inference.architecture import Basic_EmbeddingModel, SentenceTransformerToHF
 from bs4 import BeautifulSoup
 
+from app.services.inference.model import AiModel
+from app.config import settings
 
-load_dotenv("../../.env.app")
 
-milvus_uri = os.getenv("MILVUS__URI")
-milvus_token = os.getenv("MILVUS__USER") + ":" + os.getenv("MILVUS__PASS")
-embedding_llm = os.getenv("MODEL_LOADPATH")
-use_gpu = os.getenv("USE_GPU")
-window_size = int(os.getenv("AIOD__WINDOW_SIZE"))
-window_overlap = float(os.getenv("AIOD__WINDOW_OVERLAP"))
+job_lock = threading.Lock()
 
-load_dotenv(".env.chatbot")
-web_collection_name = os.getenv("WEBSITE_COLLECTION")
-api_collection_name = os.getenv("API_COLLECTION")
 
-c = MilvusClient(uri=milvus_uri, token=milvus_token)
+async def scaping_wrapper() -> None:
+    if job_lock.acquire(blocking=False):
+        logging.info(
+            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
+        )
+        await populate_collections_wrapper()
+        logging.info(
+            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has ended."
+        )
+    else:
+        logging.info(
+            "Scheduled task for scraping AIoD websites and APIs skipped (previous task is still running)"
+        )
 
-relevant_pages = ["https://www.aiodp.ai/", "aiod.eu"]
-filter_chain = FilterChain(
-    [
-        # Only follow URLs with specific patterns
-        # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
-        # Only crawl specific domains
-        DomainFilter(
-            # allowed_domains=["docs.example.com"],
-            blocked_domains=["https://auth.aiod.eu"]
-        ),
-        # Only include specific content types
-        ContentTypeFilter(allowed_types=["text/html"]),
-    ]
-)
+
+async def populate_collections_wrapper() -> None:
+    # TODO we should use MilvusEmbeedingStore instead
+    client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
+    model = AiModel(device="cuda")
+
+    website_df, api_df = await scraper("https://aiod.eu")
+    # TODO should we crawl this website as well?
+    # website_df, api_df = await scraper("https://aiondemand.github.io/AIOD-rest-api/"))
+
+    populate_collection(model, client, settings.CHATBOT.WEBSITE_COLLECTION_NAME, website_df)
+    populate_collection(model, client, settings.CHATBOT.API_COLLECTION_NAME, api_df)
+
+
+def populate_collection(
+    model: AiModel, client: MilvusClient, collection_name: str, crawled_content: pandas.DataFrame
+) -> None:
+    if client.has_collection(collection_name):
+        update_content_collection(model, client, collection_name, crawled_content)
+    else:
+        create_content_collection(client, collection_name)
+        website_data = prepare_data(model, crawled_content)
+        client.insert(collection_name=collection_name, data=website_data)
 
 
 def last_modified_time(html_content: str) -> str | None:
@@ -96,15 +103,24 @@ def extract_span_content(html_content: str, class_name: str) -> str | None:
     # Find the meta tag with the specified clas
     span_tag = soup.find("span", attrs={"class": class_name})
     # If the meta tag is found, return its 'content' attribute
-    if span_tag.text:
+    if span_tag is not None and span_tag.text:
         return span_tag.text
     else:
         return ""
 
 
-async def scraper(anchor_url):
+async def scraper(anchor_url: str) -> tuple[pandas.DataFrame, pandas.DataFrame]:
+    filter_chain = FilterChain(
+        [
+            # Only follow URLs with specific patterns
+            # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
+            # Only crawl specific domains
+            DomainFilter(blocked_domains=["https://auth.aiod.eu"]),
+            # Only include specific content types
+            ContentTypeFilter(allowed_types=["text/html"]),
+        ]
+    )
     # ignore_images =True
-
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
             max_depth=0,  # configure crawl level as needed
@@ -119,8 +135,6 @@ async def scraper(anchor_url):
 
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun(anchor_url, config=config)
-
-        print(f"Crawled {len(results)} pages in total")
 
         content_list = []
         url_list = []
@@ -147,31 +161,32 @@ async def scraper(anchor_url):
                         content_list.append(result.markdown)
                         url_list.append(result.url)
                         id_list.append(str(uuid4()))
-        print("url_list", len(url_list), url_list)
-        print("api_url_list", len(api_url_list), api_url_list)
-        data = {
-            "content": content_list,
-            "url": url_list,
-            "last_modified": modified_time_list,
-            "id": id_list,
-        }
-        df = pd.DataFrame(data)
-        df.to_csv("test_9.csv", sep=",", index=False)
-        # df.to_json()
 
-        api_data = {
-            "content": api_content_list,
-            "url": api_url_list,
-            "last_modified": api_modified_time_list,
-            "id": api_id_list,
-        }
-        api_df = pd.DataFrame(api_data)
-        api_df.to_csv("api_test_9.csv", sep=",", index=False)
-        # api_df.to_json()
-        return df, api_df
+        data = pd.DataFrame(
+            {
+                "content": content_list,
+                "url": url_list,
+                "last_modified": modified_time_list,
+                "id": id_list,
+            }
+        )
+        api_data = pd.DataFrame(
+            {
+                "content": api_content_list,
+                "url": api_url_list,
+                "last_modified": api_modified_time_list,
+                "id": api_id_list,
+            }
+        )
+
+        logging.info(f"Crawled {len(results)} pages in total")
+        logging.info(f"\t{len(url_list)} pages are from AIoD websites")
+        logging.info(f"\t{len(api_url_list)} pages are from AIoD APIs")
+
+        return data, api_data
 
 
-def create_content_collection(collection_name: str, client: MilvusClient):
+def create_content_collection(client: MilvusClient, collection_name: str) -> None:
     schema = client.create_schema(
         enable_dynamic_field=True,
     )
@@ -188,23 +203,21 @@ def create_content_collection(collection_name: str, client: MilvusClient):
 
     schema.verify()
 
-    index_params = client.prepare_index_params()
-
     vector_index_kwargs = {
         "index_type": "HNSW_SQ",
         "metric_type": "COSINE",
         "params": {"sq_type": "SQ8"},
     }
-
+    index_params = client.prepare_index_params()
     index_params.add_index(field_name="vector", **vector_index_kwargs)
-
     client.create_collection(
         collection_name=collection_name, schema=schema, index_params=index_params
     )
-    return True
 
 
-def update_content_collection(collection_name: str, client: MilvusClient, content: pd.DataFrame):
+def update_content_collection(
+    model: AiModel, client: MilvusClient, collection_name: str, content: pd.DataFrame
+) -> None:
     # not useful as long as there is no consistent way to figure out if something on the webpage has changed
     formatted_urls = ", ".join(f"'{url}'" for url in content["url"].tolist())
     where_clause = f"url in [{formatted_urls}]"
@@ -220,7 +233,6 @@ def update_content_collection(collection_name: str, client: MilvusClient, conten
     for entry in entries_to_examine:
         subset = content[content["url"] == entry["url"]]  # the url exists in the db already
         if not subset.empty:
-            print("last_modified", entry["last_modified"], subset["last_modified"].tolist())
             if (
                 entry["last_modified"] not in subset["last_modified"].tolist()
             ):  # the content has changed
@@ -240,91 +252,45 @@ def update_content_collection(collection_name: str, client: MilvusClient, conten
             entries_to_delete.append(entries_to_examine[index]["id"])
 
     # delete entries
-    print("del", len(entries_to_delete), entries_to_delete)
+    logging.info(f"Deleting {len(entries_to_delete)} entries from {collection_name}")
     if entries_to_delete:
-        res = client.delete(collection_name=collection_name, ids=entries_to_delete)
-        print(res)
-        client.flush(collection_name)
+        client.delete(collection_name=collection_name, ids=entries_to_delete)
 
     # insert entries
-    print("add", len(entries_to_add), entries_to_add)
+    logging.info(f"Adding {len(entries_to_add)} entries to {collection_name}")
     if entries_to_add:
         content_to_add = content[content["id"].isin(entries_to_add)]
-        new_data = prepare_data(content_to_add)
-        res = client.insert(collection_name=collection_name, data=new_data)
-        print(res)
-        client.flush(collection_name)
-    return
+        new_data = prepare_data(model, content_to_add)
+        client.insert(collection_name=collection_name, data=new_data)
 
 
-@torch.no_grad
-def embed_content(content_list: list[str]):
-    # compute_asset_embeddings -> 61:model.py
-    # compute_query_embeddings -> 69:model.py
-    transformer = SentenceTransformerToHF(embedding_llm, trust_remote_code=True)
-    if torch.cuda.is_available() and use_gpu:
-        # print("use cuda")
-        transformer.cuda()
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-        # print("use cpu")
-    model = Basic_EmbeddingModel(
-        transformer,
-        transformer.tokenizer,
-        pooling="none",
-        document_max_length=4096,
-        dev=device,
-    )
-    embedded_content = []
-    for content in content_list:
-        embedded_content.append(
-            model.forward(content)[0].cpu()
-        )  # 31:architecture.py -> hopefully does the embeddings
-
-    return embedded_content
-
-
-class SlidingWindowChunking:
-    def __init__(self, window_size=window_size, step=window_size * window_overlap):
-        self.window_size = window_size
-        self.step = int(step)
-
-    def chunk(self, text):
-        words = text.split()
-        chunks = []
-        if len(words) < self.window_size:
-            return [text]
-        for i in range(0, len(words) - self.window_size + 1, self.step):
-            chunks.append(" ".join(words[i : i + self.window_size]))
-        return chunks
-
-
-def chunking(content: str):
-    chunker = SlidingWindowChunking()
-    chunks = chunker.chunk(content)
-    # print(len(chunks))
-    return chunks
-
-
-def prepare_data(website_content: pd.DataFrame):
-    print("prepare_data")
+def prepare_data(
+    model: AiModel,
+    website_content: pd.DataFrame,
+) -> list[dict]:
     result_df = pd.DataFrame()
     result_vectors = []
-    result_content = []
+    result_content: list[str] = []
     result_url = []
     result_last_modified = []
-    for index, row in website_content.iterrows():
+    for index, _ in website_content.iterrows():
         content = website_content["content"].iloc[index]
         url = website_content["url"].iloc[index]
-        print("prep", url)
         last_modified = website_content["last_modified"].iloc[index]
-        chunked = chunking(content)
-        embedd_chunks = embed_content(chunked)
+
+        if model.text_splitter is not None:
+            chunks = model.text_splitter(content)
+        else:
+            # TODO this is somewhat brittle
+            raise ValueError(
+                "Text splitter is not set. You need to change the model to use chunking -> STORE_CHUNKS"
+            )
+        embedd_chunks = [model.compute_query_embeddings(chunk)[0] for chunk in chunks]
+
         result_vectors += embedd_chunks
-        result_content += chunked
-        result_url += [url for x in chunked]
-        result_last_modified += [str(last_modified) for x in chunked]
+        result_content += chunks
+        result_url += [url for x in chunks]
+        result_last_modified += [str(last_modified) for _ in chunks]
 
     result_df["vector"] = result_vectors
     result_df["content"] = result_content
@@ -334,66 +300,8 @@ def prepare_data(website_content: pd.DataFrame):
     return result_df.to_dict(orient="records")
 
 
-def populate_webcontent_collection(
-    collection_name: str, client: MilvusClient, website_content: pandas.DataFrame
-):
-    # website_content = scraper("https://aiod.eu")
-    # website_content = pd.read_csv("test_8.csv")
-    client.drop_collection(collection_name)
-    # print(website_content.head())
-    # client.drop_collection(collection_name=collection_name)
-    if client.has_collection(collection_name):
-        return update_content_collection(collection_name, client, website_content)
+# TODO get rid of this main file
+if __name__ == "__main__":
+    import asyncio
 
-    else:
-        print("create new collection")
-        # create a new collection to store the web content
-        create_content_collection(collection_name, client)
-        print("collection created")
-        # embed the markdown of the crawled content
-        website_data = prepare_data(website_content)
-        print("data prepared")
-        # insert the data into the newly created collection
-        res = client.insert(collection_name=collection_name, data=website_data)
-        # write the collection into persistent storage
-        client.flush(collection_name=collection_name)
-        return res
-
-
-def populate_api_collection(
-    api_collection_name: str, client: MilvusClient, website_content: pandas.DataFrame
-):
-    # website_content = scraper()
-    # website_content = pd.read_csv("api_test_8.csv")
-    client.drop_collection(api_collection_name)
-    # print(website_content.head())
-    # client.drop_collection(collection_name=collection_name)
-    if client.has_collection(api_collection_name):
-        return update_content_collection(api_collection_name, client, website_content)
-
-    else:
-        print("create new collection")
-        # create a new collection to store the web content
-        create_content_collection(api_collection_name, client)
-        print("collection created")
-        # embed the markdown of the crawled content
-        website_data = prepare_data(website_content)
-        print("data prepared")
-        # insert the data into the newly created collection
-        res = client.insert(collection_name=api_collection_name, data=website_data)
-        # write the collection into persistent storage
-        client.flush(collection_name=api_collection_name)
-        return res
-
-
-def populate_collections():
-    print("populate website:")
-    website_df, api_df = asyncio.run(scraper("https://aiod.eu"))
-    populate_webcontent_collection(web_collection_name, c, website_df)
-    print("populate api:")
-    populate_api_collection(api_collection_name, c, api_df)
-
-
-# asyncio.run(scraper("https://aiod.eu"))
-asyncio.run(scraper("https://aiondemand.github.io/AIOD-rest-api/"))
-# populate_collections()
+    asyncio.run(populate_collections_wrapper())

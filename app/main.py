@@ -147,7 +147,7 @@ async def app_init() -> None:
 
 
 async def init_mongo_client() -> AsyncIOMotorClient:
-    db = AsyncIOMotorClient(settings.MONGO.connection_string, uuidRepresentation="standard")[
+    db = AsyncIOMotorClient(settings.MONGO.CONNECTION_STRING, uuidRepresentation="standard")[
         settings.MONGO.DBNAME
     ]
     # TODO multiprocessing_mode doesn't make the Database connection thread-safe
