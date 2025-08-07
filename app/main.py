@@ -46,7 +46,8 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-app.include_router(chatbot_router.router, prefix="/chat", tags=["chatbot"])
+if settings.CHATBOT.USE_CHATBOT:
+    app.include_router(chatbot_router.router, prefix="/chatbot", tags=["chatbot"])
 
 app.include_router(query_router.old_router, prefix="/query", tags=["query"])
 app.include_router(query_router.old_router, prefix="/v1/query", tags=["query"], deprecated=True)
@@ -139,15 +140,14 @@ async def app_init() -> None:
         CronTrigger(hour=0, minute=0),
     )
     # Recurring scraping of AIoD websites
-
-    # TODO check whether recurring scraping works properly
-    SCHEDULER.add_job(
-        partial(
-            run_async_in_thread,
-            target_func=scraping_wrapper,
-        ),
-        CronTrigger(hour=0, minute=0),
-    )
+    if settings.CHATBOT.USE_CHATBOT:
+        SCHEDULER.add_job(
+            partial(
+                run_async_in_thread,
+                target_func=scraping_wrapper,
+            ),
+            CronTrigger(hour=0, minute=0),
+        )
     SCHEDULER.start()
 
     # Immediate computation of AIoD asset embeddings
@@ -157,9 +157,8 @@ async def app_init() -> None:
     )
     # Immediate crawling of AIoD websites
     global IMMEDIATE_CRAWLER_THREAD
-
-    # TODO for the first crawling we can allow GPU
-    IMMEDIATE_CRAWLER_THREAD = start_async_thread(target_func=scraping_wrapper)
+    if settings.CHATBOT.USE_CHATBOT:
+        IMMEDIATE_CRAWLER_THREAD = start_async_thread(target_func=scraping_wrapper)
 
 
 async def init_mongo_client() -> AsyncIOMotorClient:

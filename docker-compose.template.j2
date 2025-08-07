@@ -24,6 +24,7 @@ services:
       - MONGO__USER=${MONGO_USER}
       - MONGO__PASSWORD=${MONGO_PASSWORD}
       - MONGO__DBNAME=aiod
+      - CHATBOT__USE_CHATBOT={{ USE_CHATBOT }}
       - AIOD__JSON_SAVEPATH=/cold_data
       {% if USE_LLM == "true" %}
       - OLLAMA__URI=http://ollama:11434
@@ -56,7 +57,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 30s
+      start_period: 60s
     restart: always
     {% if USE_GPU == "true" %}
     deploy:

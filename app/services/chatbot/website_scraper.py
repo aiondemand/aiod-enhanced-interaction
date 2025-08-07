@@ -36,13 +36,12 @@ async def scraping_wrapper() -> None:
 async def populate_collections_wrapper() -> None:
     # TODO we should use MilvusEmbeedingStore instead
     client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
-    model = AiModel(
-        device="cuda"
-    )  # TODO device is specified based on whether its the initial crawling or not
+    model = AiModel(device=AiModel.get_device())
 
     website_df, api_df = await scraper("https://aiod.eu")
+
     # TODO should we crawl this website as well?
-    # website_df, api_df = await scraper("https://aiondemand.github.io/AIOD-rest-api/"))
+    # website_df, api_df = await scraper("https://aiondemand.github.io/AIOD-rest-api/")
 
     populate_collection(model, client, settings.CHATBOT.WEBSITE_COLLECTION_NAME, website_df)
     populate_collection(model, client, settings.CHATBOT.API_COLLECTION_NAME, api_df)
@@ -249,7 +248,7 @@ def update_content_collection(
             entries_to_add += content[content["url"] == new_entry]["id"].tolist()
 
     # find pages that are not reachable on the web anymore and add their ids to the delete list
-    for index, element in enumerate(urls_to_examine):  # TODO test this
+    for index, element in enumerate(urls_to_examine):
         if element not in content_url_list:
             entries_to_delete.append(entries_to_examine[index]["id"])
 
@@ -283,7 +282,7 @@ def prepare_data(
         if model.text_splitter is not None:
             chunks = model.text_splitter(content)
         else:
-            # TODO this is somewhat brittle
+            # TODO this is somewhat brittle, we need to change this later on...
             raise ValueError(
                 "Text splitter is not set. You need to change the model to use chunking -> STORE_CHUNKS"
             )
@@ -300,10 +299,3 @@ def prepare_data(
     result_df["last_modified"] = result_last_modified
 
     return result_df.to_dict(orient="records")
-
-
-# TODO get rid of this main file
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(populate_collections_wrapper())

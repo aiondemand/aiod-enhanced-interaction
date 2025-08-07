@@ -7,6 +7,10 @@ services:
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
+    environment:
+      - USE_LLM=${USE_LLM}
+      - USE_GPU=${USE_GPU}
+      - USE_CHATBOT=${USE_CHATBOT}
     env_file:
       - .env
     command: /bin/sh -c "python scripts/build_compose.py"

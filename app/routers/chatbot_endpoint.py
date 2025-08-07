@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Response, Request
-from pydantic import BaseModel
 
 from app.services.chatbot.chatbot import start_conversation, continue_conversation
 
@@ -7,21 +6,17 @@ router = APIRouter()
 
 
 CONVERSATION_ID_COOKIE_KEY = "chat_continue_conversation"
-COOKIE_PATH = "/chat"
+COOKIE_PATH = "/chatbot"
+
+# TODO stream the chatbot responses to make it more interactive
 
 
-# TODO why is this a model?
-class QueryRequest(BaseModel):
-    query: str
-
-
-@router.post("/")
-async def answer_query(user_query: str, request: Request):
+@router.post("")
+async def answer_query(user_query: str, request: Request) -> Response:
     """
     Handles user queries, either starting a new conversation or continuing an existing one
     based on the presence of a conversation ID cookie.
-    The query is now passed in the request body.
-    When this router is included with a prefix like /chat, this endpoint becomes /chat.
+    When this router is included with a prefix like /chatbot, this endpoint becomes /chatbot.
     """
     conversation_id: str | None = request.cookies.get(CONVERSATION_ID_COOKIE_KEY)
 
@@ -42,7 +37,7 @@ async def answer_query(user_query: str, request: Request):
                 httponly=True,
                 samesite="lax",
                 path=COOKIE_PATH,  # Using the explicit cookie_path
-                secure=False,  # Set to True if deploying with HTTPS
+                secure=True,  # Set to True if deploying with HTTPS
             )
     else:
         # If a conversation ID cookie exists, continue the existing conversation
@@ -54,8 +49,8 @@ async def answer_query(user_query: str, request: Request):
     return final_response  # Return the Response object on which the cookie was set
 
 
-@router.get("/clear_conversation")  # Changed to POST as clearing is an action
-async def clear_conversation(response: Response):
+@router.post("/clear_conversation")
+async def clear_conversation(response: Response) -> str:
     """
     Clears the conversation ID cookie from the client's browser.
     Note: To properly clear a cookie, you need to set its expiration to a past date
@@ -66,6 +61,6 @@ async def clear_conversation(response: Response):
         httponly=True,
         samesite="lax",
         path=COOKIE_PATH,  # Using the explicit cookie_path
-        secure=False,  # Set to True if deploying with HTTPS
+        secure=True,  # Set to True if deploying with HTTPS
     )
     return "Cookie removed"
