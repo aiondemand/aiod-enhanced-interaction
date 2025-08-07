@@ -26,6 +26,7 @@ class AiModel:
         self.use_chunking = settings.MILVUS.STORE_CHUNKS
         self.model = AiModel.load_model(self.use_chunking, device)
 
+    # TODO this is currently a quick patch for crawled data to be chunked in the same manner as AIoD assets
     @property
     def text_splitter(self) -> TokenizerTextSplitter | None:
         return self.model.text_splitter if self.use_chunking else None

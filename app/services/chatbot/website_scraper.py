@@ -1,7 +1,6 @@
 import logging
 import threading
 
-import pandas
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
@@ -14,6 +13,8 @@ from bs4 import BeautifulSoup
 from app.services.inference.model import AiModel
 from app.config import settings
 
+# Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/128
+# TODO general code refactoring would be nice
 
 job_lock = threading.Lock()
 
@@ -38,9 +39,7 @@ async def populate_collections_wrapper() -> None:
     client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
     model = AiModel(device=AiModel.get_device())
 
-    website_df, api_df = await scraper("https://aiod.eu")
-
-    # TODO should we crawl this website as well?
+    website_df, api_df = await scraper(settings.AIOD.MAIN_WEBSITE)
     # website_df, api_df = await scraper("https://aiondemand.github.io/AIOD-rest-api/")
 
     populate_collection(model, client, settings.CHATBOT.WEBSITE_COLLECTION_NAME, website_df)
@@ -48,7 +47,7 @@ async def populate_collections_wrapper() -> None:
 
 
 def populate_collection(
-    model: AiModel, client: MilvusClient, collection_name: str, crawled_content: pandas.DataFrame
+    model: AiModel, client: MilvusClient, collection_name: str, crawled_content: pd.DataFrame
 ) -> None:
     if client.has_collection(collection_name):
         update_content_collection(model, client, collection_name, crawled_content)
@@ -110,7 +109,7 @@ def extract_span_content(html_content: str, class_name: str) -> str | None:
         return ""
 
 
-async def scraper(anchor_url: str) -> tuple[pandas.DataFrame, pandas.DataFrame]:
+async def scraper(anchor_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     filter_chain = FilterChain(
         [
             # Only follow URLs with specific patterns

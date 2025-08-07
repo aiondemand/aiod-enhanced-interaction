@@ -1,5 +1,7 @@
 from __future__ import annotations
+from typing import Callable
 
+import numpy as np
 import json
 from mistralai import Mistral, FunctionResultEntry
 from mistralai.models.conversationresponse import ConversationResponse
@@ -12,15 +14,36 @@ from app.services.chatbot.prompt_library import *
 from app.services.inference.model import AiModel
 from app.config import settings
 
+# Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/127
 # TODO Wrap the whole chatbot into its own service
+# TODO replace this with the embedding store MilvusEmbeddingStore
 
 ASSET_TYPES = [typ.value for typ in settings.AIOD.ASSET_TYPES]
 MISTRAL_CLIENT = Mistral(api_key=settings.CHATBOT.MISTRAL_KEY)
-
-# TODO replace this with the embedding store MilvusEmbeddingStore
 MILVUS_CLIENT = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
-
 EMBEDDING_MODEL = AiModel(device="cpu")
+
+
+# TOOLS EXPOSED TO THE AGENT
+def aiod_page_search(query: str) -> str:
+    """Used to explain the AIoD website."""
+    return _get_relevant_crawled_content(query, settings.CHATBOT.WEBSITE_COLLECTION_NAME)
+
+
+def aiod_api_search(query: str) -> str:
+    """Used to explain the AIoD API."""
+    return _get_relevant_crawled_content(query, settings.CHATBOT.API_COLLECTION_NAME)
+
+
+def asset_search(query: str, asset: str) -> str:
+    """
+    Used to search for resources a user needs.
+    :param query: what to search for
+    :param asset: the type of asset searched for.
+    :return:
+    """
+    return _asset_search(query, asset)
+
 
 TOOL_DEFINITIONS = [
     {
@@ -79,6 +102,11 @@ TOOL_DEFINITIONS = [
         },
     },
 ]
+TOOLS: dict[str, Callable[..., str]] = {
+    "aiod_api_search": aiod_api_search,
+    "asset_search": asset_search,
+    "aiod_page_search": aiod_page_search,
+}
 
 
 talk2aiod = MISTRAL_CLIENT.beta.agents.create(
@@ -117,23 +145,7 @@ def continue_conversation(user_query: str, conversation_id: str) -> str:
         return "I can not answer this question."
 
 
-def aiod_page_search(query: str) -> str:
-    """Used to explain the AIoD website."""
-    return get_relevant_crawled_content(query, settings.CHATBOT.WEBSITE_COLLECTION_NAME)
-
-
-def aiod_api_search(query: str) -> str:
-    """Used to explain the AIoD API."""
-    return get_relevant_crawled_content(query, settings.CHATBOT.API_COLLECTION_NAME)
-
-
-def asset_search(query: str, asset: str) -> str:
-    """
-    Used to search for resources a user needs.
-    :param query: what to search for
-    :param asset: the type of asset searched for.
-    :return:
-    """
+def _asset_search(query: str, asset: str) -> str:
     embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
     mapped_asset = map_asset_name(asset)
     collection_to_search = settings.MILVUS.COLLECTION_PREFIX + "_" + mapped_asset
@@ -149,6 +161,8 @@ def asset_search(query: str, asset: str) -> str:
         )
     )[0]
 
+    # TODO add logic to search for assets till we find N results with all the fields
+    # we're interested in (we don't trigger a KeyError below...)
     result = ""
     for doc in docs:
         content = get_aiod_asset(doc["entity"]["asset_id"], SupportedAssetType(mapped_asset))
@@ -164,7 +178,7 @@ def asset_search(query: str, asset: str) -> str:
     return result
 
 
-def get_relevant_crawled_content(query: str, collection_name: str) -> str:
+def _get_relevant_crawled_content(query: str, collection_name: str) -> str:
     embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
 
     docs = list(
@@ -177,62 +191,35 @@ def get_relevant_crawled_content(query: str, collection_name: str) -> str:
         )
     )[0]
 
-    result = ""
-    for index, doc in enumerate(docs):
-        result += (
-            "Result "
-            + str(index)
-            + ":\n"
-            + doc["entity"]["content"]
-            + "\nlink:"
-            + doc["entity"]["url"]
-            + "\n"
-        )
-    return result
+    return "".join(
+        f"Result {index}:\n{doc['entity']['content']}\nlink:{doc['entity']['url']}\n"
+        for index, doc in enumerate(docs)
+    )
 
 
 def map_asset_name(asset: str) -> str:
     """
     Map the asset named by the LLM to the closest existing asset using the edit distance.
     """
-    lower_asset = asset.lower()
-    dist_list = []
-    for a in ASSET_TYPES:
-        difference = edit_distance(lower_asset, a)
-        dist_list.append(difference)
-
-    smallest_dist_id = 0
-    smallest_dist = dist_list[0]
-    for i, dist in enumerate(dist_list):
-        if dist < smallest_dist:
-            smallest_dist_id = i
-
-    return ASSET_TYPES[smallest_dist_id]
+    dist_list = np.array([edit_distance(asset.lower(), a) for a in ASSET_TYPES])
+    return ASSET_TYPES[int(np.argmin(dist_list))]
 
 
 def handle_function_call(input_response: ConversationResponse) -> str:
     if input_response.outputs[-1].type == "function.call":
-        if input_response.outputs[-1].name == "aiod_api_search":
-            function_result = json.dumps(
-                aiod_api_search(**json.loads(input_response.outputs[-1].arguments))
-            )
-        elif input_response.outputs[-1].name == "asset_search":
-            function_result = json.dumps(
-                asset_search(**json.loads(input_response.outputs[-1].arguments))
-            )
-        elif input_response.outputs[-1].name == "aiod_page_search":
-            function_result = json.dumps(
-                aiod_page_search(**json.loads(input_response.outputs[-1].arguments))
-            )
+        function_args = json.loads(input_response.outputs[-1].arguments)
+        function_name = input_response.outputs[-1].name
+
+        if function_name in TOOLS.keys():
+            function_result = json.dumps(TOOLS[function_name](**function_args))
         else:
-            return input_response.outputs[-1].content  # no content in response outputs
+            return input_response.outputs[-1].content
 
         # Providing the result to our Agent
         user_function_calling_entry = FunctionResultEntry(
             tool_call_id=input_response.outputs[-1].tool_call_id,
             result=function_result,
         )
-
         # Retrieving the final response
         tool_response = MISTRAL_CLIENT.beta.conversations.append(
             conversation_id=input_response.conversation_id, inputs=[user_function_calling_entry]
