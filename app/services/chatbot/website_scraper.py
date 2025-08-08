@@ -39,8 +39,8 @@ async def populate_collections_wrapper() -> None:
     client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
     model = AiModel(device=AiModel.get_device())
 
-    website_df, api_df = await scraper(settings.AIOD.MAIN_WEBSITE)
-    # website_df, api_df = await scraper("https://aiondemand.github.io/AIOD-rest-api/")
+    website_df = pd.concat([await scraper(website) for website in settings.AIOD.AIOD_WEBSITES])
+    api_df = pd.concat([await scraper(api) for api in settings.AIOD.AIOD_API_WEBSITES])
 
     populate_collection(model, client, settings.CHATBOT.WEBSITE_COLLECTION_NAME, website_df)
     populate_collection(model, client, settings.CHATBOT.API_COLLECTION_NAME, api_df)
@@ -109,7 +109,7 @@ def extract_span_content(html_content: str, class_name: str) -> str | None:
         return ""
 
 
-async def scraper(anchor_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+async def scraper(anchor_url: str) -> pd.DataFrame:
     filter_chain = FilterChain(
         [
             # Only follow URLs with specific patterns
@@ -179,11 +179,13 @@ async def scraper(anchor_url: str) -> tuple[pd.DataFrame, pd.DataFrame]:
             }
         )
 
-        logging.info(f"Crawled {len(results)} pages in total")
-        logging.info(f"\t{len(url_list)} pages are from AIoD websites")
-        logging.info(f"\t{len(api_url_list)} pages are from AIoD APIs")
+        logging.info(f"Crawled {len(results)} pages in total from {anchor_url}")
+        # logging.info(f"\t{len(url_list)} pages are from AIoD websites")
+        # logging.info(f"\t{len(api_url_list)} pages are from AIoD APIs")
 
-        return data, api_data
+        # TODO since the crawler doesn't work properly now, we will simply merge the two dataframes
+        # and return them as one
+        return pd.concat([data, api_data])
 
 
 def create_content_collection(client: MilvusClient, collection_name: str) -> None:

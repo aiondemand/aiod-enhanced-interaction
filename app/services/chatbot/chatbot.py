@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from typing import Callable
 
 import numpy as np
@@ -27,11 +28,13 @@ EMBEDDING_MODEL = AiModel(device="cpu")
 # TOOLS EXPOSED TO THE AGENT
 def aiod_page_search(query: str) -> str:
     """Used to explain the AIoD website."""
+    logging.info(f"Tool 'aiod_page_search' has been called with a query: '{query}'")
     return _get_relevant_crawled_content(query, settings.CHATBOT.WEBSITE_COLLECTION_NAME)
 
 
 def aiod_api_search(query: str) -> str:
     """Used to explain the AIoD API."""
+    logging.info(f"Tool 'aiod_api_search' has been called with a query: '{query}'")
     return _get_relevant_crawled_content(query, settings.CHATBOT.API_COLLECTION_NAME)
 
 
@@ -42,6 +45,9 @@ def asset_search(query: str, asset: str) -> str:
     :param asset: the type of asset searched for.
     :return:
     """
+    logging.info(
+        f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
+    )
     return _asset_search(query, asset)
 
 
@@ -150,30 +156,51 @@ def _asset_search(query: str, asset: str) -> str:
     mapped_asset = map_asset_name(asset)
     collection_to_search = settings.MILVUS.COLLECTION_PREFIX + "_" + mapped_asset
 
-    docs = list(
-        MILVUS_CLIENT.search(
-            collection_name=collection_to_search,
-            data=[embedding_vector],
-            limit=3,
-            group_by_field="asset_id",
-            output_fields=["asset_id"],
-            search_params={"metric_type": "COSINE"},
-        )
-    )[0]
+    result: str = ""
+    satisfactory_docs = 0
+    num_docs_to_return = settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH
+    seen_asset_ids: list[str] = []
 
-    # TODO add logic to search for assets till we find N results with all the fields
-    # we're interested in (we don't trigger a KeyError below...)
-    result = ""
-    for doc in docs:
-        content = get_aiod_asset(doc["entity"]["asset_id"], SupportedAssetType(mapped_asset))
-        try:
-            new_addition = (
-                f"name: {content['name']}, publication date:{content['date_published']}, url: {content['same_as']}"  # type: ignore[index]
-                f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
+    attempt = 0
+    max_attempts = 5
+
+    while satisfactory_docs < num_docs_to_return and attempt < max_attempts:
+        filter_expr = None if len(seen_asset_ids) == 0 else f"asset_id not in {seen_asset_ids}"
+
+        docs = list(
+            MILVUS_CLIENT.search(
+                collection_name=collection_to_search,
+                data=[embedding_vector],
+                limit=num_docs_to_return,
+                group_by_field="asset_id",
+                output_fields=["asset_id"],
+                search_params={"metric_type": "COSINE"},
+                expr=filter_expr,
             )
-            result += new_addition
-        except KeyError:
-            pass
+        )[0]
+        if len(docs) == 0:
+            break
+
+        for doc in docs:
+            asset_id = doc["entity"]["asset_id"]
+            seen_asset_ids.append(asset_id)
+
+            content = get_aiod_asset(asset_id, SupportedAssetType(mapped_asset))
+            if content is None:
+                continue
+
+            try:
+                new_addition = (
+                    f"name: {content['name']}, publication date:{content['date_published']}, url: {content['same_as']}"  # type: ignore[index]
+                    f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
+                )
+                result += new_addition
+                satisfactory_docs += 1
+                if satisfactory_docs == settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH:
+                    break
+            except KeyError:
+                continue
+        attempt += 1
 
     return result
 
@@ -185,7 +212,7 @@ def _get_relevant_crawled_content(query: str, collection_name: str) -> str:
         MILVUS_CLIENT.search(
             collection_name=collection_name,
             data=[embedding_vector],
-            limit=3,
+            limit=settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH,
             output_fields=["url", "content"],
             search_params={"metric_type": "COSINE"},
         )

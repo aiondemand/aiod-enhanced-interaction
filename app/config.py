@@ -105,8 +105,12 @@ class AIoDConfig(BaseModel):
         return self
 
     @property
-    def MAIN_WEBSITE(self) -> str:
-        return "https://aiod.eu"
+    def AIOD_WEBSITES(self) -> list[str]:
+        return ["https://aiod.eu"]
+
+    @property
+    def AIOD_API_WEBSITES(self) -> list[str]:
+        return ["https://aiondemand.github.io/AIOD-rest-api/", "https://api.aiod.eu"]
 
     @property
     def OFFSET_INCREMENT(self) -> int:
@@ -151,6 +155,7 @@ class ChatbotConfig(BaseModel):
     USE_CHATBOT: bool = Field(...)
     MISTRAL_KEY: str = Field(...)
     MISTRAL_MODEL: str = Field("mistral-medium-latest")
+    TOP_K_ASSETS_TO_SEARCH: int = Field(10, gt=0)
 
     @property
     def WEBSITE_COLLECTION_NAME(self) -> str:
