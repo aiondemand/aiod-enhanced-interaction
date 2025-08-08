@@ -5,6 +5,7 @@ from datetime import datetime
 
 import numpy as np
 from app.config import settings
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import check_aiod_asset
@@ -61,7 +62,7 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
 def delete_asset_embeddings(
     embedding_store: EmbeddingStore, asset_type: SupportedAssetType, to_time: datetime
 ) -> None:
-    all_aiod_asset_ids: list[str] = []
+    all_aiod_asset_ids: list[AssetId] = []
     url_params = RequestParams(
         offset=0,
         limit=settings.AIOD.WINDOW_SIZE,

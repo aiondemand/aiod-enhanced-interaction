@@ -5,6 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 
 
@@ -31,7 +32,7 @@ class VectorSearchParams(BaseModel, ABC):
 
     # filter related attributes
     metadata_filter: str = ""
-    asset_ids_to_exclude: list[str] = Field(default_factory=list)
+    asset_ids_to_exclude: list[AssetId] = Field(default_factory=list)
 
     @abstractmethod
     def get_params(self) -> dict:

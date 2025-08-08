@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 
 
@@ -127,7 +128,7 @@ class AIoDConfig(BaseModel):
     def get_assets_url(self, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}")
 
-    def get_asset_by_id_url(self, asset_id: str, asset_type: SupportedAssetType) -> str:
+    def get_asset_by_id_url(self, asset_id: AssetId, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
 
 
@@ -149,6 +150,7 @@ class Settings(BaseSettings):
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
 
+    API_VERSION: str = Field(...)
     USE_GPU: bool = Field(False)
     MODEL_LOADPATH: str = Field(...)
     MODEL_BATCH_SIZE: int = Field(..., gt=0)
