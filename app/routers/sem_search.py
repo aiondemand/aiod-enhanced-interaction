@@ -23,7 +23,6 @@ async def get_query_results(
     query_id: UUID,
     query_type: Type[BaseUserQuery],
     return_entire_assets: bool = False,
-    old_schema: bool = True,
 ) -> Response:
     user_query = await query_type.get(query_id)
     if user_query is None:
@@ -32,7 +31,7 @@ async def get_query_results(
         )
     if user_query.is_expired:
         raise HTTPException(status_code=410, detail="Requested query has expired.")
-    return user_query.map_to_response(return_entire_assets, old_schema)
+    return user_query.map_to_response(return_entire_assets)
 
 
 def validate_query_or_raise(query: str) -> None:

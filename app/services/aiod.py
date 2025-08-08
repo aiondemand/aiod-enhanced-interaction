@@ -7,6 +7,7 @@ from requests import Response
 from requests.exceptions import HTTPError, Timeout
 
 from app.config import settings
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.resilience import AIoDUnavailableException
@@ -54,7 +55,7 @@ def recursive_aiod_asset_fetch(
 
 
 def get_aiod_asset(
-    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
+    asset_id: AssetId, asset_type: SupportedAssetType, sleep_time: float = 0.1
 ) -> dict | None:
     try:
         sleep(sleep_time)
@@ -69,7 +70,7 @@ def get_aiod_asset(
 
 
 def check_aiod_asset(
-    asset_id: str, asset_type: SupportedAssetType, sleep_time: float = 0.1
+    asset_id: AssetId, asset_type: SupportedAssetType, sleep_time: float = 0.1
 ) -> bool:
     return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
