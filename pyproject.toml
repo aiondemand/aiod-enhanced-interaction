@@ -12,6 +12,7 @@ dependencies = [
     "fastapi==0.115.12",
     "uvicorn==0.34.0",
     "numpy==2.2.4",
+    "pandas==2.2.3",
     "pydantic==2.10.6",
     "pydantic-settings==2.8.1",
     "tqdm==4.67.1",
@@ -26,7 +27,11 @@ dependencies = [
     "beanie==1.29.0",
     "motor==3.7.1",
     "pymongo==4.13.0",
-    "tenacity==9.1.2"
+    "tenacity==9.1.2",
+    "Crawl4AI==0.7.2",
+    "beautifulsoup4==4.13.4",
+    "mistralai==1.9.2",
+    "nltk==3.9.1"
 ]
 readme = "README.md"
 

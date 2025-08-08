@@ -2,6 +2,8 @@
 
 <!-- TODO UPDATE (account for other services besides sem search when describing this repo) -->
 
+<!-- TODO Describe the chatbot and what tools it has an access to -->
+
 This API service expands the AIoD platform by providing a separately managed
 semantic search module that can be applied to AIoD assets,
 i.e, Datasets, Models, Publications, etc.
@@ -94,6 +96,9 @@ In this file you find the following ENV variables:
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
     - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
     - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
+- `CHATBOT__USE_CHATBOT`: Boolean value that denotes whether you wish to enable the chatbot functionality
+- `CHATBOT__MISTRAL_KEY`: API key required to access the Mistral AI API for chatbot functionality
+- `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
 - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
 - `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
@@ -181,6 +186,7 @@ Perform the following steps to deploy the service:
     - `DATA_DIRPATH`: Path to a directory that should contain all the volumes and other files related to our the services we wish to deploy.
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
+    - `USE_CHATBOT`: Whether we wish to expose endpoints that allow users to communicate with AIoD chatbot. By enabling this variable, we also automatically crawl AIoD platform on daily basis to retrieve the most up-to-date information the chatbot can subsequently have an access to.
     - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`: An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
     - `MONGO_ASSETCOLS_DUMP_FILEPATH`: An optional variable representing a filepath to a JSON file containing a list of documents used for populating MongoDB database, more specifically the `assetCollections` collection. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
 
