@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 CONVERSATION_ID_COOKIE_KEY = "chat_continue_conversation"
-COOKIE_PATH = "/chatbot"
+COOKIE_PATH_SUFFIX = "/chatbot"
 
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/126
 # TODO stream the chatbot responses to make it more interactive
@@ -39,7 +39,7 @@ async def answer_query(
                 value=new_conversation_id,
                 httponly=True,
                 samesite="lax",
-                path=COOKIE_PATH,  # Using the explicit cookie_path
+                path=build_cookie_path(request),  # Using the explicit cookie_path
                 secure=True,  # Set to True if deploying with HTTPS
             )
     else:
@@ -53,7 +53,7 @@ async def answer_query(
 
 
 @router.post("/clear_conversation")
-async def clear_conversation(response: Response) -> None:
+async def clear_conversation(request: Request, response: Response) -> None:
     """
     Clears the conversation ID cookie from the client's browser.
     Note: To properly clear a cookie, you need to set its expiration to a past date
@@ -63,6 +63,10 @@ async def clear_conversation(response: Response) -> None:
         key=CONVERSATION_ID_COOKIE_KEY,
         httponly=True,
         samesite="lax",
-        path=COOKIE_PATH,  # Using the explicit cookie_path
+        path=build_cookie_path(request),  # Using the explicit cookie_path
         secure=True,  # Set to True if deploying with HTTPS
     )
+
+
+def build_cookie_path(request: Request) -> str:
+    return f"{request.scope.get('root_path')}{COOKIE_PATH_SUFFIX}"
