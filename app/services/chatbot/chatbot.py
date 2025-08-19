@@ -175,7 +175,7 @@ def _asset_search(query: str, asset: str) -> str:
                 group_by_field="asset_id",
                 output_fields=["asset_id"],
                 search_params={"metric_type": "COSINE"},
-                expr=filter_expr,
+                filter=filter_expr,
             )
         )[0]
         if len(docs) == 0:

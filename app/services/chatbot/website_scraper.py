@@ -18,16 +18,22 @@ from app.config import settings
 
 job_lock = threading.Lock()
 
+# TODO Create MongoDB collection pertaining to the scraped websites and APIs
+# analogous to AssetCollection
+
 
 async def scraping_wrapper() -> None:
     if job_lock.acquire(blocking=False):
-        logging.info(
-            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
-        )
-        await populate_collections_wrapper()
-        logging.info(
-            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has ended."
-        )
+        try:
+            logging.info(
+                "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
+            )
+            await populate_collections_wrapper()
+            logging.info(
+                "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has ended."
+            )
+        finally:
+            job_lock.release()
     else:
         logging.info(
             "Scheduled task for scraping AIoD websites and APIs skipped (previous task is still running)"
@@ -280,15 +286,17 @@ def prepare_data(
         url = website_content["url"].iloc[index]
         last_modified = website_content["last_modified"].iloc[index]
 
-        if model.text_splitter is not None:
-            chunks = model.text_splitter(content)
-        else:
+        if model.text_splitter is None:
             # TODO this is somewhat brittle, we need to change this later on...
             raise ValueError(
                 "Text splitter is not set. You need to change the model to use chunking -> STORE_CHUNKS"
             )
-        embedd_chunks = [model.compute_query_embeddings(chunk)[0] for chunk in chunks]
+        chunks = model.text_splitter(content)
+        chunks = [chunk for chunk in chunks if len(chunk.strip()) > 0]
+        if len(chunks) == 0:
+            continue
 
+        embedd_chunks = [model.compute_query_embeddings(chunk)[0] for chunk in chunks]
         result_vectors += embedd_chunks
         result_content += chunks
         result_url += [url for x in chunks]

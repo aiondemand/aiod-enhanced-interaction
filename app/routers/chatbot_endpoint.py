@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Request
+from fastapi import APIRouter, Response, Request, Query
 
 from app.services.chatbot.chatbot import start_conversation, continue_conversation
 
@@ -13,7 +13,9 @@ COOKIE_PATH = "/chatbot"
 
 
 @router.post("")
-async def answer_query(user_query: str, request: Request) -> Response:
+async def answer_query(
+    request: Request, user_query: str = Query(..., description="User query")
+) -> Response:
     """
     Handles user queries, either starting a new conversation or continuing an existing one
     based on the presence of a conversation ID cookie.
