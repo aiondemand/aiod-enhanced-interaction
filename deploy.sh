@@ -22,6 +22,12 @@ if [ -z "$USE_LLM" ]; then
   exit 1
 fi
 
+# Check if USE_CHATBOT is set
+if [ -z "$USE_CHATBOT" ]; then
+  echo "USE_CHATBOT is not set"
+  exit 1
+fi
+
 # Check if DATA_DIRPATH is set
 if [ -z "$DATA_DIRPATH" ]; then
   echo "DATA_DIRPATH is not set"

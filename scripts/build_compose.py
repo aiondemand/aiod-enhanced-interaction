@@ -3,6 +3,10 @@ import os
 from jinja2 import Environment, FileSystemLoader
 
 if __name__ == "__main__":
+    USE_GPU = os.environ.get("USE_GPU", "false")
+    USE_LLM = os.environ.get("USE_LLM", "false")
+    USE_CHATBOT = os.environ.get("USE_CHATBOT", "false")
+
     env = Environment(
         loader=FileSystemLoader("."),
         trim_blocks=True,
@@ -14,7 +18,8 @@ if __name__ == "__main__":
     template = env.get_template("Dockerfile.template.j2")
 
     output = template.render(
-        USE_GPU=os.environ.get("USE_GPU", "false"),
+        USE_GPU=USE_GPU,
+        USE_CHATBOT=USE_CHATBOT,
     )
     with open("./Dockerfile.final", "w") as f:
         f.write(output)
@@ -23,8 +28,9 @@ if __name__ == "__main__":
     template = env.get_template("docker-compose.template.j2")
 
     output = template.render(
-        USE_GPU=os.environ.get("USE_GPU", "false"),
-        USE_LLM=os.environ.get("USE_LLM", "false"),
+        USE_GPU=USE_GPU,
+        USE_LLM=USE_LLM,
+        USE_CHATBOT=USE_CHATBOT,
     )
     with open("./docker-compose.final.yml", "w") as f:
         f.write(output)
