@@ -106,6 +106,14 @@ class AIoDConfig(BaseModel):
         return self
 
     @property
+    def AIOD_WEBSITES(self) -> list[str]:
+        return ["https://aiod.eu"]
+
+    @property
+    def AIOD_API_WEBSITES(self) -> list[str]:
+        return ["https://aiondemand.github.io/AIOD-rest-api/", "https://api.aiod.eu"]
+
+    @property
     def OFFSET_INCREMENT(self) -> int:
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
 
@@ -140,8 +148,28 @@ class MongoConfig(BaseModel):
     PASSWORD: str = Field(...)
 
     @property
-    def connection_string(self) -> str:
+    def CONNECTION_STRING(self) -> str:
         return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/"
+
+
+class ChatbotConfig(BaseModel):
+    USE_CHATBOT: bool = Field(...)
+    MISTRAL_KEY: str = Field(...)
+    MISTRAL_MODEL: str = Field("mistral-medium-latest")
+    TOP_K_ASSETS_TO_SEARCH: int = Field(10, gt=0)
+
+    @property
+    def WEBSITE_COLLECTION_NAME(self) -> str:
+        return "website_collection"
+
+    @property
+    def API_COLLECTION_NAME(self) -> str:
+        return "api_collection"
+
+    @field_validator("USE_CHATBOT", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
 
 class Settings(BaseSettings):
@@ -149,6 +177,7 @@ class Settings(BaseSettings):
     MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
+    CHATBOT: ChatbotConfig = Field(...)
 
     API_VERSION: str = Field(...)
     USE_GPU: bool = Field(False)
