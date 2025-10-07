@@ -140,7 +140,7 @@ talk2aiod = MISTRAL_CLIENT.beta.agents.create(
 
 
 # TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
-async def start_conversation(user_query: str) -> tuple[str, str]:
+async def start_conversation(user_query: str) -> tuple[str, str | None]:
     if await moderate_input(user_query):
         response = await MISTRAL_CLIENT.beta.conversations.start_async(
             agent_id=talk2aiod.id, inputs=user_query
@@ -148,7 +148,7 @@ async def start_conversation(user_query: str) -> tuple[str, str]:
         result = await handle_function_call(response)
         return result, response.conversation_id
     else:
-        return "I can not answer this question.", "-1"
+        return "I can not answer this question.", None
 
 
 async def continue_conversation(user_query: str, conversation_id: str) -> str:

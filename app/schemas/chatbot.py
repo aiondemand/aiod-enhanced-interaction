@@ -1,8 +1,14 @@
 from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 from mistralai import ConversationMessages, MessageEntries
 from pydantic import BaseModel
+
+
+class ChatbotResponse(BaseModel):
+    conversation_id: str | None = None
+    content: str
 
 
 class ChatbotMessage(BaseModel):
