@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Response, Request, Query
-
 from app.schemas.chatbot import ChatbotHistory
 from app.services.chatbot.chatbot import (
     start_conversation,
@@ -30,7 +29,7 @@ async def answer_query(
 
     if not conversation_id:
         # If no conversation ID cookie is found, start a new conversation
-        response_content, new_conversation_id = start_conversation(user_query)
+        response_content, new_conversation_id = await start_conversation(user_query)
 
         # Create the Response object here
         final_response = Response(content=response_content, media_type="text/plain")
@@ -49,7 +48,7 @@ async def answer_query(
             )
     else:
         # If a conversation ID cookie exists, continue the existing conversation
-        response_content = continue_conversation(user_query, conversation_id)
+        response_content = await continue_conversation(user_query, conversation_id)
         # For subsequent requests, if you need to return a Response object
         # but don't need to set a *new* cookie, you can create it here:
         final_response = Response(content=response_content, media_type="text/plain")
