@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Response, Request, Query
 
-from app.services.chatbot.chatbot import start_conversation, continue_conversation
+from app.schemas.chatbot import ChatbotHistory
+from app.services.chatbot.chatbot import (
+    start_conversation,
+    continue_conversation,
+    get_conversation_messages,
+)
 
 router = APIRouter()
 
@@ -50,6 +55,19 @@ async def answer_query(
         final_response = Response(content=response_content, media_type="text/plain")
 
     return final_response  # Return the Response object on which the cookie was set
+
+
+@router.get("/history")
+async def get_history(request: Request) -> ChatbotHistory | None:
+    """
+    Returns the conversation history for the current user.
+    """
+    conversation_id: str | None = request.cookies.get(CONVERSATION_ID_COOKIE_KEY)
+    if conversation_id is None:
+        return None
+
+    history = await get_conversation_messages(conversation_id)
+    return ChatbotHistory.create_from_mistral_history(history)
 
 
 @router.post("/clear_conversation")

@@ -151,6 +151,12 @@ def continue_conversation(user_query: str, conversation_id: str) -> str:
         return "I can not answer this question."
 
 
+async def get_conversation_messages(conversation_id: str):
+    return await MISTRAL_CLIENT.beta.conversations.get_messages_async(
+        conversation_id=conversation_id
+    )
+
+
 def _asset_search(query: str, asset: str) -> str:
     embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
     mapped_asset = map_asset_name(asset)
