@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
+from mistralai import SDKError
 from app.schemas.chatbot import ChatbotHistory, ChatbotResponse
 from app.services.chatbot.chatbot import (
     start_conversation,
@@ -25,10 +26,19 @@ async def answer_query(
     based on the presence of a conversation ID.
     When this router is included with a prefix like /chatbot, this endpoint becomes /chatbot.
     """
-    if conversation_id is None:
-        response_content, conversation_id = await start_conversation(user_query)
-    else:
-        response_content = await continue_conversation(user_query, conversation_id)
+    try:
+        if conversation_id is None:
+            response_content, conversation_id = await start_conversation(user_query)
+        else:
+            response_content = await continue_conversation(user_query, conversation_id)
+    except SDKError as e:
+        if e.status_code == 429:
+            raise HTTPException(
+                status_code=503,
+                detail="You have exceeded the chatbot limits. Try the request again in a few minutes.",
+            )
+        else:
+            raise e
 
     return ChatbotResponse(
         conversation_id=conversation_id,
