@@ -11,6 +11,10 @@ class ChatbotResponse(BaseModel):
     content: str
 
 
+# TODO this model can only represent communication between a user and a model
+# whilst ignoring various tool calls performed on the side of the agent
+# Since currently we currently extract from Mistral API only the messages
+# that are directly a part of user interaction, it's not a problem for now...
 class ChatbotMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str

@@ -162,7 +162,7 @@ async def continue_conversation(user_query: str, conversation_id: str) -> str:
         return "I can not answer this question."
 
 
-async def get_conversation_messages(conversation_id: str):
+async def get_past_conversation_messages(conversation_id: str):
     return await MISTRAL_CLIENT.beta.conversations.get_messages_async(
         conversation_id=conversation_id
     )

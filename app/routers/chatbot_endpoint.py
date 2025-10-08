@@ -3,10 +3,14 @@ from app.schemas.chatbot import ChatbotHistory, ChatbotResponse
 from app.services.chatbot.chatbot import (
     start_conversation,
     continue_conversation,
-    get_conversation_messages,
+    get_past_conversation_messages,
 )
 
 router = APIRouter()
+
+
+# Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/126
+# TODO stream the chatbot responses to make it more interactive
 
 
 @router.post("")
@@ -44,5 +48,5 @@ async def get_history(
     if conversation_id is None:
         return None
 
-    history = await get_conversation_messages(conversation_id)
+    history = await get_past_conversation_messages(conversation_id)
     return ChatbotHistory.create_from_mistral_history(history)
