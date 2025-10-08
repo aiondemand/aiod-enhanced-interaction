@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Response, Request, Query
-
-from app.services.chatbot.chatbot import start_conversation, continue_conversation
+from fastapi import APIRouter, HTTPException, Query
+from mistralai import SDKError
+from app.schemas.chatbot import ChatbotHistory, ChatbotResponse
+from app.services.chatbot.chatbot import (
+    start_conversation,
+    continue_conversation,
+    get_past_conversation_messages,
+)
 
 router = APIRouter()
 
-
-CONVERSATION_ID_COOKIE_KEY = "chat_continue_conversation"
-COOKIE_PATH_SUFFIX = "/chatbot"
 
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/126
 # TODO stream the chatbot responses to make it more interactive
@@ -14,59 +16,47 @@ COOKIE_PATH_SUFFIX = "/chatbot"
 
 @router.post("")
 async def answer_query(
-    request: Request, user_query: str = Query(..., description="User query")
-) -> Response:
+    user_query: str = Query(..., description="User query"),
+    conversation_id: str | None = Query(
+        default=None, description="Conversation ID. Leave empty to start a new conversation."
+    ),
+) -> ChatbotResponse:
     """
     Handles user queries, either starting a new conversation or continuing an existing one
-    based on the presence of a conversation ID cookie.
+    based on the presence of a conversation ID.
     When this router is included with a prefix like /chatbot, this endpoint becomes /chatbot.
     """
-    conversation_id: str | None = request.cookies.get(CONVERSATION_ID_COOKIE_KEY)
-
-    if not conversation_id:
-        # If no conversation ID cookie is found, start a new conversation
-        response_content, new_conversation_id = start_conversation(user_query)
-
-        # Create the Response object here
-        final_response = Response(content=response_content, media_type="text/plain")
-
-        # Check whether answering to the user query was allowed
-        if new_conversation_id != "-1":
-            # Set the new conversation ID as a cookie directly on the final_response object
-            # Set the cookie path to match the router prefix
-            final_response.set_cookie(
-                key=CONVERSATION_ID_COOKIE_KEY,
-                value=new_conversation_id,
-                httponly=True,
-                samesite="lax",
-                path=build_cookie_path(request),  # Using the explicit cookie_path
-                secure=True,  # Set to True if deploying with HTTPS
+    try:
+        if conversation_id is None:
+            response_content, conversation_id = await start_conversation(user_query)
+        else:
+            response_content = await continue_conversation(user_query, conversation_id)
+    except SDKError as e:
+        if e.status_code == 429:
+            raise HTTPException(
+                status_code=503,
+                detail="You have exceeded the chatbot limits. Try the request again in a few minutes.",
             )
-    else:
-        # If a conversation ID cookie exists, continue the existing conversation
-        response_content = continue_conversation(user_query, conversation_id)
-        # For subsequent requests, if you need to return a Response object
-        # but don't need to set a *new* cookie, you can create it here:
-        final_response = Response(content=response_content, media_type="text/plain")
+        else:
+            raise e
 
-    return final_response  # Return the Response object on which the cookie was set
-
-
-@router.post("/clear_conversation")
-async def clear_conversation(request: Request, response: Response) -> None:
-    """
-    Clears the conversation ID cookie from the client's browser.
-    Note: To properly clear a cookie, you need to set its expiration to a past date
-    or use delete_cookie().
-    """
-    response.delete_cookie(
-        key=CONVERSATION_ID_COOKIE_KEY,
-        httponly=True,
-        samesite="lax",
-        path=build_cookie_path(request),  # Using the explicit cookie_path
-        secure=True,  # Set to True if deploying with HTTPS
+    return ChatbotResponse(
+        conversation_id=conversation_id,
+        content=response_content,
     )
 
 
-def build_cookie_path(request: Request) -> str:
-    return f"{request.scope.get('root_path')}{COOKIE_PATH_SUFFIX}"
+@router.get("/history")
+async def get_history(
+    conversation_id: str | None = Query(
+        default=None, description="Conversation ID returned from the chatbot endpoint."
+    ),
+) -> ChatbotHistory | None:
+    """
+    Returns the conversation history for the current user.
+    """
+    if conversation_id is None:
+        return None
+
+    history = await get_past_conversation_messages(conversation_id)
+    return ChatbotHistory.create_from_mistral_history(history)

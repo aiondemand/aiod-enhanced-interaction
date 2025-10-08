@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
-from typing import Callable
+import asyncio
+from typing import Callable, Awaitable
 
 import numpy as np
 import json
@@ -26,19 +27,27 @@ EMBEDDING_MODEL = AiModel(device="cpu")
 
 
 # TOOLS EXPOSED TO THE AGENT
-def aiod_page_search(query: str) -> str:
+# TODO For the sake of simplicity and time, these tools are executed in a separate thread
+# as milvus and model embedding computation are blocking calls
+# TODO fix later once Milvus and other services are implemented in async way
+async def aiod_page_search(query: str) -> str:
     """Used to explain the AIoD website."""
     logging.info(f"Tool 'aiod_page_search' has been called with a query: '{query}'")
-    return _get_relevant_crawled_content(query, settings.CHATBOT.WEBSITE_COLLECTION_NAME)
+
+    return await asyncio.to_thread(
+        _get_relevant_crawled_content, query, settings.CHATBOT.WEBSITE_COLLECTION_NAME
+    )
 
 
-def aiod_api_search(query: str) -> str:
+async def aiod_api_search(query: str) -> str:
     """Used to explain the AIoD API."""
     logging.info(f"Tool 'aiod_api_search' has been called with a query: '{query}'")
-    return _get_relevant_crawled_content(query, settings.CHATBOT.API_COLLECTION_NAME)
+    return await asyncio.to_thread(
+        _get_relevant_crawled_content, query, settings.CHATBOT.API_COLLECTION_NAME
+    )
 
 
-def asset_search(query: str, asset: str) -> str:
+async def asset_search(query: str, asset: str) -> str:
     """
     Used to search for resources a user needs.
     :param query: what to search for
@@ -48,7 +57,7 @@ def asset_search(query: str, asset: str) -> str:
     logging.info(
         f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
     )
-    return _asset_search(query, asset)
+    return await asyncio.to_thread(_asset_search, query, asset)
 
 
 TOOL_DEFINITIONS = [
@@ -108,7 +117,7 @@ TOOL_DEFINITIONS = [
         },
     },
 ]
-TOOLS: dict[str, Callable[..., str]] = {
+TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
     "aiod_api_search": aiod_api_search,
     "asset_search": asset_search,
     "aiod_page_search": aiod_page_search,
@@ -131,24 +140,32 @@ talk2aiod = MISTRAL_CLIENT.beta.agents.create(
 
 
 # TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
-def start_conversation(user_query: str) -> tuple[str, str]:
-    if moderate_input(user_query):
-        response = MISTRAL_CLIENT.beta.conversations.start(agent_id=talk2aiod.id, inputs=user_query)
-        result = handle_function_call(response)
+async def start_conversation(user_query: str) -> tuple[str, str | None]:
+    if await moderate_input(user_query):
+        response = await MISTRAL_CLIENT.beta.conversations.start_async(
+            agent_id=talk2aiod.id, inputs=user_query
+        )
+        result = await handle_function_call(response)
         return result, response.conversation_id
     else:
-        return "I can not answer this question.", "-1"
+        return "I can not answer this question.", None
 
 
-def continue_conversation(user_query: str, conversation_id: str) -> str:
-    if moderate_input(user_query):
-        response = MISTRAL_CLIENT.beta.conversations.append(
+async def continue_conversation(user_query: str, conversation_id: str) -> str:
+    if await moderate_input(user_query):
+        response = await MISTRAL_CLIENT.beta.conversations.append_async(
             conversation_id=conversation_id, inputs=user_query
         )
-        result = handle_function_call(response)
+        result = await handle_function_call(response)
         return result
     else:
         return "I can not answer this question."
+
+
+async def get_past_conversation_messages(conversation_id: str):
+    return await MISTRAL_CLIENT.beta.conversations.get_messages_async(
+        conversation_id=conversation_id
+    )
 
 
 def _asset_search(query: str, asset: str) -> str:
@@ -232,13 +249,13 @@ def map_asset_name(asset: str) -> str:
     return ASSET_TYPES[int(np.argmin(dist_list))]
 
 
-def handle_function_call(input_response: ConversationResponse) -> str:
+async def handle_function_call(input_response: ConversationResponse) -> str:
     if input_response.outputs[-1].type == "function.call":
         function_args = json.loads(input_response.outputs[-1].arguments)
         function_name = input_response.outputs[-1].name
 
         if function_name in TOOLS.keys():
-            function_result = json.dumps(TOOLS[function_name](**function_args))
+            function_result = json.dumps(await TOOLS[function_name](**function_args))
         else:
             return input_response.outputs[-1].content
 
@@ -248,16 +265,16 @@ def handle_function_call(input_response: ConversationResponse) -> str:
             result=function_result,
         )
         # Retrieving the final response
-        tool_response = MISTRAL_CLIENT.beta.conversations.append(
+        tool_response = await MISTRAL_CLIENT.beta.conversations.append_async(
             conversation_id=input_response.conversation_id, inputs=[user_function_calling_entry]
         )
-        return handle_function_call(tool_response)
+        return await handle_function_call(tool_response)
     else:
         return input_response.outputs[-1].content
 
 
-def moderate_input(input_query: str) -> bool:
-    response = MISTRAL_CLIENT.classifiers.moderate_chat(
+async def moderate_input(input_query: str) -> bool:
+    response = await MISTRAL_CLIENT.classifiers.moderate_chat_async(
         model="mistral-moderation-latest",
         inputs=[
             {"role": "user", "content": input_query},
