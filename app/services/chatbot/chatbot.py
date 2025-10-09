@@ -126,8 +126,8 @@ TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
 
 talk2aiod = MISTRAL_CLIENT.beta.agents.create(
     model=settings.CHATBOT.MISTRAL_MODEL,
-    description="The Talk2AIoD chatbot",
-    name="Talk2AIoD",
+    description="AI assistant for AI-on-Demand platform",
+    name="AI assistant",
     tools=TOOL_DEFINITIONS,
     instructions=master_prompt,
     completion_args={
