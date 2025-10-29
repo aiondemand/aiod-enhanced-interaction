@@ -169,22 +169,20 @@ async def get_past_conversation_messages(conversation_id: str):
 
 
 def generate_url(asset_type, asset_id):
-    asset_id = asset_id
     if asset_type == "datasets":
-        url = f"https://mylibrary.aiod.eu/resources/data_{asset_id}?category=Dataset"
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Dataset"
     elif asset_type == "ml_models":
-        url = f"https://mylibrary.aiod.eu/resources/mdl_{asset_id}?category=AIModel"
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=AIModel"
     elif asset_type == "publications":
-        url = f"https://mylibrary.aiod.eu/resources/pub_{asset_id}?category=Publication"
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Publication"
     elif asset_type == "case_studies":
-        url = f"https://mylibrary.aiod.eu/resources/case_{asset_id}?category=Case%20studies"
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Case%20studies"
     elif asset_type == "educational_resources":
-        url = f"https://mylibrary.aiod.eu/resources/edu_{asset_id}?category=Educational%20resource"
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Educational%20resource"
     elif asset_type == "experiments":
-        url = f"https://mylibrary.aiod.eu/resources/exp_{asset_id}?category=Experiment"
-    # elif asset_type == "services":
-    #    url = f"https://mylibrary.aiod.eu/resources/exp_{asset_id}?category=Experiment"
-    # todo how is the url for services built
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Experiment"
+    elif asset_type == "services":
+        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Service"
     else:
         url = None
     return url
@@ -225,11 +223,12 @@ def _asset_search(query: str, asset: str) -> str:
             seen_asset_ids.append(asset_id)
 
             content = get_aiod_asset(asset_id, SupportedAssetType(mapped_asset))
-            url = generate_url(mapped_asset, asset_id)
+
             if content is None:
                 continue
 
             try:
+                url = generate_url(mapped_asset, asset_id)
                 if url is None:
                     url = content['same_as']
                 new_addition = (
