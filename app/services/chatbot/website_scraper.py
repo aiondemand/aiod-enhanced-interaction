@@ -129,7 +129,7 @@ async def scraper(anchor_url: str) -> pd.DataFrame:
     # ignore_images =True
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
-            max_depth=0,  # configure crawl level as needed
+            max_depth=3,  # configure crawl level as needed
             include_external=False,
             filter_chain=filter_chain,
         ),
