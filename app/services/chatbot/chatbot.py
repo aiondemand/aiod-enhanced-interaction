@@ -230,7 +230,7 @@ def _asset_search(query: str, asset: str) -> str:
             try:
                 url = generate_url(mapped_asset, asset_id)
                 if url is None:
-                    url = content['same_as']
+                    url = content["same_as"]
                 new_addition = (
                     f"name: {content['name']}, publication date:{content['date_published']}, url: {url}"  # type: ignore[index]
                     f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
