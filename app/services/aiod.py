@@ -74,6 +74,16 @@ def check_aiod_asset(
     return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
 
+def get_aiod_taxonomy(taxonomy_name: str, return_only_terms: bool = True) -> list[str] | list[dict]:
+    response = perform_url_request(settings.AIOD.get_taxonomy_url(taxonomy_name))
+    taxonomy = response.json()
+
+    if return_only_terms:
+        return [tax["term"] for tax in taxonomy if tax.get("term")]
+    else:
+        return taxonomy
+
+
 def _build_aiod_url_queries(url_params: RequestParams) -> dict:
     def translate_datetime_to_aiod_params(date: datetime | None = None) -> str | None:
         if date is None:

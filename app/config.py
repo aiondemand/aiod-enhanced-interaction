@@ -10,6 +10,28 @@ from pydantic_settings import BaseSettings
 from app.schemas.enums import SupportedAssetType
 
 
+AIOD_TAXONOMIES: list[str] = [
+    "AI_paradigms",
+    "countries",
+    "educational_competencies",
+    "educational_levels",
+    "event_modes",
+    "event_statuses",
+    "industrial_sectors",
+    "languages",
+    "learning_modes",
+    "licenses",
+    "news_categories",
+    "numbers_of_employees",
+    "organisation_activity_types",
+    "organisation_types",
+    "publication_types",
+    "research_areas",
+    "scientific_domains",
+    "turnovers",
+]
+
+
 class Validators:
     @classmethod
     def validate_bool(cls, value: str | bool) -> bool:
@@ -129,6 +151,9 @@ class AIoDConfig(BaseModel):
 
     def get_asset_by_id_url(self, asset_id: str, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
+
+    def get_taxonomy_url(self, taxonomy: str) -> str:
+        return urljoin(str(self.URL), f"{taxonomy}")
 
 
 class MongoConfig(BaseModel):

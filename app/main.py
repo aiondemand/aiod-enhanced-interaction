@@ -16,6 +16,7 @@ from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUser
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
+from app.services.taxonomies import initialize_taxonomies
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -95,6 +96,7 @@ def setup_logger():
 
 async def app_init() -> None:
     setup_logger()
+    initialize_taxonomies()
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()

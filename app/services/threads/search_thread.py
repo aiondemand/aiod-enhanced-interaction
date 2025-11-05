@@ -22,7 +22,7 @@ from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
-from app.services.inference.llm_query_parsing import PrepareLLM, UserQueryParsing
+from app.services.metadata_filtering.llm_query_parsing import PrepareLLM, UserQueryParsing
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
