@@ -1,6 +1,6 @@
 {
     "base": {
-        "licenses": [
+        "license": [
             "mit",
             "cc-by-sa-4.0",
             "Other",
@@ -257,7 +257,8 @@
             "weekly",
             "monthly",
             "quarterly",
-            "annually"
+            "annually",
+            "other"
         ],
         "collection_methods": [
             "sensor",

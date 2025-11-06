@@ -9,7 +9,7 @@ from app.schemas.asset_metadata.dataset_metadata import (
 from app.schemas.asset_metadata.new_schemas.base_schemas import AutomaticallyExtractedMetadata
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
-from app.services.metadata_filtering.metadata_extraction import metadata_extractor
+from app.services.metadata_filtering.metadata_extraction_agent import metadata_extractor_agent
 
 
 class MetadataExtraction:
@@ -37,7 +37,9 @@ class MetadataExtraction:
 
         # Non-deterministic extraction (LLM-driven)
         obj_string = ConvertJsonToString.extract_relevant_info(obj, asset_type)
-        non_deterministic_model = await metadata_extractor.extract_metadata(obj_string, asset_type)
+        non_deterministic_model = await metadata_extractor_agent.extract_metadata(
+            obj_string, asset_type
+        )
 
         return cls.filter_out_empty_fields(
             {**deterministic_model.model_dump(), **non_deterministic_model.model_dump()}

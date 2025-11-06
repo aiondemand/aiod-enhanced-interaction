@@ -1,6 +1,6 @@
 from typing import Awaitable, Callable, cast
 from pydantic_ai.settings import ModelSettings
-from pydantic_ai import Agent, ModelRetry, ModelRetry
+from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -17,14 +17,13 @@ from app.schemas.asset_metadata.new_schemas.publication_schema import (
 from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.config import settings
-from app.services.metadata_filtering.prompts.metadata_extraction import (
+from app.services.metadata_filtering.normalization_agent import normalization_agent
+from app.services.metadata_filtering.prompts.metadata_extraction_agent import (
     METADATA_EXTRACTION_SYSTEM_PROMPT,
 )
 
-# TODO Another agent that extracts the best match from enum for a arbitrary string or None/other
 
-
-class MetadataExtractor:
+class MetadataExtractorAgent:
     def __init__(self) -> None:
         # Ollama model
         self.model = OpenAIChatModel(
@@ -66,14 +65,14 @@ class MetadataExtractor:
         self, document: str, asset_type: SupportedAssetType
     ) -> AssetSpecificMetadata:
         try:
-            run_output = await self.agents[asset_type].run(user_prompt=document)
+            user_prompt = f"Description ML {asset_type.value}:\n\n{document}"
+            run_output = await self.agents[asset_type].run(user_prompt=user_prompt)
         except Exception:
             # Empty model
             return METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]()
 
         return run_output.output
 
-    # TODO LATER => We may want to check extracted values against enums...
     async def _extract_dataset_tool(
         self,
         metadata: Dataset_AiExtractedMetadata,
@@ -109,35 +108,41 @@ class MetadataExtractor:
     async def __extract_asset_metadata_tool(
         self, metadata: AssetSpecificMetadata, asset_type: SupportedAssetType
     ) -> AssetSpecificMetadata:
+        pydantic_model: type[AssetSpecificMetadata] = metadata.__class__
+        all_model_fields = metadata.model_dump()
         fields_to_check = {
             field_name: field_value
-            for field_name, field_value in metadata.model_dump().items()
+            for field_name, field_value in all_model_fields.items()
             if field_value and field_valid_value_service.exists_values(asset_type, field_name)
         }
 
-        # TODO LATER: We may want to use Pydantic validation errors instead
-        errors = []
+        # Go over fields that we need to check against a list of valid values
         for field_name, field_values in fields_to_check.items():
             valid_values = cast(
                 list[str], field_valid_value_service.get_values(asset_type, field=field_name)
             )
+            # Preprocessing (wrap into a list, apply lowercase)
+            is_field_a_list = isinstance(field_values, list)
+            field_values = field_values if is_field_a_list else [field_values]
+            field_values = [val.lower() for val in field_values]
 
-            field_values = field_values if isinstance(field_values, list) else [field_values]
-            invalid_values = [val for val in field_values if val not in valid_values]
+            valid_extracted_values = [val for val in field_values if val in valid_values]
+            invalid_extracted_values = [val for val in field_values if val not in valid_values]
 
-            if len(invalid_values) > 0:
-                errors.append(
-                    f"The field '{field_name}' doesn't support the following values: {invalid_values}. The only allowed values for this field are: {valid_values}"
+            # Subagent for normalizing incorrect values
+            normalized_extracted_values = []
+            if len(invalid_extracted_values) > 0:
+                normalized_extracted_values = await normalization_agent.normalize_values(
+                    invalid_extracted_values, valid_values, pydantic_model, field_name
                 )
 
-        # TODO LATER: Narrow down the list of values...
-        if len(errors) > 0:
-            raise ModelRetry(
-                f"The following validation errors found in {len(errors)} fields have been encountered:\n\n"
-                + "\n".join(errors)
+            # Postprocessing (merging of values, list unwrapping if necessary)
+            merged_extracted_values = valid_extracted_values + normalized_extracted_values
+            all_model_fields[field_name] = (
+                merged_extracted_values if is_field_a_list else merged_extracted_values[0]
             )
-        else:
-            return metadata
+
+        return pydantic_model(**all_model_fields)
 
 
-metadata_extractor = MetadataExtractor()
+metadata_extractor_agent = MetadataExtractorAgent()

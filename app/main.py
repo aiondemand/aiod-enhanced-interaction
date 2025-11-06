@@ -17,6 +17,8 @@ from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUser
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
+from app.schemas.enums import SupportedAssetType
+from app.services.metadata_filtering.metadata_extraction_agent import metadata_extractor_agent
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -104,6 +106,16 @@ def setup_logfire() -> None:
 async def app_init() -> None:
     setup_logger()
     setup_logfire()
+
+    example = """
+        This dataset (license: XD=5-0) contains sensor and operational event data collected from a mid-scale industrial manufacturing line producing standardized metal components. Each sample corresponds to a single production cycle and includes continuous numeric readings gathered from temperature, pressure, and vibration sensors positioned along the conveyor, press, and finishing stations. Complementary metadata fields describe machine configuration parameters, such as feed rate, applied mechanical force settings, and lubricant application level. The dataset also includes a binary quality label indicating whether the produced component passed or failed final inspection testing.
+
+The data was gathered over a period of approximately seven months under normal operating conditions, with periodic adjustments to machine setups as part of routine calibration and maintenance. Natural variation is present due to equipment wear, environmental temperature fluctuations, operator behavior, and production scheduling. No artificial perturbations or synthetic values were introduced.
+
+This dataset is suitable for use in predictive maintenance research, anomaly detection modeling, process optimization studies, and supervised classification tasks focused on predicting product quality outcomes. Because the data reflects live industrial conditions, it may require preprocessing steps such as normalization, missing value handling, and filtering of short-duration noise spikes. The dataset does not include personally identifiable information.
+    """
+
+    out = await metadata_extractor_agent.extract_metadata(example, SupportedAssetType.DATASETS)
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()
