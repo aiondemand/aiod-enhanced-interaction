@@ -233,7 +233,7 @@ def get_assets_to_add_and_delete(
         # The last page contained all but valid data
         # We need to jump to a next page
         return [], []
-    if settings.AIOD.TESTING and url_params.offset >= 10:  # TODO
+    if settings.AIOD.TESTING and url_params.offset >= 100:
         return None, None
 
     asset_ids = [obj["identifier"] for obj in assets]
