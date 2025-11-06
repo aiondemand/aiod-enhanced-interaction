@@ -84,7 +84,7 @@ class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARATED_ASSET_TYPES: str = Field(...)
     COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: str = Field(...)
-    WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
+    WINDOW_SIZE: int = Field(1000, le=1000, ge=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
     SEARCH_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(0.1, ge=0)
@@ -180,6 +180,8 @@ class Settings(BaseSettings):
     CONNECTION_NUM_RETRIES: int = Field(5, gt=0)
     CONNECTION_SLEEP_TIME: int = Field(30, gt=0)
     QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(10, gt=0)
+
+    LOGFIRE_TOKEN: str | None = Field(None)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod

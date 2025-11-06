@@ -14,9 +14,7 @@ class TaxonomyService:
     def refresh(self) -> None:
         for taxonomy in self.taxonomy_names:
             try:
-                self.taxonomy_terms[taxonomy] = cast(
-                    list[str], get_aiod_taxonomy(taxonomy, return_only_terms=True)
-                )
+                self.taxonomy_terms[taxonomy] = cast(list[str], get_aiod_taxonomy(taxonomy))
             except Exception as exc:
                 logging.warning("Failed to load AIoD taxonomy '%s': %s", taxonomy, exc)
 
@@ -33,3 +31,10 @@ taxonomy_service = TaxonomyService(AIOD_TAXONOMIES)
 def initialize_taxonomies() -> None:
     logging.info("Loading AIoD taxonomies from remote service")
     taxonomy_service.refresh()
+
+    import json
+
+    with open("all_tax.json", "w") as f:
+        json.dump(taxonomy_service.all_terms(), f)
+
+    print()

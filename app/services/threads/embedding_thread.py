@@ -4,7 +4,7 @@ import os
 import threading
 from datetime import datetime
 from functools import partial
-from typing import Callable, Literal
+from typing import Awaitable, Callable, Literal
 
 import numpy as np
 import torch
@@ -18,7 +18,7 @@ from app.services.helper import utc_now
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import (
     ConvertJsonToString,
-    HuggingFaceDatasetExtractMetadata,
+    MetadataExtraction,
 )
 from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
@@ -65,10 +65,7 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
         extract_metadata_func = None
         meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
-            extract_metadata_func = partial(
-                HuggingFaceDatasetExtractMetadata.extract_huggingface_dataset_metadata,
-                asset_type=asset_type,
-            )
+            extract_metadata_func = MetadataExtraction.extract_metadata
         logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
         try:
@@ -124,7 +121,7 @@ async def fetch_asset_collection(
 async def process_aiod_assets_wrapper(
     model: AiModel,
     stringify_function: Callable[[dict], str],
-    extract_metadata_function: Callable[[dict], dict] | None,
+    extract_metadata_function: Callable[[dict, SupportedAssetType], Awaitable[dict]] | None,
     embedding_store: EmbeddingStore,
     asset_collection: AssetCollection,
     asset_type: SupportedAssetType,
@@ -186,7 +183,9 @@ async def process_aiod_assets_wrapper(
 
             metadata: list[dict] = [{} for _ in assets_to_add]
             if extract_metadata_function is not None:
-                metadata = [extract_metadata_function(obj) for obj in assets_to_add]
+                metadata = [
+                    await extract_metadata_function(obj, asset_type) for obj in assets_to_add
+                ]
 
             data = [
                 (obj, id, meta) for obj, id, meta in zip(stringified_assets, asset_ids, metadata)
@@ -234,7 +233,7 @@ def get_assets_to_add_and_delete(
         # The last page contained all but valid data
         # We need to jump to a next page
         return [], []
-    if settings.AIOD.TESTING and url_params.offset >= 500:
+    if settings.AIOD.TESTING and url_params.offset >= 10:  # TODO
         return None, None
 
     asset_ids = [obj["identifier"] for obj in assets]

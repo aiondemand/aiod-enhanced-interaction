@@ -74,14 +74,31 @@ def check_aiod_asset(
     return get_aiod_asset(asset_id, asset_type, sleep_time) is not None
 
 
-def get_aiod_taxonomy(taxonomy_name: str, return_only_terms: bool = True) -> list[str] | list[dict]:
+def get_aiod_taxonomy(taxonomy_name: str, flatten_terms: bool = True) -> list[str] | list[dict]:
     response = perform_url_request(settings.AIOD.get_taxonomy_url(taxonomy_name))
     taxonomy = response.json()
 
-    if return_only_terms:
-        return [tax["term"] for tax in taxonomy if tax.get("term")]
-    else:
-        return taxonomy
+    if flatten_terms:
+        return _flatten_taxonomy_terms(taxonomy)
+    return taxonomy
+
+
+def _flatten_taxonomy_terms(taxonomy_nodes: list[dict], prefix: str | None = None) -> list[str]:
+    flattened: list[str] = []
+
+    for node in taxonomy_nodes:
+        term = node.get("term")
+        if not term:
+            continue
+
+        hierarchical_term = term if prefix is None else f"{prefix} > {term}"
+        flattened.append(hierarchical_term)
+
+        subterms = node.get("subterms") or []
+        if isinstance(subterms, list) and subterms:
+            flattened.extend(_flatten_taxonomy_terms(subterms, hierarchical_term))
+
+    return flattened
 
 
 def _build_aiod_url_queries(url_params: RequestParams) -> dict:

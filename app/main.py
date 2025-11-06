@@ -1,4 +1,5 @@
 from beanie import init_beanie
+import logfire
 from motor.motor_asyncio import AsyncIOMotorClient
 from functools import partial
 import logging
@@ -16,7 +17,6 @@ from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUser
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
-from app.services.taxonomies import initialize_taxonomies
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -85,7 +85,7 @@ app.add_middleware(
 )
 
 
-def setup_logger():
+def setup_logger() -> None:
     format_string = "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
     logging.basicConfig(
         level=logging.INFO,
@@ -94,9 +94,16 @@ def setup_logger():
     )
 
 
+def setup_logfire() -> None:
+    logfire.configure(
+        token=settings.LOGFIRE_TOKEN, send_to_logfire="if-token-present", console=False
+    )
+    logfire.instrument_pydantic_ai()
+
+
 async def app_init() -> None:
     setup_logger()
-    initialize_taxonomies()
+    setup_logfire()
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()

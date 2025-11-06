@@ -2,6 +2,12 @@ from typing import List, Optional
 from pydantic import Field
 
 from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.new_schemas.types import (
+    DateString,
+    FileExtension,
+    SourceTypeEnum,
+)
+from app.schemas.asset_metadata.new_schemas.types import CountryCode
 
 
 class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
@@ -23,14 +29,13 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         description=("Number of features / columns per instance / datapoint, e.g. 42."),
     )
 
-    data_formats: Optional[List[str]] = Field(
+    data_formats: Optional[List[FileExtension]] = Field(
         None,
         description=(
-            "One or more storage formats e.g. '.png', '.mp3', '.csv', '.json', '.parquet', etc."
+            "One or more storage formats specified by their extension e.g. '.png', '.mp3', '.csv', '.json', '.parquet', etc."
         ),
     )
 
-    # TODO incorporate LabelTypeEnum from enums.py
     label_types: Optional[List[str]] = Field(
         None,
         description=(
@@ -41,7 +46,6 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         ),
     )
 
-    # TODO We need to come up with a enum for this field
     collection_methods: Optional[List[str]] = Field(
         None,
         description=(
@@ -51,28 +55,22 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         ),
     )
 
-    # TODO We need to come up with a enum for this field
-    source_type: Optional[str] = Field(
-        None,
-        description=(
-            "What source the data comes from, e.g. "
-            "['real_world', 'synthetic', 'simulated', 'hybrid']."
-        ),
+    source_type: Optional[SourceTypeEnum] = Field(
+        None, description="What source the data comes from"
     )
 
-    # TODO We need to come up with a enum for this field
     update_frequency: Optional[str] = Field(
         None,
         description=(
             "How often the dataset is updated, e.g. "
-            "['never', 'on_demand', 'daily', 'weekly', 'monthly', "
-            "'quarterly', 'annually']."
+            "'never', 'on_demand', 'daily', 'weekly', 'monthly', "
+            "'quarterly', 'annually'"
         ),
     )
 
-    dataset_size_megabytes: Optional[int] = Field(
+    dataset_size_gigabytes: Optional[float] = Field(
         None,
-        description=("Total compressed size of the dataset files in megabytes, e.g. 4700."),
+        description=("Total compressed size of the dataset files in gigabytes"),
     )
 
     class_count: Optional[int] = Field(
@@ -80,19 +78,19 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         description=("Number of unique classes / labels (for classification datasets), e.g. 10."),
     )
 
-    geo_coverage: Optional[List[str]] = Field(
+    geo_coverage: Optional[List[CountryCode]] = Field(
         None,
         description=(
             "List of ISO-3166 country codes or region names represented in the data, e.g. ['US', 'DE', 'CN']."
         ),
     )
 
-    temporal_coverage_start: Optional[str] = Field(
+    temporal_coverage_start: Optional[DateString] = Field(
         None,
-        description=("Start date of temporal coverage in the dataset (YYYY-MM-DD format)."),
+        description=("Start date of temporal coverage in the dataset."),
     )
 
-    temporal_coverage_end: Optional[str] = Field(
+    temporal_coverage_end: Optional[DateString] = Field(
         None,
-        description=("End date of temporal coverage in the dataset (YYYY-MM-DD format)."),
+        description=("End date of temporal coverage in the dataset."),
     )
