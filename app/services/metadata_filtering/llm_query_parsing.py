@@ -98,8 +98,8 @@ class PrepareLLM:
 
             return ChatOllama(
                 model=model_name,
-                num_predict=settings.OLLAMA.NUM_PREDICT,
-                num_ctx=settings.OLLAMA.NUM_CTX,
+                num_predict=settings.OLLAMA.MAX_TOKENS,
+                num_ctx=4_096,
                 base_url=ollama_uri,
             )
         except Exception as e:

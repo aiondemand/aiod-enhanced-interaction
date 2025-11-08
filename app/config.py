@@ -86,8 +86,7 @@ class MetadataFiltering(BaseModel):
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
     MODEL_NAME: str = Field("qwen3:8b")
-    NUM_PREDICT: int = Field(1_024, gt=0)
-    NUM_CTX: int = Field(4_096, gt=0)
+    MAX_TOKENS: int = Field(1_024, gt=0)
 
 
 class AIoDConfig(BaseModel):

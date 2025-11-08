@@ -1,4 +1,6 @@
+from functools import lru_cache
 from typing import Awaitable, Callable, cast
+from urllib.parse import urljoin
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -23,16 +25,19 @@ from app.services.metadata_filtering.prompts.metadata_extraction_agent import (
 )
 
 
-class MetadataExtractorAgent:
+class MetadataExtractionAgent:
     def __init__(self) -> None:
         # Ollama model
+        ollama_url = urljoin(str(settings.OLLAMA.URI), "v1")
         self.model = OpenAIChatModel(
-            model_name="qwen3:4b-instruct",
-            provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
+            model_name=settings.OLLAMA.MODEL_NAME,
+            provider=OpenAIProvider(base_url=ollama_url),
         )
         self.model_settings = ModelSettings(
-            max_tokens=4_096,
+            max_tokens=settings.OLLAMA.MAX_TOKENS,
         )
+
+        self.enforce_enums = settings.METADATA_FILTERING.ENFORCE_ENUMS
         self.agents = self.build_agents()
 
     def build_agents(self) -> dict[SupportedAssetType, Agent[None, AssetSpecificMetadata]]:
@@ -44,7 +49,7 @@ class MetadataExtractorAgent:
                 name=f"{asset_type.value.upper()}_MetadataExtractor_Agent",
                 system_prompt=METADATA_EXTRACTION_SYSTEM_PROMPT,
                 output_type=self._choose_output_function(asset_type),
-                output_retries=2,
+                output_retries=3,
                 model_settings=self.model_settings,
             )
 
@@ -108,6 +113,17 @@ class MetadataExtractorAgent:
     async def __extract_asset_metadata_tool(
         self, metadata: AssetSpecificMetadata, asset_type: SupportedAssetType
     ) -> AssetSpecificMetadata:
+        if self.enforce_enums:
+            return await self.__validate_enums(metadata, asset_type)
+        else:
+            return metadata
+
+    async def __validate_enums(
+        self, metadata: AssetSpecificMetadata, asset_type: SupportedAssetType
+    ) -> AssetSpecificMetadata:
+        if normalization_agent is None:
+            raise ValueError("Metadata Filtering is disabled")
+
         pydantic_model: type[AssetSpecificMetadata] = metadata.__class__
         all_model_fields = metadata.model_dump()
         fields_to_check = {
@@ -145,4 +161,12 @@ class MetadataExtractorAgent:
         return pydantic_model(**all_model_fields)
 
 
-metadata_extractor_agent = MetadataExtractorAgent()
+@lru_cache()
+def get_metadata_extraction_agent() -> MetadataExtractionAgent | None:
+    if settings.METADATA_FILTERING.ENABLED:
+        return MetadataExtractionAgent()
+    else:
+        return None
+
+
+metadata_extractor_agent = get_metadata_extraction_agent()

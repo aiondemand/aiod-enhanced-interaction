@@ -1,10 +1,13 @@
 from dataclasses import dataclass
+from functools import lru_cache
+from urllib.parse import urljoin
 from pydantic import BaseModel, Field
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, ModelRetry, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from app.config import settings
 from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
 from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZATION_SYSTEM_PROMPT
 
@@ -25,12 +28,13 @@ class NormalizedValue(BaseModel):
 class NormalizationAgent:
     def __init__(self) -> None:
         # Ollama model
+        ollama_url = urljoin(str(settings.OLLAMA.URI), "v1")
         self.model = OpenAIChatModel(
-            model_name="qwen3:4b-instruct",
-            provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
+            model_name=settings.OLLAMA.MODEL_NAME,
+            provider=OpenAIProvider(base_url=ollama_url),
         )
         self.model_settings = ModelSettings(
-            max_tokens=1_024,
+            max_tokens=settings.OLLAMA.MAX_TOKENS,
         )
 
         self.agent = self.build_agent()
@@ -41,7 +45,7 @@ class NormalizationAgent:
             name="Normalization_Agent",
             system_prompt=NORMALIZATION_SYSTEM_PROMPT,
             output_type=self.transform_valid_values,
-            output_retries=2,
+            output_retries=3,
             deps_type=ModelInput,
             model_settings=self.model_settings,
         )
@@ -67,14 +71,10 @@ class NormalizationAgent:
         except:
             return []
 
-        values = set(
-            [
-                norm_value.normalized_value
-                for norm_value in response.output
-                if norm_value.normalized_value is not None
-            ]
-        )
-        return list(values)
+        normalized_values = [
+            val.normalized_value for val in response.output if val.normalized_value is not None
+        ]
+        return list(set(normalized_values))
 
     def _build_user_prompt(
         self,
@@ -114,4 +114,12 @@ class NormalizationAgent:
             return normalized_values
 
 
-normalization_agent = NormalizationAgent()
+@lru_cache()
+def get_normalization_agent() -> NormalizationAgent | None:
+    if settings.METADATA_FILTERING.ENABLED:
+        return NormalizationAgent()
+    else:
+        return None
+
+
+normalization_agent = get_normalization_agent()
