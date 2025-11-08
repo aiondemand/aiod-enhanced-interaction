@@ -71,7 +71,7 @@ class MilvusConfig(BaseModel):
         return f"{self.USER}:{self.PASS}"
 
 
-class MetadataFiltering(BaseModel):
+class MetadataFilteringConfig(BaseModel):
     ENABLED: bool = Field(True)
     # Whether we wish to run a subagent checking values adhere to fields' associated enums
     # For both the metadata extraction & user query parsing
@@ -181,8 +181,8 @@ class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
     MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
-    METADATA_FILTERING: MetadataFiltering = Field(...)
-    OLLAMA: OllamaConfig = Field(...)
+    METADATA_FILTERING: MetadataFilteringConfig = Field(default=MetadataFilteringConfig())
+    OLLAMA: OllamaConfig = Field(default=OllamaConfig())
 
     USE_GPU: bool = Field(False)
     MODEL_LOADPATH: str = Field(...)

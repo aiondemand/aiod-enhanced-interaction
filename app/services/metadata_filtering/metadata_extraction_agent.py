@@ -41,8 +41,7 @@ class MetadataExtractionAgent:
         self.agents = self.build_agents()
 
     def build_agents(self) -> dict[SupportedAssetType, Agent[None, AssetSpecificMetadata]]:
-        agents: dict[SupportedAssetType, Agent[None, AssetSpecificMetadata]] = {}
-
+        agents = {}
         for asset_type in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
             agents[asset_type] = Agent(
                 model=self.model,
@@ -71,12 +70,12 @@ class MetadataExtractionAgent:
     ) -> AssetSpecificMetadata:
         try:
             user_prompt = f"Description ML {asset_type.value}:\n\n{document}"
-            run_output = await self.agents[asset_type].run(user_prompt=user_prompt)
+            response = await self.agents[asset_type].run(user_prompt=user_prompt)
         except Exception:
             # Empty model
             return METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]()
 
-        return run_output.output
+        return response.output
 
     async def _extract_dataset_tool(
         self,
@@ -149,7 +148,7 @@ class MetadataExtractionAgent:
             normalized_extracted_values = []
             if len(invalid_extracted_values) > 0:
                 normalized_extracted_values = await normalization_agent.normalize_values(
-                    invalid_extracted_values, valid_values, pydantic_model, field_name
+                    invalid_extracted_values, valid_values, asset_type, field_name
                 )
 
             # Postprocessing (merging of values, list unwrapping if necessary)

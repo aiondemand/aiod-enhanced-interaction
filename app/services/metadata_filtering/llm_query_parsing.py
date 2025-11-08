@@ -21,7 +21,7 @@ from ollama import Client as OllamaClient
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.config import settings
-from app.models.filter import Filter
+from app.models.filter import StructerCondition_V2
 from app.schemas.asset_metadata.base import BaseMetadataTemplate
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
@@ -248,7 +248,7 @@ class UserQueryParsing:
     @classmethod
     def get_db_translator_func(
         cls, technology: str
-    ) -> Callable[[list[Filter], Type[BaseModel]], str]:
+    ) -> Callable[[list[StructerCondition_V2], Type[BaseModel]], str]:
         return getattr(cls, cls.DB_TRANSLATOR_FUNCS[technology])
 
     def __init__(
@@ -342,7 +342,7 @@ class UserQueryParsing:
                 )
 
         topic = " ".join(topic_list)
-        filters = [Filter(**cond) for cond in parsed_conditions]
+        filters = [StructerCondition_V2(**cond) for cond in parsed_conditions]
         filter_string = self.translator_func(filters, asset_schema)
 
         return {
@@ -353,7 +353,7 @@ class UserQueryParsing:
 
     @classmethod
     def milvus_translator(
-        cls, filters: list[Filter], asset_schema: Type[BaseMetadataTemplate]
+        cls, filters: list[StructerCondition_V2], asset_schema: Type[BaseMetadataTemplate]
     ) -> str:
         def format_value(val: str | int | float) -> str:
             return f"'{val.lower()}'" if isinstance(val, str) else str(val)

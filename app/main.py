@@ -2,7 +2,6 @@ from beanie import init_beanie
 import logfire
 from motor.motor_asyncio import AsyncIOMotorClient
 from functools import partial
-import logging
 from contextlib import asynccontextmanager
 from threading import Thread
 
@@ -12,11 +11,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.logging import setup_logger
 from app.models.asset_collection import AssetCollection
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
+from app.schemas.enums import SupportedAssetType
+from app.services.metadata_filtering.query_parsing_agent import user_query_parsing_agent
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
 from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
 from app.services.threads.threads import run_async_in_thread, start_async_thread
@@ -85,15 +87,6 @@ app.add_middleware(
 )
 
 
-def setup_logger() -> None:
-    format_string = "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
-    logging.basicConfig(
-        level=logging.INFO,
-        format=format_string,
-        datefmt="%Y-%m-%dT%H:%M:%S%z",
-    )
-
-
 def setup_logfire() -> None:
     logfire.configure(
         token=settings.LOGFIRE_TOKEN, send_to_logfire="if-token-present", console=False
@@ -104,6 +97,13 @@ def setup_logfire() -> None:
 async def app_init() -> None:
     setup_logger()
     setup_logfire()
+
+    user_query = "I'm searching for Slovak or English datasets that have over 10k datapoints, but less than 100k. The task I'm interested in is summarization, and I don't want any machine translation."
+
+    filters = await user_query_parsing_agent.extract_filters(
+        user_query, SupportedAssetType.DATASETS
+    )
+    exit()
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()

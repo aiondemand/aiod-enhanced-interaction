@@ -97,12 +97,11 @@ class Base_AiExtractedMetadata(BaseModel):
 
 
 class AssetSpecificMetadata(Base_AiExtractedMetadata):
-    pass
+    @classmethod
+    def get_described_fields(cls) -> dict[str, str]:
+        return {
+            field_name: getattr(field, "description", "")
+            for field_name, field in cls.model_fields.items()
+        }
 
-    # TODO most but not all string values can be lowercased...
-    # @field_validator("*")
-    # @classmethod
-    # def apply_lowercase(cls, v):
-    #     if isinstance(v, str):
-    #         return v.lower()
-    #     return v
+    pass
