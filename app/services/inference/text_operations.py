@@ -1,6 +1,5 @@
 import json
 import re
-from datetime import datetime
 from typing import Any
 
 from app.schemas.asset_metadata.dataset_metadata import (
@@ -12,7 +11,7 @@ from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.metadata_extraction_agent import metadata_extractor_agent
 
 
-class MetadataExtraction:
+class MetadataExtractionWrapper:
     @classmethod
     def filter_out_empty_fields(cls, obj: dict) -> dict:
         def not_empty(val: Any) -> bool:
@@ -356,12 +355,6 @@ class ConvertJsonToString:
             x = data.get(field_name, None)
             if x is not None:
                 new_object[field_name] = x
-
-        if new_object.get("date_published", None) is not None:
-            dt = datetime.fromisoformat(new_object["date_published"])
-            new_object["year_published"] = dt.year
-            new_object["month_published"] = dt.month
-            new_object["day_published"] = dt.day
 
         array_fields = cls.orig_array_fields
         if asset_type == SupportedAssetType.EDUCATIONAL_RESOURCES:

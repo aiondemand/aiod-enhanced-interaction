@@ -50,7 +50,6 @@ class MilvusConfig(BaseModel):
     COLLECTION_PREFIX: str = Field(..., max_length=100)
     BATCH_SIZE: int = Field(500, gt=0)
     STORE_CHUNKS: bool = Field(True)
-    EXTRACT_METADATA: bool = Field(False)
     TIMEOUT: int = Field(60, gt=0)
 
     @field_validator("COLLECTION_PREFIX", mode="before")
@@ -62,7 +61,7 @@ class MilvusConfig(BaseModel):
             raise ValueError("Collection name can only contain letters, numbers, and underscores.")
         return value
 
-    @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
+    @field_validator("STORE_CHUNKS", mode="before")
     @classmethod
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
@@ -72,12 +71,23 @@ class MilvusConfig(BaseModel):
         return f"{self.USER}:{self.PASS}"
 
 
+class MetadataFiltering(BaseModel):
+    ENABLED: bool = Field(True)
+    # Whether we wish to run a subagent checking values adhere to fields' associated enums
+    # For both the metadata extraction & user query parsing
+    ENFORCE_ENUMS: bool = Field(True)
+
+    @field_validator("ENABLED", "ENFORCE_ENUMS", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
+
+
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
-    MODEL_NAME: str = Field("llama3.1:8b", max_length=50)
+    MODEL_NAME: str = Field("qwen3:8b")
     NUM_PREDICT: int = Field(1_024, gt=0)
     NUM_CTX: int = Field(4_096, gt=0)
-    TIMEOUT: int = Field(120, gt=0)
 
 
 class AIoDConfig(BaseModel):
@@ -172,6 +182,7 @@ class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
     MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
+    METADATA_FILTERING: MetadataFiltering = Field(...)
     OLLAMA: OllamaConfig = Field(...)
 
     USE_GPU: bool = Field(False)
@@ -198,10 +209,21 @@ class Settings(BaseSettings):
         raise ValueError("Invalid loadpath for the model.")
 
     @property
+    def USING_OLLAMA(self) -> bool:
+        return self.OLLAMA.URI is not None
+
+    def extracts_metadata_from_asset(self, asset_type: SupportedAssetType) -> bool:
+        return (
+            self.USING_OLLAMA
+            and self.METADATA_FILTERING.ENABLED
+            and asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+        )
+
+    @property
     def PERFORM_LLM_QUERY_PARSING(self) -> bool:
         return (
-            self.MILVUS.EXTRACT_METADATA
-            and self.OLLAMA.URI is not None
+            self.USING_OLLAMA
+            and self.METADATA_FILTERING.ENABLED
             and len(self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION) > 0
         )
 

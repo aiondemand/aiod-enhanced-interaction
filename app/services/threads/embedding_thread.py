@@ -18,7 +18,7 @@ from app.services.helper import utc_now
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import (
     ConvertJsonToString,
-    MetadataExtraction,
+    MetadataExtractionWrapper,
 )
 from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
@@ -63,9 +63,8 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
             continue
 
         extract_metadata_func = None
-        meta_extract_types = settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-        if settings.MILVUS.EXTRACT_METADATA and asset_type in meta_extract_types:
-            extract_metadata_func = MetadataExtraction.extract_metadata
+        if settings.extracts_metadata_from_asset(asset_type):
+            extract_metadata_func = MetadataExtractionWrapper.extract_metadata
         logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
 
         try:
@@ -233,7 +232,7 @@ def get_assets_to_add_and_delete(
         # The last page contained all but valid data
         # We need to jump to a next page
         return [], []
-    if settings.AIOD.TESTING and url_params.offset >= 100:
+    if settings.AIOD.TESTING and url_params.offset >= 10:
         return None, None
 
     asset_ids = [obj["identifier"] for obj in assets]

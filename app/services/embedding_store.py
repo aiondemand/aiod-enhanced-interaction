@@ -86,7 +86,6 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         verbose: bool = False,
     ) -> None:
         self.emb_dimensionality = 1024
-        self.extract_metadata = settings.MILVUS.EXTRACT_METADATA
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
         self.metadata_field_config = self._load_metadata_field_config()
@@ -127,7 +126,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
             schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
 
-            if self.extract_metadata:
+            if settings.extracts_metadata_from_asset(asset_type):
                 self._add_metadata_fields(schema, asset_type)
 
             schema.verify()

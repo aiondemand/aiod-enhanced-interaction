@@ -3,7 +3,7 @@
     {
       "field_name": "platform",
       "data_type": "VARCHAR",
-      "max_length": 20,
+      "max_length": 32,
       "nullable": true
     },
     {
@@ -28,7 +28,7 @@
       "field_name": "research_areas",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 64,
+      "max_length": 128,
       "max_capacity": 16,
       "nullable": true
     },
@@ -60,7 +60,7 @@
       "field_name": "industrial_sectors",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 32,
+      "max_length": 128,
       "max_capacity": 16,
       "nullable": true
     },
@@ -68,7 +68,7 @@
       "field_name": "application_areas",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 32,
+      "max_length": 128,
       "max_capacity": 16,
       "nullable": true
     },
@@ -110,7 +110,7 @@
       "field_name": "label_types",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 16,
+      "max_length": 32,
       "max_capacity": 8,
       "nullable": true
     },
@@ -118,20 +118,20 @@
       "field_name": "collection_methods",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 16,
+      "max_length": 32,
       "max_capacity": 8,
       "nullable": true
     },
     {
       "field_name": "source_type",
       "data_type": "VARCHAR",
-      "max_length": 16,
+      "max_length": 32,
       "nullable": true
     },
     {
       "field_name": "update_frequency",
       "data_type": "VARCHAR",
-      "max_length": 16,
+      "max_length": 32,
       "nullable": true
     },
     {
@@ -191,7 +191,7 @@
       "field_name": "training_techniques",
       "data_type": "ARRAY",
       "element_type": "VARCHAR",
-      "max_length": 32,
+      "max_length": 64,
       "max_capacity": 16,
       "nullable": true
     },

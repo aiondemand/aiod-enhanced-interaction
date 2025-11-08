@@ -4,6 +4,11 @@ from pydantic import BaseModel, Field
 from app.schemas.asset_metadata.new_schemas.types import DatePublished, LanguageCode, ModalityEnum
 
 
+# TODO LATER
+# Add into the Pydantic models value constraints matching the ones we use for building
+# Milvus collections (for each string field => max_length, max_capacity)
+
+
 class AutomaticallyExtractedMetadata(BaseModel):
     """
     Metadata fields that apply to any ML asset (dataset, model, software, publication, …)
