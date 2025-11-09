@@ -177,9 +177,10 @@
       "nullable": true
     },
     {
-      "field_name": "architecture_family",
+      "field_name": "architecture_families",
       "data_type": "VARCHAR",
-      "max_length": 16,
+      "max_length": 32,
+      "max_capacity": 16,
       "nullable": true
     },
     {

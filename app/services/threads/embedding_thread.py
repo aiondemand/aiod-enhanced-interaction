@@ -17,7 +17,7 @@ from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.helper import utc_now
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import ConvertJsonToString
-from app.services.metadata_filtering.metadata_extraction_wrapper import MetadataExtractionWrapper
+from app.services.metadata_filtering.metadata_extraction_agent import MetadataExtractionWrapper
 from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
 

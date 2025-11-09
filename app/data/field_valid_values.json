@@ -3,7 +3,6 @@
         "license": [
             "mit",
             "cc-by-sa-4.0",
-            "Other",
             "cc-by-nc-4.0",
             "cc-by-4.0",
             "apache-2.0",
@@ -71,8 +70,7 @@
             "gemma",
             "artistic-2.0en",
             "bsd-2-clause-patent",
-            "cddl-1.0",
-            "other"
+            "cddl-1.0"
         ],
         "industrial_sectors": [
             "Manufacturing",
@@ -85,7 +83,6 @@
             "Information and Communication Technologies",
             "Information Technology",
             "Mining and Quarring",
-            "Other",
             "Real Estate Activities",
             "Tourism",
             "Trade",
@@ -99,8 +96,7 @@
             "Inclusive and universal access to education",
             "Professional, scientific and technical activities",
             "Safety & Security",
-            "Scientific research, design & engineering",
-            "Other"
+            "Scientific research, design & engineering"
         ],
         "application_areas": [
             "aerospace defence",
@@ -129,7 +125,6 @@
             "healthcare",
             "manufacturing",
             "mobility transport automotive",
-            "other",
             "postal services",
             "professional, scientific and technical activities",
             "proximity social economy civil security",
@@ -138,8 +133,7 @@
             "sensor networks",
             "textile",
             "tourism",
-            "voice assistance",
-            "other"
+            "voice assistance"
         ],
         "research_areas": [
             "AI Services",
@@ -166,8 +160,7 @@
             "Common Sense Reasoning",
             "Knowledge Representation",
             "AI Hardware & High-Performance Computing",
-            "Constraints and satisfiability",
-            "Other"
+            "Constraints and satisfiability"
         ],
         "ml_tasks": [
             "language-modeling",
@@ -231,8 +224,7 @@
             "text-to-audio",
             "audio-to-audio",
             "text-to-video",
-            "unconditional-image-generation",
-            "Other"
+            "unconditional-image-generation"
         ]
     },
     "datasets": {
@@ -247,8 +239,7 @@
             "segmentation_mask",
             "keypoints",
             "pairwise_rank",
-            "ordered_rank",
-            "other"
+            "ordered_rank"
         ],
         "update_frequencies" : [
             "never",
@@ -257,8 +248,7 @@
             "weekly",
             "monthly",
             "quarterly",
-            "annually",
-            "other"
+            "annually"
         ],
         "collection_methods": [
             "sensor",
@@ -269,8 +259,7 @@
             "synthetic_generation",
             "third_party",
             "internal_system",
-            "api",
-            "other"
+            "api"
         ]
     },
     "ml_models": {
@@ -291,8 +280,7 @@
             "linear",
             "knn",
             "logistic_regression",
-            "ensemble",
-            "other"
+            "ensemble"
         ],
         "training_techniques": [
             "supervised",
@@ -315,8 +303,7 @@
             "rlvr",
             "dpo",
             "distillation",
-            "pruning",
-            "other"
+            "pruning"
         ]
     },
     "publications": {
@@ -339,8 +326,7 @@
             "Proceedings Paper",
             "Report Document",
             "Specification Document",
-            "Web Content",
-            "Other"
+            "Web Content"
         ]
     }
 }

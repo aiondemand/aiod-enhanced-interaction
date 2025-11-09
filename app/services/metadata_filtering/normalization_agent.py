@@ -1,7 +1,5 @@
-from dataclasses import dataclass
 from functools import lru_cache
 from urllib.parse import urljoin
-from pydantic import BaseModel, Field
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, ModelRetry, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -10,20 +8,9 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from app.config import settings
 from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
+from app.services.metadata_filtering.models.dependencies import NormalizationAgentDeps
+from app.services.metadata_filtering.models.outputs import NormalizedValue
 from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZATION_SYSTEM_PROMPT
-
-
-@dataclass
-class ModelInput:
-    invalid_values: list[str]
-    valid_values: list[str]
-
-
-class NormalizedValue(BaseModel):
-    original_value: str = Field(..., description="The input value before normalization.")
-    normalized_value: str | None = Field(
-        ..., description="The resulting value after applying normalization rules."
-    )
 
 
 class NormalizationAgent:
@@ -40,14 +27,14 @@ class NormalizationAgent:
 
         self.agent = self.build_agent()
 
-    def build_agent(self) -> Agent[ModelInput, list[NormalizedValue]]:
+    def build_agent(self) -> Agent[NormalizationAgentDeps, list[NormalizedValue]]:
         return Agent(
             model=self.model,
             name="Normalization_Agent",
             system_prompt=NORMALIZATION_SYSTEM_PROMPT,
             output_type=self.transform_valid_values,
             output_retries=3,
-            deps_type=ModelInput,
+            deps_type=NormalizationAgentDeps,
             model_settings=self.model_settings,
         )
 
@@ -67,7 +54,7 @@ class NormalizationAgent:
 
         try:
             response = await self.agent.run(
-                user_prompt, deps=ModelInput(invalid_values, valid_values)
+                user_prompt, deps=NormalizationAgentDeps(invalid_values, valid_values)
             )
         except:
             return []
@@ -91,7 +78,7 @@ class NormalizationAgent:
         )
 
     async def transform_valid_values(
-        self, ctx: RunContext[ModelInput], normalized_values: list[NormalizedValue]
+        self, ctx: RunContext[NormalizationAgentDeps], normalized_values: list[NormalizedValue]
     ) -> list[NormalizedValue]:
         # Check whether normalized_values have been in fact normalized
         err_messages = []

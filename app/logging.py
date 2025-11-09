@@ -1,10 +1,10 @@
 import logging
 
-
-class HealthCheckFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        # Drop logs for the health endpoint
-        return "/health" not in record.getMessage()
+# TODO resolve
+# class HealthCheckFilter(logging.Filter):
+#     def filter(self, record: logging.LogRecord) -> bool:
+#         # Drop logs for the health endpoint
+#         return "/health" not in record.getMessage()
 
 
 def setup_logger():
@@ -16,4 +16,4 @@ def setup_logger():
     )
 
 
-logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
+# logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())

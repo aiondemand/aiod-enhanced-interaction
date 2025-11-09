@@ -5,6 +5,12 @@ from pydantic import Field
 
 ###### TYPES
 
+Varchar16 = Annotated[str, Field(max_length=16)]
+Varchar32 = Annotated[str, Field(max_length=32)]
+Varchar64 = Annotated[str, Field(max_length=64)]
+Varchar128 = Annotated[str, Field(max_length=128)]
+Varchar256 = Annotated[str, Field(max_length=128)]
+
 CountryCode = Annotated[str, Field(description="ISO-3166 country code", pattern=r"^[A-Z]{2}$")]
 LanguageCode = Annotated[str, Field(description="ISO-639-1 language code", pattern=r"^[a-z]{2}$")]
 DateString = Annotated[
@@ -17,7 +23,9 @@ DatePublished = Annotated[
         pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$",
     ),
 ]
-FileExtension = Annotated[str, Field(description="File extension", pattern=r"^\..*$")]
+FileExtension = Annotated[
+    str, Field(description="File extension", pattern=r"^\..*$", max_length=16)
+]
 
 
 ###### ENUMS

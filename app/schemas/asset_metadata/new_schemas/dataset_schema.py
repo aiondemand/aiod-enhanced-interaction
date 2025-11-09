@@ -6,6 +6,7 @@ from app.schemas.asset_metadata.new_schemas.types import (
     DateString,
     FileExtension,
     SourceTypeEnum,
+    Varchar32,
 )
 from app.schemas.asset_metadata.new_schemas.types import CountryCode
 
@@ -34,9 +35,10 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         description=(
             "One or more storage formats specified by their extension e.g. '.png', '.mp3', '.csv', '.json', '.parquet', etc."
         ),
+        max_length=16,
     )
 
-    label_types: Optional[List[str]] = Field(
+    label_types: Optional[List[Varchar32]] = Field(
         None,
         description=(
             "Kinds of annotations, label types  present , e.g. "
@@ -44,22 +46,24 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
             "'text_generation', 'bounding_box', 'segmentation_mask', "
             "'keypoints', 'pairwise_rank', 'ordered_rank']."
         ),
+        max_length=8,
     )
 
-    collection_methods: Optional[List[str]] = Field(
+    collection_methods: Optional[List[Varchar32]] = Field(
         None,
         description=(
             "How the raw data was gathered, e.g. "
             "['sensor', 'survey', 'web_scraping', 'simulation', 'synthetic_generation'"
             "'crowdsourcing', 'third_party', 'internal_systems']."
         ),
+        max_length=8,
     )
 
     source_type: Optional[SourceTypeEnum] = Field(
         None, description="What source the data comes from"
     )
 
-    update_frequency: Optional[str] = Field(
+    update_frequency: Optional[Varchar32] = Field(
         None,
         description=(
             "How often the dataset is updated, e.g. "
@@ -83,6 +87,7 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         description=(
             "List of ISO-3166 country codes or region names represented in the data, e.g. ['US', 'DE', 'CN']."
         ),
+        max_length=64,
     )
 
     temporal_coverage_start: Optional[DateString] = Field(

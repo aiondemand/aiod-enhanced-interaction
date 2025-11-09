@@ -2,6 +2,7 @@ from typing import List, Optional
 from pydantic import Field
 
 from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.new_schemas.types import Varchar32, Varchar64
 
 
 class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
@@ -23,13 +24,14 @@ class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
         description=("Compressed checkpoint size on disk in gigabytes"),
     )
 
-    architecture_family: Optional[str] = Field(
+    architecture_families: Optional[List[Varchar32]] = Field(
         None,
         description=(
             "High-level architecture chosen from "
             "['transformer', 'cnn', 'rnn', 'gnn', 'diffusion', 'boosted_trees', "
             "'linear', 'ensemble', 'other']."
         ),
+        max_length=16,
     )
 
     fine_tuned: Optional[bool] = Field(
@@ -39,13 +41,14 @@ class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
         ),
     )
 
-    training_techniques: Optional[List[str]] = Field(
+    training_techniques: Optional[List[Varchar64]] = Field(
         None,
         description=(
             "High-level training methods applied, e.g. "
             "['supervised', 'self_supervised', 'rlhf', 'dpo', "
             "'distillation', 'pruning', 'quantization_aware']."
         ),
+        max_length=16,
     )
 
     training_compute_gpu_hours: Optional[float] = Field(

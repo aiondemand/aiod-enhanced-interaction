@@ -7,6 +7,5 @@ You are given:
 3. A list of input values that may be noisy, inconsistent, partial, or informal.
 
 For each input value, choose the single best corresponding value from the allowed values list if one clearly matches by meaning, equivalence, or common usage.
-If no allowed value clearly matches, return the value "other" granted it is one of the valid values.
-Otherwise return None
+If no allowed value clearly matches, return None
 """
