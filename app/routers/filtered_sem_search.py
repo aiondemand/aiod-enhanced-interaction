@@ -14,9 +14,9 @@ from app.routers.sem_search import (
     validate_asset_type_or_raise,
     validate_query_or_raise,
 )
-from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
 from app.schemas.query import FilteredUserQueryResponse, OldFilteredUserQueryResponse
+from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
 
 
 router = APIRouter()
@@ -70,17 +70,15 @@ async def get_fields_to_filter_by(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SchemaOperations.get_asset_schema(asset_type)
-    field_names = SchemaOperations.get_schema_field_names(schema)
+    schema = SCHEMA_MAPPING[asset_type]
+    field_names = list(schema.model_fields.keys())
 
     inner_class_dict: dict[str, Any] = {
         "__annotations__": {},
     }
     for field in field_names:
-        inner_class_dict[field] = SchemaOperations.get_inner_field_info(schema, field)
-        inner_class_dict["__annotations__"][field] = SchemaOperations.get_inner_annotation(
-            schema, field
-        )
+        inner_class_dict[field] = Field(..., description=schema.model_fields[field].description)
+        inner_class_dict["__annotations__"][field] = schema.get_inner_annotation(field)
 
     fields_class: Type[BaseModel] = type(
         f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict
@@ -108,8 +106,8 @@ async def get_filter_schema(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SchemaOperations.get_asset_schema(asset_type)
-    if field_name not in SchemaOperations.get_schema_field_names(schema):
+    schema = SCHEMA_MAPPING[asset_type]
+    if field_name not in list(schema.model_fields.keys()):
         raise HTTPException(
             status_code=400,
             detail=f"Asset type '{asset_type.value}' does not support field name '{field_name}'",

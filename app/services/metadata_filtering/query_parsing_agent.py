@@ -1,7 +1,11 @@
 from urllib.parse import urljoin
-
+from functools import lru_cache
+from pydantic_ai.settings import ModelSettings
+from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel
 
+from app.models.filter import Filter
 from app.config import settings
 from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
@@ -11,15 +15,66 @@ from app.services.metadata_filtering.models.outputs import (
 )
 from app.services.metadata_filtering.nl_condition_parsing_agent import nl_condition_parsing_agent
 from app.services.metadata_filtering.prompts.query_parsing_agent import QUERY_PARSING_SYSTEM_PROMPT
-
-from functools import lru_cache
-from urllib.parse import urljoin
-from pydantic_ai.settings import ModelSettings
-from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
-
 from app.config import settings
+
+
+class QueryParsingWrapper:
+    @classmethod
+    async def parse_query(cls, user_query: str, asset_type: SupportedAssetType) -> dict:
+        if query_parsing_agent is None:
+            raise ValueError("Metadata Filtering is disabled")
+
+        conditions = await query_parsing_agent.extract_conditions(user_query, asset_type)
+        filters = [Filter.build_from_llm_condition(cond) for cond in conditions]
+
+        return {
+            "topic": user_query,
+            "filter_str": cls.milvus_translate(filters, asset_type),
+            "filters": filters,
+        }
+
+    @classmethod
+    def milvus_translate(cls, filters: list[Filter], asset_type: SupportedAssetType) -> str:
+        def format_value(val: str | int | float) -> str:
+            return f"'{val.lower()}'" if isinstance(val, str) else str(val)
+
+        asset_schema = SCHEMA_MAPPING[asset_type]
+
+        simple_expression_template = "({field} {op} {val})"
+        list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
+        list_fields_mask = asset_schema.get_list_fields_mask()
+
+        condition_strings: list[str] = []
+        for cond in filters:
+            field = cond.field
+            log_operator = cond.logical_operator
+
+            str_expressions: list[str] = []
+            for expr in cond.expressions:
+                comp_operator = expr.comparison_operator
+                val = expr.value
+
+                if list_fields_mask[field]:
+                    if comp_operator not in ["==", "!="]:
+                        raise ValueError(
+                            "We don't support any other comparison operators but a '==', '!=' for checking whether values exist within the metadata field."
+                        )
+                    str_expressions.append(
+                        list_expression_template.format(
+                            field=field,
+                            op="" if comp_operator == "==" else "not ",
+                            val=format_value(val),
+                        )
+                    )
+                else:
+                    str_expressions.append(
+                        simple_expression_template.format(
+                            field=field, op=comp_operator, val=format_value(val)
+                        )
+                    )
+            condition_strings.append("(" + f" {log_operator.lower()} ".join(str_expressions) + ")")
+
+        return " and ".join(condition_strings)
 
 
 class QueryParsingAgent:
@@ -96,4 +151,4 @@ def get_query_parsing_agent() -> QueryParsingAgent | None:
         return None
 
 
-user_query_parsing_agent = get_query_parsing_agent()
+query_parsing_agent = get_query_parsing_agent()

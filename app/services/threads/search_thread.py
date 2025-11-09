@@ -16,13 +16,12 @@ from app.models.query import (
     RecommenderUserQuery,
     SimpleUserQuery,
 )
-from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
-from app.services.metadata_filtering.llm_query_parsing import PrepareLLM, UserQueryParsing
+from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
@@ -61,10 +60,6 @@ async def search_thread() -> None:
     model = AiModel("cpu")
     embedding_store = MilvusEmbeddingStore()
 
-    llm_query_parser = None
-    if settings.PERFORM_LLM_QUERY_PARSING:
-        llm_query_parser = UserQueryParsing(llm=PrepareLLM.setup_ollama_llm())
-
     while True:
         query_id, query_type = QUERY_QUEUE.get()
         if query_id is None or query_type is None:
@@ -76,9 +71,8 @@ async def search_thread() -> None:
         logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
 
         try:
-            results = search_across_assets_wrapper(
+            results = await search_across_assets_wrapper(
                 model,
-                llm_query_parser,
                 embedding_store,
                 user_query,
             )
@@ -117,14 +111,13 @@ async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> B
         return user_query
 
 
-def search_across_assets_wrapper(
+async def search_across_assets_wrapper(
     model: AiModel,
-    llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
 ) -> AssetResults:
-    search_params, all_asset_types = prepare_search_parameters(
-        model, llm_query_parser, embedding_store, user_query
+    search_params, all_asset_types = await prepare_search_parameters(
+        model, embedding_store, user_query
     )
     if search_params is None:
         return AssetResults()
@@ -175,25 +168,26 @@ def search_asset_collection(
     return all_assets_to_return
 
 
-def prepare_search_parameters(
+async def prepare_search_parameters(
     model: AiModel,
-    llm_query_parser: UserQueryParsing | None,
     embedding_store: EmbeddingStore,
     user_query: BaseUserQuery,
 ) -> tuple[VectorSearchParams | None, bool]:
     # apply metadata filtering
     metadata_filter_str = ""
-    if llm_query_parser is not None and isinstance(user_query, FilteredUserQuery):
+
+    if settings.PERFORM_LLM_QUERY_PARSING and isinstance(user_query, FilteredUserQuery):
         if user_query.invoke_llm_for_parsing:
             # utilize LLM to automatically extract filters from the user query
-            parsed_query = llm_query_parser(user_query.search_query, user_query.asset_type)
+            parsed_query = await QueryParsingWrapper.parse_query(
+                user_query.search_query, user_query.asset_type
+            )
             metadata_filter_str = parsed_query["filter_str"]
             user_query.filters = parsed_query["filters"]
         elif user_query.filters is not None:
             # user manually defined filters
-            metadata_filter_str = llm_query_parser.translator_func(
-                user_query.filters,
-                SchemaOperations.get_asset_schema(user_query.asset_type),
+            metadata_filter_str = QueryParsingWrapper.milvus_translate(
+                user_query.filters, user_query.asset_type
             )
 
     # compute query embedding

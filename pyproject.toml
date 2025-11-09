@@ -20,14 +20,13 @@ dependencies = [
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
     "apscheduler==3.10.4",
-    "langchain-core==0.3.47",
-    "langchain-ollama==0.2.3",
-    "ollama==0.4.7",
     "beanie==1.29.0",
     "motor==3.7.1",
     "pymongo==4.13.0",
     "tenacity==9.1.2",
     "logfire==4.0.1",
+    "pydantic-ai-slim==1.11.0",
+    "openai==2.7.1"
 ]
 readme = "README.md"
 
@@ -37,8 +36,7 @@ dev = [
     "flake8==7.2.0",
     "isort==6.0.1",
     "pre-commit==3.3.3",
-    "torch==2.6.0",
-    "pydantic-ai==1.11.0"
+    "torch==2.6.0"
 ]
 
 [tool.setuptools]
