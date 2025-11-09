@@ -29,4 +29,5 @@ NL_CONDITION_PARSING_SYSTEM_PROMPT = """
     2. Make sure that you perform an unambiguous transformation of the raw value associated with each expression to its valid counterpart that is compliant with the restrictions imposed on the metadata field.
         - If the transformation of the raw value is not clear and ambiguous, discard the expression and set the `processed_value` to None.
     3. Identify logical operator applied between expressions. There's only one operator (AND/OR) applied in between all expressions.
+    4. If the natural language condition contain phrase like: "not a X", it clearly states that user doesn't want X as a value for a field and thus we need to apply != comparison operator with the X value
 """

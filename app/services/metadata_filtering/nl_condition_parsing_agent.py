@@ -78,13 +78,13 @@ class NLConditionParsingAgent:
             model=self.model,
             name="NLConditionParsing_Agent",
             system_prompt=NL_CONDITION_PARSING_SYSTEM_PROMPT,
-            output_type=self._build_and_validate_filter,
+            output_type=self._build_and_validate_condition,
             output_retries=3,
             deps_type=NLConditionParsingDeps,
             model_settings=self.model_settings,
         )
 
-    async def build_filter(
+    async def build_structed_condition(
         self, nl_condition: NaturalLanguageCondition_V2, asset_type: SupportedAssetType
     ) -> StructedCondition_V2 | None:
         try:
@@ -102,18 +102,32 @@ class NLConditionParsingAgent:
         self, nl_condition: NaturalLanguageCondition_V2, asset_type: SupportedAssetType
     ) -> str:
         pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]
-        schema = pydantic_model.model_json_schema()
-        field_schema = dict(schema["properties"][nl_condition.field])
-        field_schema.pop("title", None)
+        inner_annotation = self._get_field_inner_annotation(
+            asset_type=asset_type, field_name=nl_condition.field
+        )
 
+        field_schema = TypeAdapter(inner_annotation).json_schema()
+        field_schema.pop("title", None)
+        field_schema.pop("description", None)
         field_description = pydantic_model.get_described_fields()[nl_condition.field]
 
-        metadata_field_string = f"Metadata field: '{nl_condition.field}'\nField description:{field_description}\n\nField schema:{field_schema}"
-        condition_string = f"Natural language condition: {nl_condition.condition}"
+        metadata_field_string = f"Metadata field: '{nl_condition.field}'\nField description: {field_description}\n\nField schema: {field_schema}"
+        condition_string = f"Natural language condition to analyze and extract expressions from: '{nl_condition.condition}'"
 
         return f"{metadata_field_string}\n\n{condition_string}"
 
-    async def _build_and_validate_filter(
+    def _get_field_inner_annotation(self, asset_type: SupportedAssetType, field_name: str) -> type:
+        pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]
+
+        field_info = pydantic_model.model_fields[field_name]
+        annotation = field_info.annotation
+        if annotation is None:
+            raise ValueError(
+                f"Annotation for the field '{field_name}' for the asset '{asset_type}' doesn't exist. Fix the asset schema."
+            )
+        return AnnotationOperations.strip_optional_and_list_types(annotation)
+
+    async def _build_and_validate_condition(
         self, ctx: RunContext[NLConditionParsingDeps], condition: StructedCondition_V2
     ) -> StructedCondition_V2 | None:
         if normalization_agent is None:
@@ -123,7 +137,6 @@ class NLConditionParsingAgent:
                 f"Incorrect metadata field. The condition works on top of '{ctx.deps.nl_condition.field}', not '{condition.field}'"
             )
 
-        pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[ctx.deps.asset_type]
         valid_enum_values: list[str] | None = field_valid_value_service.get_values(
             ctx.deps.asset_type, field=condition.field
         )
@@ -133,15 +146,10 @@ class NLConditionParsingAgent:
             if expr.discard or expr.processed_value is None:
                 continue
 
-            field_info = pydantic_model.model_fields[condition.field]
-            annotation = field_info.annotation
-            if annotation is None:
-                raise ValueError(
-                    f"Annotation for the field '{condition.field}' for the asset '{ctx.deps.asset_type}' doesn't exist. Fix the asset schema."
-                )
-            inner_annotation: type = AnnotationOperations.strip_optional_and_list_types(annotation)
-
             # Validate the data type => strip of optional and list wrappers
+            inner_annotation = self._get_field_inner_annotation(
+                asset_type=ctx.deps.asset_type, field_name=condition.field
+            )
             try:
                 TypeAdapter(inner_annotation).validate_python(expr.processed_value)
             except ValidationError as e:

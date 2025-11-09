@@ -241,7 +241,7 @@
             "pairwise_rank",
             "ordered_rank"
         ],
-        "update_frequencies" : [
+        "update_frequency" : [
             "never",
             "on_demand",
             "daily",

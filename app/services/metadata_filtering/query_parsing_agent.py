@@ -54,7 +54,7 @@ class QueryParsingAgent:
 
         return agents
 
-    async def extract_filters(
+    async def extract_conditions(
         self, user_query: str, asset_type: SupportedAssetType
     ) -> list[StructedCondition_V2]:
         try:
@@ -84,7 +84,7 @@ class QueryParsingAgent:
 
         # Go over individual NLConditions now
         structed_conditions = [
-            await nl_condition_parsing_agent.build_filter(nl_cond, asset_type=ctx.deps)
+            await nl_condition_parsing_agent.build_structed_condition(nl_cond, asset_type=ctx.deps)
             for nl_cond in nl_conditions
         ]
         return [cond for cond in structed_conditions if cond is not None]
