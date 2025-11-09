@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 PrimitiveTypes: TypeAlias = int | float | str | bool
 
 
-class Expression_V2(BaseModel):
+class LLMExpression(BaseModel):
     """An Expression represents a single comparison between a value and a metadata field"""
 
     raw_value: str = Field(
@@ -33,20 +33,20 @@ class Expression_V2(BaseModel):
     )
 
 
-class StructedCondition_V2(BaseModel):
+class LLMStructedCondition(BaseModel):
     """A Condition consists of one or more expressions joined with a logical operator"""
 
     field: str = Field(..., description="Name of the metadata field to filter by")
     logical_operator: Literal["AND", "OR"] = Field(
         ..., description="Allowed logical operator to be used for combining multiple expressions"
     )
-    expressions: list[Expression_V2] = Field(
+    expressions: list[LLMExpression] = Field(
         ...,
         description="List of expressions associated with their respective values and comparison operators to be used for filtering",
     )
 
 
-class NaturalLanguageCondition_V2(BaseModel):
+class LLM_NaturalLanguageCondition(BaseModel):
     """Condition in its natural language form extracted from user query"""
 
     condition: str = Field(
@@ -67,7 +67,7 @@ class NaturalLanguageCondition_V2(BaseModel):
     )
 
 
-class NormalizedValue(BaseModel):
+class LLM_NormalizedValue(BaseModel):
     original_value: str = Field(..., description="The input value before normalization.")
     normalized_value: str | None = Field(
         ..., description="The resulting value after applying normalization rules."

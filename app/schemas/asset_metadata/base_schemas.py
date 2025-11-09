@@ -1,21 +1,9 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from app.schemas.asset_metadata.new_schemas.types import (
-    DatePublished,
-    LanguageCode,
-    ModalityEnum,
-    Varchar128,
-    Varchar256,
-    Varchar32,
-    Varchar64,
-)
+from app.schemas.asset_metadata.types import *
 
-
-# TODO LATER
-# Add into the Pydantic models value constraints matching the ones we use for building
-# Milvus collections (for each string field => max_length, max_capacity)
-
+# README
 # Value constraints need to be specified within their own annotated types rather than in the Field arguments
 # Constraints passed via Field constructor are only applied to constrain the list size
 
@@ -123,4 +111,26 @@ class AssetSpecificMetadata(Base_AiExtractedMetadata):
             for field_name, field in cls.model_fields.items()
         }
 
-    pass
+    @classmethod
+    def get_inner_annotation(cls, field_name: str) -> type:
+        annotation = cls._get_annotation_or_raise(field_name)
+        return AnnotationOperations.strip_optional_and_list_types(annotation)
+
+    @classmethod
+    def get_list_fields_mask(cls) -> dict[str, bool]:
+        return {
+            field_name: AnnotationOperations.is_list_type(
+                AnnotationOperations.strip_optional_type(cls._get_annotation_or_raise(field_name))
+            )
+            for field_name in cls.model_fields.keys()
+        }
+
+    @classmethod
+    def _get_annotation_or_raise(cls, field_name: str) -> type:
+        annotation = cls.model_fields[field_name].annotation
+        if annotation is None:
+            raise ValueError(
+                f"Annotation for the field '{field_name}' of the model '{cls.__name__}' doesn't exist. Fix the asset schema."
+            )
+        else:
+            return annotation

@@ -1,14 +1,8 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
-from app.schemas.asset_metadata.new_schemas.types import (
-    DateString,
-    FileExtension,
-    SourceTypeEnum,
-    Varchar32,
-)
-from app.schemas.asset_metadata.new_schemas.types import CountryCode
+from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.types import *
 
 
 class Dataset_AiExtractedMetadata(AssetSpecificMetadata):

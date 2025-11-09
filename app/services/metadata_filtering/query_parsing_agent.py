@@ -3,11 +3,11 @@ from urllib.parse import urljoin
 from pydantic_ai.models.openai import OpenAIChatModel
 
 from app.config import settings
-from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.outputs import (
-    NaturalLanguageCondition_V2,
-    StructedCondition_V2,
+    LLM_NaturalLanguageCondition,
+    LLMStructedCondition,
 )
 from app.services.metadata_filtering.nl_condition_parsing_agent import nl_condition_parsing_agent
 from app.services.metadata_filtering.prompts.query_parsing_agent import QUERY_PARSING_SYSTEM_PROMPT
@@ -36,10 +36,10 @@ class QueryParsingAgent:
 
         self.agents = self.build_agents()
 
-    def build_agents(self) -> dict[SupportedAssetType, Agent[None, list[StructedCondition_V2]]]:
+    def build_agents(self) -> dict[SupportedAssetType, Agent[None, list[LLMStructedCondition]]]:
         agents = {}
         for asset_type in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
-            described_fields = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type].get_described_fields()
+            described_fields = SCHEMA_MAPPING[asset_type].get_described_fields()
             system_prompt = QUERY_PARSING_SYSTEM_PROMPT.format(described_fields=described_fields)
 
             agents[asset_type] = Agent(
@@ -56,7 +56,7 @@ class QueryParsingAgent:
 
     async def extract_conditions(
         self, user_query: str, asset_type: SupportedAssetType
-    ) -> list[StructedCondition_V2]:
+    ) -> list[LLMStructedCondition]:
         try:
             user_prompt = f"Searching '{asset_type.value}' assets\n\nUser query:\n{user_query}"
             response = await self.agents[asset_type].run(user_prompt=user_prompt, deps=asset_type)
@@ -66,14 +66,12 @@ class QueryParsingAgent:
         return response.output
 
     async def _parse_nl_conditions(
-        self, ctx: RunContext[SupportedAssetType], nl_conditions: list[NaturalLanguageCondition_V2]
-    ) -> list[StructedCondition_V2]:
+        self, ctx: RunContext[SupportedAssetType], nl_conditions: list[LLM_NaturalLanguageCondition]
+    ) -> list[LLMStructedCondition]:
         if nl_condition_parsing_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
-        all_metadata_fields = list(
-            METADATA_EXTRACTION_SCHEMA_MAPPING[ctx.deps].get_described_fields().keys()
-        )
+        all_metadata_fields = list(SCHEMA_MAPPING[ctx.deps].get_described_fields().keys())
 
         # Check all the NLConditions are tied to existing metadata fields
         for nl_cond in nl_conditions:

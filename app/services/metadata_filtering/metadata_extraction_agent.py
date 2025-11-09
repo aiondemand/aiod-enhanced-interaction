@@ -6,24 +6,24 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from app.schemas.asset_metadata.new_schemas.valid_values import field_valid_value_service
-from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
-from app.schemas.asset_metadata.new_schemas.dataset_schema import Dataset_AiExtractedMetadata
-from app.schemas.asset_metadata.new_schemas.educational_resource_schema import (
+from app.services.metadata_filtering.field_valid_values import field_valid_value_service
+from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.dataset_schema import Dataset_AiExtractedMetadata
+from app.schemas.asset_metadata.educational_resource_schema import (
     EducationalResource_AiExtractedMetadata,
 )
-from app.schemas.asset_metadata.new_schemas.model_schema import MlModel_AiExtractedMetadata
-from app.schemas.asset_metadata.new_schemas.publication_schema import (
+from app.schemas.asset_metadata.model_schema import MlModel_AiExtractedMetadata
+from app.schemas.asset_metadata.publication_schema import (
     Publication_AiExtractedMetadata,
 )
-from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.config import settings
 from app.services.metadata_filtering.normalization_agent import normalization_agent
 from app.services.metadata_filtering.prompts.metadata_extraction_agent import (
     METADATA_EXTRACTION_SYSTEM_PROMPT,
 )
-from app.schemas.asset_metadata.new_schemas.base_schemas import AutomaticallyExtractedMetadata
+from app.schemas.asset_metadata.base_schemas import AutomaticallyExtractedMetadata
 from app.schemas.enums import SupportedAssetType
 from app.services.inference.text_operations import ConvertJsonToString
 
@@ -113,7 +113,7 @@ class MetadataExtractionAgent:
             response = await self.agents[asset_type].run(user_prompt=user_prompt)
         except Exception:
             # Empty model
-            return METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]()
+            return SCHEMA_MAPPING[asset_type]()
 
         return response.output
 

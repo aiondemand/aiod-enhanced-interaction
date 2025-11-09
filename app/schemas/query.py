@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.filter import StructerCondition_V2
+from app.models.filter import Filter
 from app.schemas.enums import QueryStatus, SupportedAssetType, AssetTypeQueryParam
 from app.schemas.search_results import AssetResults
 
@@ -44,7 +44,7 @@ class SimpleUserQueryResponse(BaseUserQueryResponse):
 class FilteredUserQueryResponse(BaseUserQueryResponse):
     asset_type: SupportedAssetType
     search_query: str
-    filters: list[StructerCondition_V2] | None = None
+    filters: list[Filter] | None = None
 
 
 class RecommenderUserQueryResponse(BaseUserQueryResponse):
@@ -75,7 +75,7 @@ class OldSimpleUserQueryResponse(OldBaseUserQueryResponse):
 class OldFilteredUserQueryResponse(OldBaseUserQueryResponse):
     asset_type: SupportedAssetType
     search_query: str
-    filters: list[StructerCondition_V2] | None = None
+    filters: list[Filter] | None = None
 
 
 class OldRecommenderUserQueryResponse(OldBaseUserQueryResponse):

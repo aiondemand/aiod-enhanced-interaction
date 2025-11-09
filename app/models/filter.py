@@ -20,7 +20,7 @@ class Expression(BaseModel):
     )
 
 
-class StructerCondition_V2(BaseModel):
+class Filter(BaseModel):
     field: str = Field(..., max_length=30, description="Name of the metadata field to filter by")
     logical_operator: Literal["AND", "OR"] = Field(
         ..., description="Allowed logical operator to be used for combining multiple expressions"
@@ -58,26 +58,24 @@ class StructerCondition_V2(BaseModel):
         filter_class_dict = {
             "__annotations__": {
                 "field": Literal[field_name],
-                "logical_operator": StructerCondition_V2.model_fields[
-                    "logical_operator"
-                ].annotation,
+                "logical_operator": Filter.model_fields["logical_operator"].annotation,
                 "expressions": list[expression_class],  # type: ignore[valid-type]
             },
-            "field": Field(..., description=StructerCondition_V2.model_fields["field"].description),
+            "field": Field(..., description=Filter.model_fields["field"].description),
             "logical_operator": Field(
-                ..., description=StructerCondition_V2.model_fields["logical_operator"].description
+                ..., description=Filter.model_fields["logical_operator"].description
             ),
             "expressions": Field(
                 ...,
-                description=StructerCondition_V2.model_fields["expressions"].description,
+                description=Filter.model_fields["expressions"].description,
                 max_length=5,
             ),
         }
 
         # apply original validators from the Filter class
-        field_validators = SchemaOperations.get_field_validators(StructerCondition_V2, "field")
+        field_validators = SchemaOperations.get_field_validators(Filter, "field")
         logical_operator_validators = SchemaOperations.get_field_validators(
-            StructerCondition_V2, "logical_operator"
+            Filter, "logical_operator"
         )
         field_names = ["field"] * len(field_validators) + ["logical_operator"] * len(
             logical_operator_validators
@@ -85,9 +83,7 @@ class StructerCondition_V2(BaseModel):
         filter_class_dict.update(
             {
                 f"{func_name}_wrapper": field_validator(field_name, mode=decor.info.mode)(
-                    partial(
-                        cls._filter_validator_wrapper, func=getattr(StructerCondition_V2, func_name)
-                    )
+                    partial(cls._filter_validator_wrapper, func=getattr(Filter, func_name))
                 )
                 for (func_name, decor), field_name in zip(
                     field_validators + logical_operator_validators, field_names
@@ -137,7 +133,7 @@ class StructerCondition_V2(BaseModel):
 
         try:
             validated_filter = filter_class(**self.model_dump())
-            validated_filter = StructerCondition_V2(**validated_filter.model_dump())
+            validated_filter = Filter(**validated_filter.model_dump())
 
             # update the values within expressions in the case of implicit data type conversion
             self.expressions = [
@@ -149,7 +145,7 @@ class StructerCondition_V2(BaseModel):
     @classmethod
     def get_body_examples(cls) -> list[dict]:
         return [
-            StructerCondition_V2(
+            Filter(
                 field="languages",
                 logical_operator="AND",
                 expressions=[
@@ -157,7 +153,7 @@ class StructerCondition_V2(BaseModel):
                     Expression(value="es", comparison_operator="=="),
                 ],
             ).model_dump(),
-            StructerCondition_V2(
+            Filter(
                 field="datapoints_lower_bound",
                 logical_operator="AND",
                 expressions=[

@@ -1,18 +1,17 @@
-from types import UnionType
-from typing import Type, Union, cast, get_args, get_origin
+from typing import cast
 from urllib.parse import urljoin
 
 from pydantic import TypeAdapter, ValidationError
 from pydantic_ai.models.openai import OpenAIChatModel
 
 from app.config import settings
-from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
-from app.schemas.asset_metadata.new_schemas.valid_values import field_valid_value_service
+from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.field_valid_values import field_valid_value_service
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.dependencies import NLConditionParsingDeps
 from app.services.metadata_filtering.models.outputs import (
-    NaturalLanguageCondition_V2,
-    StructedCondition_V2,
+    LLM_NaturalLanguageCondition,
+    LLMStructedCondition,
 )
 from app.services.metadata_filtering.normalization_agent import normalization_agent
 from app.services.metadata_filtering.prompts.nl_condition_parsing_agent import (
@@ -29,36 +28,6 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from app.config import settings
 
 
-# TODO put somewhere else
-class AnnotationOperations:
-    @classmethod
-    def strip_optional_and_list_types(cls, annotation: Type) -> Type:
-        """Strip annotation of the form Optional[List[TYPE]] to TYPE"""
-        return cls.strip_list_type(cls.strip_optional_type(annotation))
-
-    @classmethod
-    def is_optional_type(cls, annotation: Type) -> bool:
-        if get_origin(annotation) is Union or get_origin(annotation) is UnionType:
-            return type(None) in get_args(annotation)
-        return False
-
-    @classmethod
-    def is_list_type(cls, annotation: Type) -> bool:
-        return get_origin(annotation) is list
-
-    @classmethod
-    def strip_optional_type(cls, annotation: Type) -> Type:
-        if cls.is_optional_type(annotation):
-            return next(arg for arg in get_args(annotation) if arg is not type(None))
-        return annotation
-
-    @classmethod
-    def strip_list_type(cls, annotation: Type) -> Type:
-        if cls.is_list_type(annotation):
-            return get_args(annotation)[0]
-        return annotation
-
-
 class NLConditionParsingAgent:
     def __init__(self) -> None:
         # Ollama model
@@ -73,7 +42,7 @@ class NLConditionParsingAgent:
 
         self.agent = self.build_agent()
 
-    def build_agent(self) -> Agent[NLConditionParsingDeps, StructedCondition_V2 | None]:
+    def build_agent(self) -> Agent[NLConditionParsingDeps, LLMStructedCondition | None]:
         return Agent(
             model=self.model,
             name="NLConditionParsing_Agent",
@@ -85,8 +54,8 @@ class NLConditionParsingAgent:
         )
 
     async def build_structed_condition(
-        self, nl_condition: NaturalLanguageCondition_V2, asset_type: SupportedAssetType
-    ) -> StructedCondition_V2 | None:
+        self, nl_condition: LLM_NaturalLanguageCondition, asset_type: SupportedAssetType
+    ) -> LLMStructedCondition | None:
         try:
             user_prompt = self._build_user_prompt(nl_condition, asset_type)
             response = await self.agent.run(
@@ -99,37 +68,24 @@ class NLConditionParsingAgent:
         return response.output
 
     def _build_user_prompt(
-        self, nl_condition: NaturalLanguageCondition_V2, asset_type: SupportedAssetType
+        self, nl_condition: LLM_NaturalLanguageCondition, asset_type: SupportedAssetType
     ) -> str:
-        pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]
-        inner_annotation = self._get_field_inner_annotation(
-            asset_type=asset_type, field_name=nl_condition.field
-        )
+        pydantic_model = SCHEMA_MAPPING[asset_type]
+
+        field_description = pydantic_model.get_described_fields()[nl_condition.field]
+        inner_annotation = pydantic_model.get_inner_annotation(nl_condition.field)
 
         field_schema = TypeAdapter(inner_annotation).json_schema()
         field_schema.pop("title", None)
         field_schema.pop("description", None)
-        field_description = pydantic_model.get_described_fields()[nl_condition.field]
 
         metadata_field_string = f"Metadata field: '{nl_condition.field}'\nField description: {field_description}\n\nField schema: {field_schema}"
         condition_string = f"Natural language condition to analyze and extract expressions from: '{nl_condition.condition}'"
-
         return f"{metadata_field_string}\n\n{condition_string}"
 
-    def _get_field_inner_annotation(self, asset_type: SupportedAssetType, field_name: str) -> type:
-        pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]
-
-        field_info = pydantic_model.model_fields[field_name]
-        annotation = field_info.annotation
-        if annotation is None:
-            raise ValueError(
-                f"Annotation for the field '{field_name}' for the asset '{asset_type}' doesn't exist. Fix the asset schema."
-            )
-        return AnnotationOperations.strip_optional_and_list_types(annotation)
-
     async def _build_and_validate_condition(
-        self, ctx: RunContext[NLConditionParsingDeps], condition: StructedCondition_V2
-    ) -> StructedCondition_V2 | None:
+        self, ctx: RunContext[NLConditionParsingDeps], condition: LLMStructedCondition
+    ) -> LLMStructedCondition | None:
         if normalization_agent is None:
             raise ValueError("Metadata Filtering is disabled")
         if condition.field != ctx.deps.nl_condition.field:
@@ -137,6 +93,7 @@ class NLConditionParsingAgent:
                 f"Incorrect metadata field. The condition works on top of '{ctx.deps.nl_condition.field}', not '{condition.field}'"
             )
 
+        pydantic_model = SCHEMA_MAPPING[ctx.deps.asset_type]
         valid_enum_values: list[str] | None = field_valid_value_service.get_values(
             ctx.deps.asset_type, field=condition.field
         )
@@ -147,9 +104,7 @@ class NLConditionParsingAgent:
                 continue
 
             # Validate the data type => strip of optional and list wrappers
-            inner_annotation = self._get_field_inner_annotation(
-                asset_type=ctx.deps.asset_type, field_name=condition.field
-            )
+            inner_annotation = pydantic_model.get_inner_annotation(condition.field)
             try:
                 TypeAdapter(inner_annotation).validate_python(expr.processed_value)
             except ValidationError as e:
@@ -177,7 +132,7 @@ class NLConditionParsingAgent:
             valid_expressions.append(expr)
 
         if len(valid_expressions) > 0:
-            return StructedCondition_V2(
+            return LLMStructedCondition(
                 field=condition.field,
                 logical_operator=condition.logical_operator,
                 expressions=valid_expressions,

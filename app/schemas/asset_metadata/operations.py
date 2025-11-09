@@ -3,20 +3,17 @@ from functools import partial
 from types import UnionType
 from typing import Annotated, Any, Callable, Literal, Type, Union, get_args, get_origin
 
-from app.schemas.asset_metadata.base import BaseMetadataTemplate
-from app.schemas.asset_metadata.dataset_metadata import (
-    HuggingFaceDatasetMetadataTemplate,
-)
 from app.schemas.enums import SupportedAssetType
 from pydantic import BaseModel, field_validator
 from pydantic._internal._decorators import Decorator, FieldValidatorDecoratorInfo
 from pydantic.fields import FieldInfo
 
 
+# TODO remove this class once we use all its functions we need
+
+
 class SchemaOperations:
-    SCHEMA_MAPPING: dict[SupportedAssetType, Type[BaseMetadataTemplate]] = {
-        SupportedAssetType.DATASETS: HuggingFaceDatasetMetadataTemplate
-    }
+    SCHEMA_MAPPING = {}
 
     @classmethod
     def get_asset_schema(cls, asset_type: SupportedAssetType) -> Type[BaseMetadataTemplate]:

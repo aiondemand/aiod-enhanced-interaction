@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from app.schemas.enums import SupportedAssetType
-from app.services.metadata_filtering.models.outputs import NaturalLanguageCondition_V2
+from app.services.metadata_filtering.models.outputs import LLM_NaturalLanguageCondition
 
 
 @dataclass
@@ -12,5 +12,5 @@ class NormalizationAgentDeps:
 
 @dataclass
 class NLConditionParsingDeps:
-    nl_condition: NaturalLanguageCondition_V2
+    nl_condition: LLM_NaturalLanguageCondition
     asset_type: SupportedAssetType

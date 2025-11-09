@@ -1,8 +1,8 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.new_schemas.base_schemas import AssetSpecificMetadata
-from app.schemas.asset_metadata.new_schemas.types import Varchar32, Varchar64
+from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.types import *
 
 
 class MlModel_AiExtractedMetadata(AssetSpecificMetadata):

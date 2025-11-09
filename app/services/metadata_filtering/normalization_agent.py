@@ -6,10 +6,10 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
-from app.schemas.asset_metadata.new_schemas.schema_mapping import METADATA_EXTRACTION_SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.dependencies import NormalizationAgentDeps
-from app.services.metadata_filtering.models.outputs import NormalizedValue
+from app.services.metadata_filtering.models.outputs import LLM_NormalizedValue
 from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZATION_SYSTEM_PROMPT
 
 
@@ -27,7 +27,7 @@ class NormalizationAgent:
 
         self.agent = self.build_agent()
 
-    def build_agent(self) -> Agent[NormalizationAgentDeps, list[NormalizedValue]]:
+    def build_agent(self) -> Agent[NormalizationAgentDeps, list[LLM_NormalizedValue]]:
         return Agent(
             model=self.model,
             name="Normalization_Agent",
@@ -45,7 +45,7 @@ class NormalizationAgent:
         asset_type: SupportedAssetType,
         field_name: str,
     ) -> list[str]:
-        pydantic_model = METADATA_EXTRACTION_SCHEMA_MAPPING[asset_type]
+        pydantic_model = SCHEMA_MAPPING[asset_type]
         field_description = pydantic_model.get_described_fields()[field_name]
 
         user_prompt = self._build_user_prompt(
@@ -78,8 +78,8 @@ class NormalizationAgent:
         )
 
     async def transform_valid_values(
-        self, ctx: RunContext[NormalizationAgentDeps], normalized_values: list[NormalizedValue]
-    ) -> list[NormalizedValue]:
+        self, ctx: RunContext[NormalizationAgentDeps], normalized_values: list[LLM_NormalizedValue]
+    ) -> list[LLM_NormalizedValue]:
         # Check whether normalized_values have been in fact normalized
         err_messages = []
         for it, norm_value in enumerate(normalized_values):

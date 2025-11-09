@@ -1,7 +1,38 @@
 from enum import Enum
 from typing import Annotated
-
+from types import UnionType
+from typing import Type, Union, get_args, get_origin
 from pydantic import Field
+
+
+class AnnotationOperations:
+    @classmethod
+    def strip_optional_and_list_types(cls, annotation: Type) -> Type:
+        """Strip annotation of the form Optional[List[TYPE]] to TYPE"""
+        return cls.strip_list_type(cls.strip_optional_type(annotation))
+
+    @classmethod
+    def is_optional_type(cls, annotation: Type) -> bool:
+        if get_origin(annotation) is Union or get_origin(annotation) is UnionType:
+            return type(None) in get_args(annotation)
+        return False
+
+    @classmethod
+    def is_list_type(cls, annotation: Type) -> bool:
+        return get_origin(annotation) is list
+
+    @classmethod
+    def strip_optional_type(cls, annotation: Type) -> Type:
+        if cls.is_optional_type(annotation):
+            return next(arg for arg in get_args(annotation) if arg is not type(None))
+        return annotation
+
+    @classmethod
+    def strip_list_type(cls, annotation: Type) -> Type:
+        if cls.is_list_type(annotation):
+            return get_args(annotation)[0]
+        return annotation
+
 
 ###### TYPES
 

@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.models.filter import StructerCondition_V2
+from app.models.filter import Filter
 from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
     get_query_results,
@@ -32,7 +32,7 @@ def get_body_examples_argument() -> dict:
         "manually_defined": {
             "summary": "Manually defined filters by a user",
             "description": "If the body contains filters, an LLM is not used for parsing query. Instead these manually user-defined filters are used.",
-            "value": StructerCondition_V2.get_body_examples(),
+            "value": Filter.get_body_examples(),
         },
     }
 
@@ -46,7 +46,7 @@ async def submit_filtered_query(
         SupportedAssetType.DATASETS,
         description="Asset type eligible for metadata filtering. Currently only 'datasets' asset type works.",
     ),
-    filters: Annotated[list[StructerCondition_V2], Field(..., max_length=5)] | None = Body(
+    filters: Annotated[list[Filter], Field(..., max_length=5)] | None = Body(
         None,
         description="Manually user-defined filters to apply",
         openapi_examples=get_body_examples_argument(),
@@ -115,7 +115,7 @@ async def get_filter_schema(
             detail=f"Asset type '{asset_type.value}' does not support field name '{field_name}'",
         )
 
-    filter_class = StructerCondition_V2.create_field_specific_filter_type(asset_type, field_name)
+    filter_class = Filter.create_field_specific_filter_type(asset_type, field_name)
     return filter_class.model_json_schema()
 
 
@@ -151,7 +151,7 @@ async def get_filtered_query_result(
 async def _sumbit_filtered_query(
     search_query: str,
     asset_type: SupportedAssetType,
-    filters: list[StructerCondition_V2] | None,
+    filters: list[Filter] | None,
     topk: int,
 ) -> UUID:
     validate_query_or_raise(search_query)

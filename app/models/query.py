@@ -7,7 +7,7 @@ from typing import Generic, TypeVar
 from fastapi import HTTPException
 
 from app.config import settings
-from app.models.filter import StructerCondition_V2
+from app.models.filter import Filter
 from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam, QueryStatus
 from app.schemas.query import (
@@ -123,7 +123,7 @@ class SimpleUserQuery(BaseUserQuery[SimpleUserQueryResponse, OldSimpleUserQueryR
 class FilteredUserQuery(BaseUserQuery[FilteredUserQueryResponse, OldFilteredUserQueryResponse]):
     search_query: str
     asset_type: SupportedAssetType
-    filters: list[StructerCondition_V2] | None = None
+    filters: list[Filter] | None = None
 
     class Settings:
         name = "filteredUserQueries"
