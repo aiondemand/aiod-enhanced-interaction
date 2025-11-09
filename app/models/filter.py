@@ -39,7 +39,8 @@ class Filter(BaseModel):
     @staticmethod
     def build_from_llm_condition(condition: LLMStructedCondition) -> Filter:
         kwargs = condition.model_dump()
-        kwargs["value"] = kwargs.pop("processed_value")
+        for it in range(len(kwargs["expressions"])):
+            kwargs["expressions"][it]["value"] = kwargs["expressions"][it].pop("processed_value")
 
         return Filter(**kwargs)
 

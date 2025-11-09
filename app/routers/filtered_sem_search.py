@@ -155,6 +155,7 @@ async def _sumbit_filtered_query(
     validate_query_or_raise(search_query)
     await validate_asset_type_or_raise(asset_type, apply_filtering=True)
 
+    # TODO TO BE TESTED
     if filters:
         for filter in filters:
             filter.validate_filter_or_raise(asset_type)

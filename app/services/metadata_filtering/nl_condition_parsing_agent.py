@@ -41,6 +41,7 @@ class NLConditionParsingAgent:
         )
 
         self.agent = self.build_agent()
+        self.enforce_enums = settings.METADATA_FILTERING.ENFORCE_ENUMS
 
     def build_agent(self) -> Agent[NLConditionParsingDeps, LLMStructedCondition | None]:
         return Agent(
@@ -94,8 +95,10 @@ class NLConditionParsingAgent:
             )
 
         pydantic_model = SCHEMA_MAPPING[ctx.deps.asset_type]
-        valid_enum_values: list[str] | None = field_valid_value_service.get_values(
-            ctx.deps.asset_type, field=condition.field
+        valid_enum_values: list[str] | None = (
+            field_valid_value_service.get_values(ctx.deps.asset_type, field=condition.field)
+            if self.enforce_enums
+            else None
         )
 
         valid_expressions = []
