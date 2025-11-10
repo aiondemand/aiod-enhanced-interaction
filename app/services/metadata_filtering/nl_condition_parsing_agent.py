@@ -75,12 +75,15 @@ class NLConditionParsingAgent:
 
         field_description = pydantic_model.get_described_fields()[nl_condition.field]
         inner_annotation = pydantic_model.get_inner_annotation(nl_condition.field)
+        allowed_comparison_operators = pydantic_model.get_supported_comparison_operators(
+            nl_condition.field
+        )
 
         field_schema = TypeAdapter(inner_annotation).json_schema()
         field_schema.pop("title", None)
         field_schema.pop("description", None)
 
-        metadata_field_string = f"Metadata field: '{nl_condition.field}'\nField description: {field_description}\n\nField schema: {field_schema}"
+        metadata_field_string = f"Metadata field: '{nl_condition.field}'\nField description: {field_description}\nPermitted comparison operators: {allowed_comparison_operators}\nField schema: {field_schema}"
         condition_string = f"Natural language condition to analyze and extract expressions from: '{nl_condition.condition}'"
         return f"{metadata_field_string}\n\n{condition_string}"
 
@@ -100,6 +103,9 @@ class NLConditionParsingAgent:
             if self.enforce_enums
             else None
         )
+        allowed_comparison_operators = pydantic_model.get_supported_comparison_operators(
+            condition.field
+        )
 
         valid_expressions = []
         for expr in condition.expressions:
@@ -114,6 +120,12 @@ class NLConditionParsingAgent:
                 raise ModelRetry(
                     f"Extracted processed_value '{expr.processed_value}' doesn't conform to the the value constraints imposed by the field definition.\n\n"
                     f"ValidationError: {e}"
+                )
+
+            # Check the comparison operator
+            if expr.comparison_operator not in allowed_comparison_operators:
+                raise ModelRetry(
+                    f"Extracted comparison_operator '{expr.comparison_operator}' is not supported for the field '{condition.field}'. The only permitted comparison operators are: {allowed_comparison_operators}"
                 )
 
             # Check against enum

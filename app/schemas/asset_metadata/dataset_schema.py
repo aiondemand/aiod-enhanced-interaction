@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata, Base_AiExtractedMetadata
 from app.schemas.asset_metadata.types import *
 
 
@@ -93,3 +93,30 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
         None,
         description=("End date of temporal coverage in the dataset."),
     )
+
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_date_field_names() + [
+            "temporal_coverage_start",
+            "temporal_coverage_end",
+        ]
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_categorical_field_names() + [
+            "data_formats",
+            "label_types",
+            "collection_methods",
+            "source_type",
+            "update_frequency",
+            "geo_coverage",
+        ]
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_numerical_field_names() + [
+            "datapoint_count",
+            "feature_count",
+            "dataset_size_gigabytes",
+            "class_count",
+        ]

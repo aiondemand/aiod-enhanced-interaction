@@ -83,13 +83,17 @@ async def get_fields_to_filter_by(
     fields_class: Type[BaseModel] = type(
         f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict
     )
-    output_schema = fields_class.model_json_schema()["properties"]
 
-    for field in output_schema.keys():
-        output_schema[field].pop("default", None)
-        output_schema[field].pop("title", None)
+    model_schema = fields_class.model_json_schema()
+    fields_schema = model_schema["properties"]
 
-    return output_schema
+    for field in fields_schema.keys():
+        fields_schema[field].pop("default", None)
+        fields_schema[field].pop("title", None)
+
+    return {"fields_to_filter_by": fields_schema, "$defs": model_schema["$defs"]}
+
+    return fields_schema
 
 
 @router.get("/schemas/get_filter_schema")
@@ -155,7 +159,6 @@ async def _sumbit_filtered_query(
     validate_query_or_raise(search_query)
     await validate_asset_type_or_raise(asset_type, apply_filtering=True)
 
-    # TODO TO BE TESTED
     if filters:
         for filter in filters:
             filter.validate_filter_or_raise(asset_type)

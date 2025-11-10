@@ -1,23 +1,21 @@
 from __future__ import annotations
 
-from typing import Literal, Type, TypeAlias
+from typing import Literal, Type
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
+from app.schemas.asset_metadata.types import ComparisonOperator, LogicalOperator, PrimitiveTypes
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.outputs import LLMStructedCondition
 from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
-
-
-PrimitiveTypes: TypeAlias = int | float | str | bool
 
 
 class Expression(BaseModel):
     """An Expression represents a single comparison between a value and a metadata field"""
 
     value: PrimitiveTypes = Field(..., description="Value to be compared to the metadata field")
-    comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(
+    comparison_operator: ComparisonOperator = Field(
         ...,
         description="Comparison operator to be used for comparing the value to the metadata field",
     )
@@ -27,7 +25,7 @@ class Filter(BaseModel):
     """A filter consists of one or more expressions joined with a logical operator"""
 
     field: str = Field(..., max_length=30, description="Name of the metadata field to filter by")
-    logical_operator: Literal["AND", "OR"] = Field(
+    logical_operator: LogicalOperator = Field(
         ..., description="Allowed logical operator to be used for combining multiple expressions"
     )
     expressions: list[Expression] = Field(
@@ -88,9 +86,7 @@ class Filter(BaseModel):
             "__annotations__": {
                 "value": annotation,
                 "comparison_operator": Literal[
-                    # TODO fix
-                    "<", ">", "<=", ">=", "==", "!="
-                    # *asset_schema.get_supported_comparison_operators(field_name)
+                    *asset_schema.get_supported_comparison_operators(field_name)
                 ],
             },
             "value": Field(..., description=asset_schema.model_fields[field_name].description),
@@ -130,10 +126,11 @@ class Filter(BaseModel):
                 ],
             ).model_dump(),
             Filter(
-                field="datapoints_lower_bound",
+                field="modalities",
                 logical_operator="AND",
                 expressions=[
-                    Expression(value=10000, comparison_operator=">"),
+                    Expression(value="image", comparison_operator="=="),
+                    Expression(value="text", comparison_operator="!="),
                 ],
             ).model_dump(),
         ]

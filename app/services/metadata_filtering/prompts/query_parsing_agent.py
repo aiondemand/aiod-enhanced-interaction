@@ -20,7 +20,7 @@ QUERY_PARSING_SYSTEM_PROMPT = """
 
     4. **Logical Operators for Conditions:**
     - Always include a logical operator (AND/OR) for conditions with multiple values.
-    - For conditions with a single value, the logical operator is not required and thus is set to its default value, "NONE"
+    - For conditions with a single value, the logical operator is not required and won't be read, but still set it to "AND" regardless
 
     Here we provide a brief description of all the metadata fields we use for filtering purposes:
     {described_fields}

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata, Base_AiExtractedMetadata
 from app.schemas.asset_metadata.types import *
 
 
@@ -79,3 +79,26 @@ class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
             "Use this attribute for LLMs only."
         ),
     )
+
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_date_field_names() + []
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_categorical_field_names() + [
+            "architecture_families",
+            "fine_tuned",
+            "training_techniques",
+        ]
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return Base_AiExtractedMetadata.get_numerical_field_names() + [
+            "parameter_count_millions",
+            "model_size_gigabytes",
+            "training_compute_gpu_hours",
+            "llm_max_sequence_length",
+            "vocab_size",
+            "llm_training_data_volume_tokens",
+        ]

@@ -1,8 +1,6 @@
-from typing import Literal, TypeAlias
 from pydantic import BaseModel, Field
 
-
-PrimitiveTypes: TypeAlias = int | float | str | bool
+from app.schemas.asset_metadata.types import ComparisonOperator, LogicalOperator, PrimitiveTypes
 
 
 class LLMExpression(BaseModel):
@@ -19,7 +17,7 @@ class LLMExpression(BaseModel):
             "If the original value cannot be unambiguosly mapped to one of the valid values, this field is set to None."
         ),
     )
-    comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(
+    comparison_operator: ComparisonOperator = Field(
         ...,
         description="Comparison operator to be used for comparing the value to the metadata field",
     )
@@ -33,7 +31,7 @@ class LLMStructedCondition(BaseModel):
     """A Condition consists of one or more expressions joined with a logical operator"""
 
     field: str = Field(..., description="Name of the metadata field to filter by")
-    logical_operator: Literal["AND", "OR"] = Field(
+    logical_operator: LogicalOperator = Field(
         ..., description="Allowed logical operator to be used for combining multiple expressions"
     )
     expressions: list[LLMExpression] = Field(
@@ -54,11 +52,10 @@ class LLM_NaturalLanguageCondition(BaseModel):
         ),
     )
     field: str = Field(..., description="Name of the metadata field")
-    operator: Literal["AND", "OR", "NONE"] = Field(
+    operator: LogicalOperator = Field(
         ...,
         description=(
-            "Logical operator used between multiple values pertaining to the same metadata field. "
-            "If the condition describes only one value, set it to NONE instead."
+            "Logical operator used between multiple values pertaining to the same metadata field."
         ),
     )
 

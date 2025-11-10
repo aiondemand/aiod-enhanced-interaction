@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal, TypeAlias
 from types import UnionType
 from typing import Type, Union, get_args, get_origin
 from pydantic import Field
@@ -35,6 +35,10 @@ class AnnotationOperations:
 
 
 ###### TYPES
+
+PrimitiveTypes: TypeAlias = int | float | str | bool
+ComparisonOperator = Literal["<", ">", "<=", ">=", "==", "!="]
+LogicalOperator = Literal["AND", "OR"]
 
 Varchar16 = Annotated[str, Field(max_length=16)]
 Varchar32 = Annotated[str, Field(max_length=32)]

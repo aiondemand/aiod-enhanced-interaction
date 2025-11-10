@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -102,6 +103,18 @@ class Base_AiExtractedMetadata(BaseModel):
         max_length=32,
     )
 
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return []
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return list(cls.model_fields.keys())
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return []
+
 
 class AssetSpecificMetadata(Base_AiExtractedMetadata):
     @classmethod
@@ -124,6 +137,35 @@ class AssetSpecificMetadata(Base_AiExtractedMetadata):
             )
             for field_name in cls.model_fields.keys()
         }
+
+    @classmethod
+    @abstractmethod
+    def get_date_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    def get_supported_comparison_operators(cls, field_name: str) -> list[ComparisonOperator]:
+        match_operators: list[ComparisonOperator] = ["==", "!="]
+        range_operators: list[ComparisonOperator] = [">", "<", ">=", "<="]
+
+        if field_name in cls.get_date_field_names():
+            return range_operators
+        elif field_name in cls.get_categorical_field_names():
+            return match_operators
+        elif field_name in cls.get_numerical_field_names():
+            return match_operators + range_operators
+        else:
+            raise ValueError(f"Invalid field name: '{field_name}'")
 
     @classmethod
     def _get_annotation_or_raise(cls, field_name: str) -> type:
