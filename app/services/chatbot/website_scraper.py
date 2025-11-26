@@ -45,8 +45,8 @@ async def populate_collections_wrapper() -> None:
     client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
     model = AiModel(device=AiModel.get_device())
 
-    website_df = pd.concat([await scraper(website) for website in settings.AIOD.AIOD_WEBSITES])
-    api_df = pd.concat([await scraper(api) for api in settings.AIOD.AIOD_API_WEBSITES])
+    website_df = pd.concat([await scraper(website) for website in settings.CRAWLER.WEBSITES])
+    api_df = pd.concat([await scraper(api) for api in settings.CRAWLER.API_WEBSITES])
 
     populate_collection(model, client, settings.CHATBOT.WEBSITE_COLLECTION_NAME, website_df)
     populate_collection(model, client, settings.CHATBOT.API_COLLECTION_NAME, api_df)
@@ -121,7 +121,7 @@ async def scraper(anchor_url: str) -> pd.DataFrame:
             # Only follow URLs with specific patterns
             # URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
             # Only crawl specific domains
-            DomainFilter(blocked_domains=["https://auth.aiod.eu"]),
+            DomainFilter(blocked_domains=settings.CRAWLER.BLOCKED_WEBSITES),
             # Only include specific content types
             ContentTypeFilter(allowed_types=["text/html"]),
         ]
@@ -155,7 +155,7 @@ async def scraper(anchor_url: str) -> pd.DataFrame:
             if result.url not in url_list:  # make sure no duplicates are stored
                 if str(extract_meta_content(result.html, "x-dont-crawl")).lower() != "true":
                     # only index pages that should be crawled
-                    if "api.aiod.eu" in result.url:
+                    if "api" in result.url:
                         last_modified = str(last_modified_time(result.html))
                         api_modified_time_list.append(last_modified)
                         api_content_list.append(result.markdown)
