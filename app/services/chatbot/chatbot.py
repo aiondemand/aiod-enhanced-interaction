@@ -10,6 +10,7 @@ from mistralai.models.conversationresponse import ConversationResponse
 from pymilvus import MilvusClient
 from nltk import edit_distance
 
+
 from app.schemas.enums import SupportedAssetType
 from app.services.aiod import get_aiod_asset
 from app.services.chatbot.prompt_library import *
@@ -168,26 +169,6 @@ async def get_past_conversation_messages(conversation_id: str):
     )
 
 
-def generate_url(asset_type, asset_id):
-    if asset_type == "datasets":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Dataset"
-    elif asset_type == "ml_models":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=AIModel"
-    elif asset_type == "publications":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Publication"
-    elif asset_type == "case_studies":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Case%20studies"
-    elif asset_type == "educational_resources":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Educational%20resource"
-    elif asset_type == "experiments":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Experiment"
-    elif asset_type == "services":
-        url = f"https://mylibrary.aiod.eu/resources/{asset_id}?category=Service"
-    else:
-        url = None
-    return url
-
-
 def _asset_search(query: str, asset: str) -> str:
     embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
     mapped_asset = map_asset_name(asset)
@@ -228,7 +209,9 @@ def _asset_search(query: str, asset: str) -> str:
                 continue
 
             try:
-                url = generate_url(mapped_asset, asset_id)
+                url = settings.CHATBOT.generate_mylibrary_asset_url(
+                    asset_id, SupportedAssetType(mapped_asset)
+                )
                 if url is None:
                     url = content["same_as"]
                 new_addition = (
