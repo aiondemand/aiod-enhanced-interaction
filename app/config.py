@@ -187,12 +187,13 @@ class MongoConfig(BaseModel):
     HOST: str = Field(...)
     PORT: int = Field(...)
     DBNAME: str = Field("aiod")
+    AUTH_DBNAME: str = Field("admin")
     USER: str = Field(...)
     PASSWORD: str = Field(...)
 
     @property
     def CONNECTION_STRING(self) -> str:
-        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/"
+        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/{self.DBNAME}?authSource={self.AUTH_DBNAME}"
 
 
 class ChatbotConfig(BaseModel):
