@@ -41,6 +41,7 @@ class QueryParsingWrapper:
         asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
 
         simple_expression_template = "({field} {op} {val})"
+        text_match_expression_template = "({op}TEXT_MATCH({field}, {val}))"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
         list_fields_mask = asset_schema.get_list_fields_mask()
 
@@ -54,10 +55,12 @@ class QueryParsingWrapper:
                 comp_operator = expr.comparison_operator
                 val = expr.value
 
+                # We work with a metadata field that has a list of values
+                # We compare a value against a list of values
                 if list_fields_mask[field]:
                     if comp_operator not in ["==", "!="]:
                         raise ValueError(
-                            "We don't support any other comparison operators but a '==', '!=' for checking whether values exist within the metadata field."
+                            "We don't support any other comparison operators but a '==', '!=' for checking whether a value exist within a list of values (Milvus's 'ARRAY_CONTAINS' operation)."
                         )
                     str_expressions.append(
                         list_expression_template.format(
@@ -66,6 +69,21 @@ class QueryParsingWrapper:
                             val=format_value(val),
                         )
                     )
+                # 'name' field is special: The contents of this field are indexed and analyzed
+                # We can use text matching akin to ElasticSearch
+                elif field == "name":
+                    if comp_operator not in ["==", "!="]:
+                        raise ValueError(
+                            "We don't support any other comparison operators but a '==', '!=' for performing a Milvus's 'TEXT_MATCH' operation."
+                        )
+                    str_expressions.append(
+                        text_match_expression_template.format(
+                            field=field,
+                            op="" if comp_operator == "==" else "not ",
+                            val=format_value(val),
+                        )
+                    )
+                # Other non-list fields to compare a value against
                 else:
                     str_expressions.append(
                         simple_expression_template.format(

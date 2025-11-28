@@ -194,9 +194,6 @@ class AssetSpecific_UserQueryParsedMetadata(AutomaticallyExtractedMetadata):
 
     @classmethod
     def get_supported_comparison_operators(cls, field_name: str) -> list[ComparisonOperator]:
-        # TODO add IN operator for substrings -> useful for matching the name
-        # TODO we need to specify a new type of field that will use this in operator?
-
         match_operators: list[ComparisonOperator] = ["==", "!="]
         range_operators: list[ComparisonOperator] = [">", "<", ">=", "<="]
 

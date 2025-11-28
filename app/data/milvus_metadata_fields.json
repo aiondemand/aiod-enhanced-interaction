@@ -10,7 +10,9 @@
       "field_name": "name",
       "data_type": "VARCHAR",
       "max_length": 256,
-      "nullable": true
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
     },
     {
       "field_name": "date_published",
