@@ -17,6 +17,7 @@ from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
 from app.routers import chatbot_endpoint as chatbot_router
+from app.routers import healthcheck as healthcheck_router
 
 from app.services.chatbot.website_scraper import scraping_wrapper
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
@@ -38,13 +39,13 @@ async def lifespan(app: FastAPI):
     await app_shutdown()
 
 
-app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
+app = FastAPI(title="[AIoD] Enhanced Interaction", lifespan=lifespan)
 
 
-@app.get("/health", tags=["healthcheck"])
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
-
+app.include_router(healthcheck_router.router, prefix="", tags=["healthcheck"])
+app.include_router(
+    healthcheck_router.router, prefix=f"{settings.API_VERSION}", tags=["healthcheck"]
+)
 
 app.include_router(query_router.router, prefix="/query", tags=["query"])
 app.include_router(query_router.router, prefix=f"{settings.API_VERSION}/query", tags=["query"])
