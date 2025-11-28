@@ -1,11 +1,16 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata, Base_AiExtractedMetadata
+from app.schemas.asset_metadata.base_schemas import (
+    AssetSpecific_AiExtractedMetadata,
+    AssetSpecific_UserQueryParsedMetadata,
+    AutomaticallyExtractedMetadata,
+    Base_AiExtractedMetadata,
+)
 from app.schemas.asset_metadata.types import *
 
 
-class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
+class Dataset_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
     """
     Metadata fields that apply only to assets of type 'dataset'.
     Every attribute is optional so an agent can omit values it cannot
@@ -120,3 +125,28 @@ class Dataset_AiExtractedMetadata(AssetSpecificMetadata):
             "dataset_size_gigabytes",
             "class_count",
         ]
+
+
+class Dataset_UserQueryParsedMetadata(
+    AssetSpecific_UserQueryParsedMetadata, Dataset_AiExtractedMetadata
+):
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_date_field_names()
+            + Dataset_AiExtractedMetadata.get_date_field_names()
+        )
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_categorical_field_names()
+            + Dataset_AiExtractedMetadata.get_categorical_field_names()
+        )
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_numerical_field_names()
+            + Dataset_AiExtractedMetadata.get_numerical_field_names()
+        )

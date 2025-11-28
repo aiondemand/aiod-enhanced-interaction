@@ -1,11 +1,16 @@
 from typing import List, Optional
 from pydantic import Field
 
-from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata, Base_AiExtractedMetadata
+from app.schemas.asset_metadata.base_schemas import (
+    AssetSpecific_AiExtractedMetadata,
+    AssetSpecific_UserQueryParsedMetadata,
+    AutomaticallyExtractedMetadata,
+    Base_AiExtractedMetadata,
+)
 from app.schemas.asset_metadata.types import *
 
 
-class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
+class MlModel_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
     """
     Metadata fields that apply only to assets of type 'ml_model'.
     Every attribute is optional so an agent can omit values it cannot
@@ -102,3 +107,28 @@ class MlModel_AiExtractedMetadata(AssetSpecificMetadata):
             "vocab_size",
             "llm_training_data_volume_tokens",
         ]
+
+
+class MlModel_UserQueryParsedMetadata(
+    AssetSpecific_UserQueryParsedMetadata, MlModel_AiExtractedMetadata
+):
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_date_field_names()
+            + MlModel_AiExtractedMetadata.get_date_field_names()
+        )
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_categorical_field_names()
+            + MlModel_AiExtractedMetadata.get_categorical_field_names()
+        )
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return (
+            AutomaticallyExtractedMetadata.get_numerical_field_names()
+            + MlModel_AiExtractedMetadata.get_numerical_field_names()
+        )

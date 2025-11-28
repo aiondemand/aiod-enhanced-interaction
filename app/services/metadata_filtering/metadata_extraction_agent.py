@@ -7,16 +7,16 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.services.metadata_filtering.field_valid_values import field_valid_value_service
-from app.schemas.asset_metadata.base_schemas import AssetSpecificMetadata
+from app.schemas.asset_metadata.base_schemas import AssetSpecific_AiExtractedMetadata
 from app.schemas.asset_metadata.dataset_schema import Dataset_AiExtractedMetadata
 from app.schemas.asset_metadata.educational_resource_schema import (
     EducationalResource_AiExtractedMetadata,
 )
-from app.schemas.asset_metadata.model_schema import MlModel_AiExtractedMetadata
+from app.schemas.asset_metadata.ml_model_schema import MlModel_AiExtractedMetadata
 from app.schemas.asset_metadata.publication_schema import (
     Publication_AiExtractedMetadata,
 )
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import ASSET_EXTRACTION_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.config import settings
 from app.services.metadata_filtering.normalization_agent import normalization_agent
@@ -80,7 +80,9 @@ class MetadataExtractionAgent:
         self.enforce_enums = settings.METADATA_FILTERING.ENFORCE_ENUMS
         self.agents = self.build_agents()
 
-    def build_agents(self) -> dict[SupportedAssetType, Agent[None, AssetSpecificMetadata]]:
+    def build_agents(
+        self,
+    ) -> dict[SupportedAssetType, Agent[None, AssetSpecific_AiExtractedMetadata]]:
         agents = {}
         for asset_type in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
             agents[asset_type] = Agent(
@@ -96,7 +98,9 @@ class MetadataExtractionAgent:
 
     def _choose_output_function(
         self, asset_type: SupportedAssetType
-    ) -> Callable[[AssetSpecificMetadata], Awaitable[AssetSpecificMetadata]]:
+    ) -> Callable[
+        [AssetSpecific_AiExtractedMetadata], Awaitable[AssetSpecific_AiExtractedMetadata]
+    ]:
         output_functions = {
             SupportedAssetType.DATASETS: self._extract_dataset_tool,
             SupportedAssetType.ML_MODELS: self._extract_ml_model_tool,
@@ -107,13 +111,13 @@ class MetadataExtractionAgent:
 
     async def extract_metadata(
         self, document: str, asset_type: SupportedAssetType
-    ) -> AssetSpecificMetadata:
+    ) -> AssetSpecific_AiExtractedMetadata:
         try:
             user_prompt = f"Description ML {asset_type.value}:\n\n{document}"
             response = await self.agents[asset_type].run(user_prompt=user_prompt)
         except Exception:
             # Empty model
-            return SCHEMA_MAPPING[asset_type]()
+            return ASSET_EXTRACTION_SCHEMA_MAPPING[asset_type]()
 
         return response.output
 
@@ -150,20 +154,20 @@ class MetadataExtractionAgent:
         )
 
     async def __extract_asset_metadata_tool(
-        self, metadata: AssetSpecificMetadata, asset_type: SupportedAssetType
-    ) -> AssetSpecificMetadata:
+        self, metadata: AssetSpecific_AiExtractedMetadata, asset_type: SupportedAssetType
+    ) -> AssetSpecific_AiExtractedMetadata:
         if self.enforce_enums:
             return await self.__validate_enums(metadata, asset_type)
         else:
             return metadata
 
     async def __validate_enums(
-        self, metadata: AssetSpecificMetadata, asset_type: SupportedAssetType
-    ) -> AssetSpecificMetadata:
+        self, metadata: AssetSpecific_AiExtractedMetadata, asset_type: SupportedAssetType
+    ) -> AssetSpecific_AiExtractedMetadata:
         if normalization_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
-        pydantic_model: type[AssetSpecificMetadata] = metadata.__class__
+        pydantic_model: type[AssetSpecific_AiExtractedMetadata] = metadata.__class__
         all_model_fields = metadata.model_dump()
         fields_to_check = {
             field_name: field_value
@@ -188,7 +192,7 @@ class MetadataExtractionAgent:
             normalized_extracted_values = []
             if len(invalid_extracted_values) > 0:
                 normalized_extracted_values = await normalization_agent.normalize_values(
-                    invalid_extracted_values, valid_values, asset_type, field_name
+                    invalid_extracted_values, valid_values, pydantic_model, field_name
                 )
 
             # Postprocessing (merging of values, list unwrapping if necessary)

@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     await app_shutdown()
 
 
-app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
+app = FastAPI(title="[AIoD] Enhanced Interaction", lifespan=lifespan)
 
 
 @app.get("/health", tags=["healthcheck"])

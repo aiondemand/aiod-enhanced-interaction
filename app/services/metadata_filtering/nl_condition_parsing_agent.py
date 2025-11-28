@@ -5,7 +5,7 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic_ai.models.openai import OpenAIChatModel
 
 from app.config import settings
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.services.metadata_filtering.field_valid_values import field_valid_value_service
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.dependencies import NLConditionParsingDeps
@@ -71,7 +71,7 @@ class NLConditionParsingAgent:
     def _build_user_prompt(
         self, nl_condition: LLM_NaturalLanguageCondition, asset_type: SupportedAssetType
     ) -> str:
-        pydantic_model = SCHEMA_MAPPING[asset_type]
+        pydantic_model = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
 
         field_description = pydantic_model.get_described_fields()[nl_condition.field]
         inner_annotation = pydantic_model.get_inner_annotation(nl_condition.field)
@@ -97,7 +97,7 @@ class NLConditionParsingAgent:
                 f"Incorrect metadata field. The condition works on top of '{ctx.deps.nl_condition.field}', not '{condition.field}'"
             )
 
-        pydantic_model = SCHEMA_MAPPING[ctx.deps.asset_type]
+        pydantic_model = QUERY_PARSING_SCHEMA_MAPPING[ctx.deps.asset_type]
         valid_enum_values: list[str] | None = (
             field_valid_value_service.get_values(ctx.deps.asset_type, field=condition.field)
             if self.enforce_enums
@@ -133,7 +133,7 @@ class NLConditionParsingAgent:
                 normalized_values = await normalization_agent.normalize_values(
                     [cast(str, expr.processed_value)],
                     valid_enum_values,
-                    ctx.deps.asset_type,
+                    pydantic_model,
                     condition.field,
                 )
                 # No valid value was mapped to the processed_value

@@ -7,7 +7,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 
 from app.models.filter import Filter
 from app.config import settings
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.outputs import (
     LLM_NaturalLanguageCondition,
@@ -38,7 +38,7 @@ class QueryParsingWrapper:
         def format_value(val: str | int | float) -> str:
             return f"'{val.lower()}'" if isinstance(val, str) else str(val)
 
-        asset_schema = SCHEMA_MAPPING[asset_type]
+        asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
 
         simple_expression_template = "({field} {op} {val})"
         list_expression_template = "({op}ARRAY_CONTAINS({field}, {val}))"
@@ -94,7 +94,7 @@ class QueryParsingAgent:
     def build_agents(self) -> dict[SupportedAssetType, Agent[None, list[LLMStructedCondition]]]:
         agents = {}
         for asset_type in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
-            described_fields = SCHEMA_MAPPING[asset_type].get_described_fields()
+            described_fields = QUERY_PARSING_SCHEMA_MAPPING[asset_type].get_described_fields()
             system_prompt = QUERY_PARSING_SYSTEM_PROMPT.format(described_fields=described_fields)
 
             agents[asset_type] = Agent(
@@ -126,7 +126,9 @@ class QueryParsingAgent:
         if nl_condition_parsing_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
-        all_metadata_fields = list(SCHEMA_MAPPING[ctx.deps].get_described_fields().keys())
+        all_metadata_fields = list(
+            QUERY_PARSING_SCHEMA_MAPPING[ctx.deps].get_described_fields().keys()
+        )
 
         # Check all the NLConditions are tied to existing metadata fields
         for nl_cond in nl_conditions:

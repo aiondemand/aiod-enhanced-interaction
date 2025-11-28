@@ -6,8 +6,10 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
-from app.schemas.enums import SupportedAssetType
+from app.schemas.asset_metadata.base_schemas import (
+    AssetSpecific_AiExtractedMetadata,
+    AssetSpecific_UserQueryParsedMetadata,
+)
 from app.services.metadata_filtering.models.dependencies import NormalizationAgentDeps
 from app.services.metadata_filtering.models.outputs import LLM_NormalizedValue
 from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZATION_SYSTEM_PROMPT
@@ -42,12 +44,11 @@ class NormalizationAgent:
         self,
         invalid_values: list[str],
         valid_values: list[str],
-        asset_type: SupportedAssetType,
+        pydantic_model: type[AssetSpecific_AiExtractedMetadata]
+        | type[AssetSpecific_UserQueryParsedMetadata],
         field_name: str,
     ) -> list[str]:
-        pydantic_model = SCHEMA_MAPPING[asset_type]
         field_description = pydantic_model.get_described_fields()[field_name]
-
         user_prompt = self._build_user_prompt(
             invalid_values, valid_values, field_name, field_description
         )

@@ -44,7 +44,7 @@ Varchar16 = Annotated[str, Field(max_length=16)]
 Varchar32 = Annotated[str, Field(max_length=32)]
 Varchar64 = Annotated[str, Field(max_length=64)]
 Varchar128 = Annotated[str, Field(max_length=128)]
-Varchar256 = Annotated[str, Field(max_length=128)]
+Varchar256 = Annotated[str, Field(max_length=256)]
 
 CountryCode = Annotated[str, Field(description="ISO-3166 country code", pattern=r"^[A-Z]{2}$")]
 LanguageCode = Annotated[str, Field(description="ISO-639-1 language code", pattern=r"^[a-z]{2}$")]
@@ -64,6 +64,22 @@ FileExtension = Annotated[
 
 
 ###### ENUMS
+
+
+class PlatformEnum(str, Enum):
+    AIOD = "aiod"
+    EXAMPLE = "example"
+    OPENML = "openml"
+    HUGGINGFACE = "huggingface"
+    ZENODO = "zenodo"
+    AI4EXPERIMENTS = "ai4experiments"
+    STAIRWAI = "stairwai"
+    BONSEYES = "bonseyes"
+    AIDA_CMS = "aida_cms"
+    ROBOTICS4EU = "robotics4eu"
+    ADRA_E = "adra_e"
+    AIBUILDER = "aibuilder"
+    AI4EUROPE_CMS = "ai4europe_cms"
 
 
 class ModalityEnum(str, Enum):
@@ -91,7 +107,6 @@ class SourceTypeEnum(str, Enum):
 # PUBLICATIONS / EDUCATIONAL RESOURCES
 
 # TODO LATER
-# TODO make Enums lowercase
 
 
 class EducationalCompetency(str, Enum):

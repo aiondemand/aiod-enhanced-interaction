@@ -15,7 +15,7 @@ class AutomaticallyExtractedMetadata(BaseModel):
     and are automatically extracted from the asset's JSON schema without the need to use an LLM.
     """
 
-    platform: Varchar32 | None = Field(
+    platform: PlatformEnum | Varchar32 | None = Field(
         None,
         description=(
             "The platform on which the asset is hosted, e.g. 'Hugging Face', 'Zenodo', 'OpenML'."
@@ -30,6 +30,18 @@ class AutomaticallyExtractedMetadata(BaseModel):
     same_as: Varchar256 | None = Field(
         None, description=("The link pointing to the asset on the original platform.")
     )
+
+    @classmethod
+    def get_date_field_names(cls) -> list[str]:
+        return ["date_published"]
+
+    @classmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        return ["platform", "name", "same_as"]
+
+    @classmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        return []
 
 
 class Base_AiExtractedMetadata(BaseModel):
@@ -109,14 +121,46 @@ class Base_AiExtractedMetadata(BaseModel):
 
     @classmethod
     def get_categorical_field_names(cls) -> list[str]:
+        # All the fields are categorical
         return list(cls.model_fields.keys())
 
     @classmethod
     def get_numerical_field_names(cls) -> list[str]:
         return []
 
+    @classmethod
+    def get_described_fields(cls) -> dict[str, str]:
+        return {
+            field_name: getattr(field, "description", "")
+            for field_name, field in cls.model_fields.items()
+        }
 
-class AssetSpecificMetadata(Base_AiExtractedMetadata):
+
+class AssetSpecific_AiExtractedMetadata(Base_AiExtractedMetadata):
+    @classmethod
+    @abstractmethod
+    def get_date_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    def get_described_fields(cls) -> dict[str, str]:
+        return {
+            field_name: getattr(field, "description", "")
+            for field_name, field in cls.model_fields.items()
+        }
+
+
+class AssetSpecific_UserQueryParsedMetadata(AutomaticallyExtractedMetadata):
     @classmethod
     def get_described_fields(cls) -> dict[str, str]:
         return {
@@ -139,22 +183,20 @@ class AssetSpecificMetadata(Base_AiExtractedMetadata):
         }
 
     @classmethod
-    @abstractmethod
-    def get_date_field_names(cls) -> list[str]:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def get_categorical_field_names(cls) -> list[str]:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def get_numerical_field_names(cls) -> list[str]:
-        pass
+    def _get_annotation_or_raise(cls, field_name: str) -> type:
+        annotation = cls.model_fields[field_name].annotation
+        if annotation is None:
+            raise ValueError(
+                f"Annotation for the field '{field_name}' of the model '{cls.__name__}' doesn't exist. Fix the asset schema."
+            )
+        else:
+            return annotation
 
     @classmethod
     def get_supported_comparison_operators(cls, field_name: str) -> list[ComparisonOperator]:
+        # TODO add IN operator for substrings -> useful for matching the name
+        # TODO we need to specify a new type of field that will use this in operator?
+
         match_operators: list[ComparisonOperator] = ["==", "!="]
         range_operators: list[ComparisonOperator] = [">", "<", ">=", "<="]
 
@@ -168,11 +210,16 @@ class AssetSpecificMetadata(Base_AiExtractedMetadata):
             raise ValueError(f"Invalid field name: '{field_name}'")
 
     @classmethod
-    def _get_annotation_or_raise(cls, field_name: str) -> type:
-        annotation = cls.model_fields[field_name].annotation
-        if annotation is None:
-            raise ValueError(
-                f"Annotation for the field '{field_name}' of the model '{cls.__name__}' doesn't exist. Fix the asset schema."
-            )
-        else:
-            return annotation
+    @abstractmethod
+    def get_date_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_categorical_field_names(cls) -> list[str]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_numerical_field_names(cls) -> list[str]:
+        pass

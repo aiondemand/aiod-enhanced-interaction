@@ -16,7 +16,7 @@ from app.routers.sem_search import (
 )
 from app.schemas.enums import SupportedAssetType
 from app.schemas.query import FilteredUserQueryResponse, OldFilteredUserQueryResponse
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 
 
 router = APIRouter()
@@ -70,7 +70,7 @@ async def get_fields_to_filter_by(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SCHEMA_MAPPING[asset_type]
+    schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
     field_names = list(schema.model_fields.keys())
 
     inner_class_dict: dict[str, Any] = {
@@ -91,9 +91,7 @@ async def get_fields_to_filter_by(
         fields_schema[field].pop("default", None)
         fields_schema[field].pop("title", None)
 
-    return {"fields_to_filter_by": fields_schema, "$defs": model_schema["$defs"]}
-
-    return fields_schema
+    return {"$defs": model_schema["$defs"], "fields_to_filter_by": fields_schema}
 
 
 @router.get("/schemas/get_filter_schema")
@@ -110,7 +108,7 @@ async def get_filter_schema(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SCHEMA_MAPPING[asset_type]
+    schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
     if field_name not in list(schema.model_fields.keys()):
         raise HTTPException(
             status_code=400,

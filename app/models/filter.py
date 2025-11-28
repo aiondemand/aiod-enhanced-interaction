@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.schemas.asset_metadata.types import ComparisonOperator, LogicalOperator, PrimitiveTypes
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.outputs import LLMStructedCondition
-from app.services.metadata_filtering.schema_mapping import SCHEMA_MAPPING
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 
 
 class Expression(BaseModel):
@@ -46,7 +46,7 @@ class Filter(BaseModel):
     def create_field_specific_filter_type(
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
-        asset_schema = SCHEMA_MAPPING[asset_type]
+        asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
 
         if field_name not in list(asset_schema.model_fields.keys()):
             raise HTTPException(status_code=400, detail=f"Invalid field value '{field_name}'")
@@ -79,7 +79,7 @@ class Filter(BaseModel):
     def _create_field_specific_expression_type(
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
-        asset_schema = SCHEMA_MAPPING[asset_type]
+        asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
         annotation = asset_schema.get_inner_annotation(field_name)
 
         expression_class_dict = {
