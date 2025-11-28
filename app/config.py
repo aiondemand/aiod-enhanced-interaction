@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 from urllib.parse import urljoin
 
 from pydantic import AnyUrl, BaseModel, Field, field_validator, model_validator
@@ -20,6 +21,11 @@ class Validators:
             return value.lower() == "true"
         else:
             raise ValueError("Invalid value for a boolean attribute")
+
+    @classmethod
+    def validate_csv(cls, value: str) -> list[str]:
+        values = value.lower().split(",")
+        return [val.strip() for val in values if len(val.strip()) > 0]
 
 
 class MilvusConfig(BaseModel):
@@ -51,6 +57,53 @@ class MilvusConfig(BaseModel):
         return f"{self.USER}:{self.PASS}"
 
 
+class CrawlerConfig(BaseModel):
+    COMMA_SEPARATED_WEBSITES: str = Field(...)
+    COMMA_SEPARATED_API_WEBSITES: str = Field(...)
+    COMMA_SEPARATED_BLOCKED_WEBSITES: str = Field(...)
+
+    @classmethod
+    def convert_csv_to_urls(cls, value: str, to_string: bool) -> list[AnyUrl] | list[str]:
+        websites = Validators.validate_csv(value)
+        if to_string:
+            return websites
+        else:
+            return [AnyUrl(url) for url in websites]
+
+    @field_validator(
+        "COMMA_SEPARATED_WEBSITES",
+        "COMMA_SEPARATED_API_WEBSITES",
+        "COMMA_SEPARATED_BLOCKED_WEBSITES",
+        mode="before",
+    )
+    @classmethod
+    def validate_csv_urls(cls, value: str) -> str:
+        try:
+            cls.convert_csv_to_urls(value, to_string=False)
+        except ValueError:
+            ValueError("Invalid asset types defined")
+        return value
+
+    @property
+    def WEBSITES(self) -> list[str]:
+        return cast(
+            list[str], self.convert_csv_to_urls(self.COMMA_SEPARATED_WEBSITES, to_string=True)
+        )
+
+    @property
+    def API_WEBSITES(self) -> list[str]:
+        return cast(
+            list[str], self.convert_csv_to_urls(self.COMMA_SEPARATED_API_WEBSITES, to_string=True)
+        )
+
+    @property
+    def BLOCKED_WEBSITES(self) -> list[str]:
+        return cast(
+            list[str],
+            self.convert_csv_to_urls(self.COMMA_SEPARATED_BLOCKED_WEBSITES, to_string=True),
+        )
+
+
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
     MODEL_NAME: str = Field("llama3.1:8b", max_length=50)
@@ -76,8 +129,7 @@ class AIoDConfig(BaseModel):
 
     @classmethod
     def convert_csv_to_asset_types(cls, value: str) -> list[SupportedAssetType]:
-        types = value.lower().split(",")
-        return [SupportedAssetType(typ.strip()) for typ in types if len(typ.strip()) > 0]
+        return [SupportedAssetType(typ) for typ in Validators.validate_csv(value)]
 
     @field_validator(
         "COMMA_SEPARATED_ASSET_TYPES",
@@ -104,14 +156,6 @@ class AIoDConfig(BaseModel):
                 "You need to specify 'JSON_SAVEPATH' env var if 'STORE_DATA_IN_JSON' env var is set to True."
             )
         return self
-
-    @property
-    def AIOD_WEBSITES(self) -> list[str]:
-        return ["https://aiod.eu"]
-
-    @property
-    def AIOD_API_WEBSITES(self) -> list[str]:
-        return ["https://aiondemand.github.io/AIOD-rest-api/", "https://api.aiod.eu"]
 
     @property
     def OFFSET_INCREMENT(self) -> int:
@@ -144,12 +188,13 @@ class MongoConfig(BaseModel):
     HOST: str = Field(...)
     PORT: int = Field(...)
     DBNAME: str = Field("aiod")
+    AUTH_DBNAME: str = Field("admin")
     USER: str = Field(...)
     PASSWORD: str = Field(...)
 
     @property
     def CONNECTION_STRING(self) -> str:
-        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/"
+        return f"mongodb://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/{self.DBNAME}?authSource={self.AUTH_DBNAME}"
 
 
 class ChatbotConfig(BaseModel):
@@ -157,6 +202,7 @@ class ChatbotConfig(BaseModel):
     MISTRAL_KEY: str = Field(...)
     MISTRAL_MODEL: str = Field("mistral-medium-latest")
     TOP_K_ASSETS_TO_SEARCH: int = Field(10, gt=0)
+    MYLIBRARY_URL: AnyUrl = Field(...)
 
     @property
     def WEBSITE_COLLECTION_NAME(self) -> str:
@@ -171,6 +217,22 @@ class ChatbotConfig(BaseModel):
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
 
+    def generate_mylibrary_asset_url(self, asset_id: str, asset_type: SupportedAssetType) -> str:
+        _mapping = {
+            SupportedAssetType.DATASETS: "Dataset",
+            SupportedAssetType.ML_MODELS: "AIModel",
+            SupportedAssetType.PUBLICATIONS: "Publication",
+            SupportedAssetType.CASE_STUDIES: r"Case%20studies",
+            SupportedAssetType.EDUCATIONAL_RESOURCES: r"Educational%20resource",
+            SupportedAssetType.EXPERIMENTS: "Experiment",
+            SupportedAssetType.SERVICES: "Service",
+        }
+
+        return urljoin(
+            str(settings.CHATBOT.MYLIBRARY_URL),
+            f"resources/{asset_id}?category={_mapping[asset_type]}",
+        )
+
 
 class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
@@ -178,6 +240,7 @@ class Settings(BaseSettings):
     AIOD: AIoDConfig = Field(...)
     OLLAMA: OllamaConfig = Field(...)
     CHATBOT: ChatbotConfig = Field(...)
+    CRAWLER: CrawlerConfig = Field(...)
 
     API_VERSION: str = Field(...)
     USE_GPU: bool = Field(False)
