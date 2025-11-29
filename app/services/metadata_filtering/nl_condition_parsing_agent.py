@@ -74,7 +74,9 @@ class NLConditionParsingAgent:
         pydantic_model = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
 
         field_description = pydantic_model.get_described_fields()[nl_condition.field]
-        inner_annotation = pydantic_model.get_inner_annotation(nl_condition.field)
+        inner_annotation = pydantic_model.get_inner_annotation(
+            nl_condition.field, with_valid_values_enum=False
+        )
         allowed_comparison_operators = pydantic_model.get_supported_comparison_operators(
             nl_condition.field
         )
@@ -113,7 +115,9 @@ class NLConditionParsingAgent:
                 continue
 
             # Validate the data type => strip of optional and list wrappers
-            inner_annotation = pydantic_model.get_inner_annotation(condition.field)
+            inner_annotation = pydantic_model.get_inner_annotation(
+                condition.field, with_valid_values_enum=False
+            )
             try:
                 TypeAdapter(inner_annotation).validate_python(expr.processed_value)
             except ValidationError as e:

@@ -1,8 +1,11 @@
 from abc import abstractmethod
-from typing import List, Optional
+from typing import List, Optional, cast
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.schemas.asset_metadata.types import *
+from app.schemas.enums import SupportedAssetType
+from app.services.metadata_filtering.field_valid_values import field_valid_value_service
 
 # README
 # Value constraints need to be specified within their own annotated types rather than in the Field arguments
@@ -139,6 +142,11 @@ class Base_AiExtractedMetadata(BaseModel):
 class AssetSpecific_AiExtractedMetadata(Base_AiExtractedMetadata):
     @classmethod
     @abstractmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        pass
+
+    @classmethod
+    @abstractmethod
     def get_date_field_names(cls) -> list[str]:
         pass
 
@@ -162,6 +170,11 @@ class AssetSpecific_AiExtractedMetadata(Base_AiExtractedMetadata):
 
 class AssetSpecific_UserQueryParsedMetadata(AutomaticallyExtractedMetadata):
     @classmethod
+    @abstractmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        pass
+
+    @classmethod
     def get_described_fields(cls) -> dict[str, str]:
         return {
             field_name: getattr(field, "description", "")
@@ -169,9 +182,18 @@ class AssetSpecific_UserQueryParsedMetadata(AutomaticallyExtractedMetadata):
         }
 
     @classmethod
-    def get_inner_annotation(cls, field_name: str) -> type:
-        annotation = cls._get_annotation_or_raise(field_name)
-        return AnnotationOperations.strip_optional_and_list_types(annotation)
+    def get_inner_annotation(cls, field_name: str, with_valid_values_enum: bool) -> type:
+        all_valid_values = field_valid_value_service.get_values(cls.get_asset_type(), field_name)
+
+        if (
+            with_valid_values_enum
+            and all_valid_values
+            and settings.METADATA_FILTERING.ENFORCE_ENUMS
+        ):
+            return cast(type, Literal[*all_valid_values])
+        else:
+            annotation = cls._get_annotation_or_raise(field_name)
+            return AnnotationOperations.strip_optional_and_list_types(annotation)
 
     @classmethod
     def get_list_fields_mask(cls) -> dict[str, bool]:

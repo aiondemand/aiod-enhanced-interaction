@@ -8,6 +8,7 @@ from app.schemas.asset_metadata.base_schemas import (
     Base_AiExtractedMetadata,
 )
 from app.schemas.asset_metadata.types import *
+from app.schemas.enums import SupportedAssetType
 
 
 class MlModel_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
@@ -86,6 +87,10 @@ class MlModel_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
     )
 
     @classmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        return SupportedAssetType.ML_MODELS
+
+    @classmethod
     def get_date_field_names(cls) -> list[str]:
         return Base_AiExtractedMetadata.get_date_field_names() + []
 
@@ -112,6 +117,10 @@ class MlModel_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
 class MlModel_UserQueryParsedMetadata(
     AssetSpecific_UserQueryParsedMetadata, MlModel_AiExtractedMetadata
 ):
+    @classmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        return SupportedAssetType.ML_MODELS
+
     @classmethod
     def get_date_field_names(cls) -> list[str]:
         return (

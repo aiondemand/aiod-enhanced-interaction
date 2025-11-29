@@ -8,6 +8,7 @@ from app.schemas.asset_metadata.base_schemas import (
     Base_AiExtractedMetadata,
 )
 from app.schemas.asset_metadata.types import *
+from app.schemas.enums import SupportedAssetType
 
 
 class Dataset_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
@@ -100,6 +101,10 @@ class Dataset_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
     )
 
     @classmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        return SupportedAssetType.DATASETS
+
+    @classmethod
     def get_date_field_names(cls) -> list[str]:
         return Base_AiExtractedMetadata.get_date_field_names() + [
             "temporal_coverage_start",
@@ -130,6 +135,10 @@ class Dataset_AiExtractedMetadata(AssetSpecific_AiExtractedMetadata):
 class Dataset_UserQueryParsedMetadata(
     AssetSpecific_UserQueryParsedMetadata, Dataset_AiExtractedMetadata
 ):
+    @classmethod
+    def get_asset_type(cls) -> SupportedAssetType:
+        return SupportedAssetType.DATASETS
+
     @classmethod
     def get_date_field_names(cls) -> list[str]:
         return (

@@ -78,7 +78,9 @@ async def get_fields_to_filter_by(
     }
     for field in field_names:
         inner_class_dict[field] = Field(..., description=schema.model_fields[field].description)
-        inner_class_dict["__annotations__"][field] = schema.get_inner_annotation(field)
+        inner_class_dict["__annotations__"][field] = schema.get_inner_annotation(
+            field, with_valid_values_enum=True
+        )
 
     fields_class: Type[BaseModel] = type(
         f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict

@@ -80,7 +80,7 @@ class Filter(BaseModel):
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
         asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
-        annotation = asset_schema.get_inner_annotation(field_name)
+        annotation = asset_schema.get_inner_annotation(field_name, with_valid_values_enum=True)
 
         expression_class_dict = {
             "__annotations__": {
