@@ -220,6 +220,145 @@
       "nullable": true
     }
   ],
-  "publications": [],
-  "educational_resources": []
+  "publications": [
+    {
+      "field_name": "authors",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 64,
+      "nullable": true
+    },
+    {
+      "field_name": "affiliations",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "publication_types",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "publication_venues",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 4,
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
+    },
+    {
+      "field_name": "news_categories",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "peer_reviewed",
+      "data_type": "BOOL",
+      "nullable": true
+    },
+    {
+      "field_name": "open_access",
+      "data_type": "BOOL",
+      "nullable": true
+    },
+    {
+      "field_name": "doi",
+      "data_type": "VARCHAR",
+      "max_length": 128,
+      "nullable": true
+    },
+    {
+      "field_name": "citation_count",
+      "data_type": "INT64",
+      "nullable": true
+    }
+  ],
+  "educational_resources": [
+    {
+      "field_name": "resource_types",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "educational_levels",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "competency_levels",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "learning_modes",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "educational_paces",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "prerequisites",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "target_audiences",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "estimated_duration_hours",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "provider",
+      "data_type": "VARCHAR",
+      "max_length": 128,
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
+    },
+    {
+      "field_name": "certification_available",
+      "data_type": "BOOL",
+      "nullable": true
+    }
+  ]
 }

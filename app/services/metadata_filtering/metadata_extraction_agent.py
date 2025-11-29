@@ -197,9 +197,12 @@ class MetadataExtractionAgent:
 
             # Postprocessing (merging of values, list unwrapping if necessary)
             merged_extracted_values = valid_extracted_values + normalized_extracted_values
-            all_model_fields[field_name] = (
-                merged_extracted_values if is_field_a_list else merged_extracted_values[0]
-            )
+            if len(merged_extracted_values) == 0 and is_field_a_list is False:
+                all_model_fields[field_name] = None
+            else:
+                all_model_fields[field_name] = (
+                    merged_extracted_values if is_field_a_list else merged_extracted_values[0]
+                )
 
         return pydantic_model(**all_model_fields)
 

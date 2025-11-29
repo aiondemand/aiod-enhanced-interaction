@@ -328,5 +328,34 @@
             "Specification Document",
             "Web Content"
         ]
+    },
+    "educational_resources": {
+        "educational_levels": [
+            "Doctoral or equivalent level",
+            "Early childhood education",
+            "Lower secondary education",
+            "Not elsewhere classified",
+            "Post-secondary non-tertiary education",
+            "Primary education",
+            "Short-cycle tertiary education",
+            "Upper secondary education",
+            "Bachelor’s or equivalent level",
+            "Master’s or equivalent level"
+        ],
+        "prerequisites": [
+            "basic math",
+            "intro lin alg, calculus, prob/stats",
+            "undergraduate statistics",
+            "basic AI/CS helpful; programming useful",
+            "basic AI or digital law",
+            "1+ year coding data role",
+            "graduate linear algebra",
+            "familiar with supervised learning and constrained optimization",
+            "probability, stats, lin alg, calculus, logic; python useful",
+            "ML with neural networks",
+            "interest in compliance or ethical AI",
+            "international audience",
+            "recommended: BSc engineering or higher"
+        ]
     }
 }
