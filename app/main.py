@@ -17,6 +17,7 @@ from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
 from app.routers import chatbot_endpoint as chatbot_router
+from app.routers import healthcheck as healthcheck_router
 
 from app.services.chatbot.website_scraper import scraping_wrapper
 from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
@@ -38,50 +39,39 @@ async def lifespan(app: FastAPI):
     await app_shutdown()
 
 
-app = FastAPI(title="[AIoD] Enhanced Search", lifespan=lifespan)
+app = FastAPI(title="[AIoD] Enhanced Interaction", lifespan=lifespan)
 
 
-@app.get("/health", tags=["healthcheck"])
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(healthcheck_router.router, prefix="", tags=["healthcheck"])
+app.include_router(
+    healthcheck_router.router, prefix=f"{settings.API_VERSION}", tags=["healthcheck"]
+)
 
+app.include_router(query_router.router, prefix="/query", tags=["query"])
+app.include_router(query_router.router, prefix=f"{settings.API_VERSION}/query", tags=["query"])
 
 if settings.CHATBOT.USE_CHATBOT:
     app.include_router(chatbot_router.router, prefix="/chatbot", tags=["chatbot"])
+    app.include_router(
+        chatbot_router.router, prefix=f"{settings.API_VERSION}/chatbot", tags=["chatbot"]
+    )
 
-app.include_router(query_router.old_router, prefix="/query", tags=["query"])
-app.include_router(query_router.old_router, prefix="/v1/query", tags=["query"], deprecated=True)
-app.include_router(query_router.router, prefix="/v2/query", tags=["query"])
-
-app.include_router(recommender_router.old_router, prefix="/recommender", tags=["recommender_query"])
+app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
 app.include_router(
-    recommender_router.old_router,
-    prefix="/v1/recommender",
+    recommender_router.router,
+    prefix=f"{settings.API_VERSION}/recommender",
     tags=["recommender_query"],
-    deprecated=True,
 )
-app.include_router(recommender_router.router, prefix="/v2/recommender", tags=["recommender_query"])
 
 if settings.PERFORM_LLM_QUERY_PARSING:
-    # Common endpoints across versions
     app.include_router(
         filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
     )
     app.include_router(
         filtered_query_router.router,
-        prefix="/v1/experimental/filtered_query",
-        tags=["filtered_query"],
-        deprecated=True,
-    )
-    app.include_router(
-        filtered_query_router.router,
-        prefix="/v2/experimental/filtered_query",
+        prefix=f"{settings.API_VERSION}/experimental/filtered_query",
         tags=["filtered_query"],
     )
-
-    # GET endpoint that is different across versions
-    app.include_router(filtered_query_router.router_diff, tags=["filtered_query"])
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,7 +81,7 @@ app.add_middleware(
 )
 
 
-def setup_logger():
+def setup_logger() -> None:
     format_string = "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
     logging.basicConfig(
         level=logging.INFO,

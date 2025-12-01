@@ -16,7 +16,7 @@ from app.routers.sem_search import (
 )
 from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
-from app.schemas.query import FilteredUserQueryResponse, OldFilteredUserQueryResponse
+from app.schemas.query import FilteredUserQueryResponse
 
 
 router = APIRouter()
@@ -55,6 +55,21 @@ async def submit_filtered_query(
 ) -> RedirectResponse:
     query_id = await _sumbit_filtered_query(search_query, asset_type, filters, topk=topk)
     return RedirectResponse(f"/filtered_query/{query_id}/result", status_code=202)
+
+
+@router.get("/{query_id}/result")
+async def get_filtered_query_result(
+    query_id: UUID = Path(..., description="Valid query ID"),
+    return_entire_assets: bool = Query(
+        default=False,
+        description="Whether to return the entire AIoD assets or only their corresponding IDs",
+    ),
+) -> FilteredUserQueryResponse:
+    return await get_query_results(
+        query_id,
+        FilteredUserQuery,
+        return_entire_assets=return_entire_assets,
+    )
 
 
 @router.get("/schemas/get_fields")
@@ -117,35 +132,6 @@ async def get_filter_schema(
 
     filter_class = Filter.create_field_specific_filter_type(asset_type, field_name)
     return filter_class.model_json_schema()
-
-
-router_diff = APIRouter()
-
-
-@router_diff.get("/experimental/filtered_query/{query_id}/result")
-@router_diff.get("/v1/experimental/filtered_query/{query_id}/result", deprecated=True)
-async def old_get_filtered_query_result(
-    query_id: UUID = Path(..., description="Valid query ID"),
-) -> OldFilteredUserQueryResponse:
-    return await get_query_results(
-        query_id, FilteredUserQuery, return_entire_assets=False, old_schema=True
-    )
-
-
-@router_diff.get("/v2/experimental/filtered_query/{query_id}/result")
-async def get_filtered_query_result(
-    query_id: UUID = Path(..., description="Valid query ID"),
-    return_entire_assets: bool = Query(
-        default=False,
-        description="Whether to return the entire AIoD assets or only their corresponding IDs",
-    ),
-) -> FilteredUserQueryResponse:
-    return await get_query_results(
-        query_id,
-        FilteredUserQuery,
-        return_entire_assets=return_entire_assets,
-        old_schema=False,
-    )
 
 
 async def _sumbit_filtered_query(
