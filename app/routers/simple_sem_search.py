@@ -10,8 +10,8 @@ from app.routers.sem_search import (
     validate_asset_type_or_raise,
 )
 
-from app.schemas.enums import AssetTypeQueryParam, SupportedAssetType
-from app.schemas.query import SimpleUserQueryResponse, OldSimpleUserQueryResponse
+from app.schemas.enums import AssetTypeQueryParam
+from app.schemas.query import SimpleUserQueryResponse
 
 
 router = APIRouter()
@@ -41,39 +41,6 @@ async def get_simple_query_result(
         query_id,
         SimpleUserQuery,
         return_entire_assets=return_entire_assets,
-        old_schema=False,
-    )
-
-
-####################################
-############ OLD ROUTER ############
-####################################
-
-old_router = APIRouter()
-
-
-# v1 endpoint that doesn't support searching across asset types
-@old_router.post("")
-async def old_submit_simple_query(
-    search_query: str = Query(..., max_length=200, min_length=1, description="User search query"),
-    asset_type: SupportedAssetType = Query(
-        default=SupportedAssetType.DATASETS, description="Asset type of assets to return"
-    ),
-    topk: int = Query(default=10, gt=0, le=100, description="Number of assets to return"),
-) -> RedirectResponse:
-    query_id = await _sumbit_simple_query(
-        search_query, asset_type=AssetTypeQueryParam(asset_type.value), topk=topk
-    )
-    return RedirectResponse(f"/query/{query_id}/result", status_code=202)
-
-
-# v1 endpoint that doesn't support returning the entire assets nor assets of different types
-@old_router.get("/{query_id}/result")
-async def old_get_simple_query_result(
-    query_id: UUID = Path(..., description="Valid query ID"),
-) -> OldSimpleUserQueryResponse:
-    return await get_query_results(
-        query_id, SimpleUserQuery, return_entire_assets=False, old_schema=True
     )
 
 

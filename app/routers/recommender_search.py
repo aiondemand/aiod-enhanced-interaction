@@ -8,8 +8,9 @@ from app.routers.sem_search import (
     submit_query,
     validate_asset_type_or_raise,
 )
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType, AssetTypeQueryParam
-from app.schemas.query import OldRecommenderUserQueryResponse, RecommenderUserQueryResponse
+from app.schemas.query import RecommenderUserQueryResponse
 
 
 router = APIRouter()
@@ -17,7 +18,7 @@ router = APIRouter()
 
 @router.post("")
 async def submit_recommender_query(
-    asset_id: str = Query(..., max_length=50, description="Asset ID"),
+    asset_id: AssetId = Query(..., description="Asset ID", pattern=r"^[a-z]{3,4}_[a-zA-Z0-9]{24}$"),
     asset_type: SupportedAssetType = Query(
         ..., description="Asset type of an asset to find recommendations to"
     ),
@@ -47,50 +48,11 @@ async def get_recommender_result(
         query_id,
         RecommenderUserQuery,
         return_entire_assets=return_entire_assets,
-        old_schema=False,
-    )
-
-
-####################################
-############ OLD ROUTER ############
-####################################
-
-old_router = APIRouter()
-
-
-# v1 endpoint that doesn't support searching across asset types
-@old_router.post("")
-async def old_submit_recommender_query(
-    asset_id: str = Query(..., max_length=50, description="Asset ID"),
-    asset_type: SupportedAssetType = Query(
-        ..., description="Asset type of an asset to find recommendations to"
-    ),
-    output_asset_type: SupportedAssetType = Query(
-        ..., description="Output asset type of assets to return"
-    ),
-    topk: int = Query(default=10, gt=0, le=100, description="Number of similar assets to return"),
-) -> RedirectResponse:
-    query_id = await _submit_recommender_query(
-        asset_id,
-        asset_type,
-        AssetTypeQueryParam(output_asset_type.value),
-        topk,
-    )
-    return RedirectResponse(url=f"/recommender/{query_id}/result", status_code=202)
-
-
-# v1 endpoint that doesn't support returning the entire assets nor assets of different types
-@old_router.get("/{query_id}/result", response_model=OldRecommenderUserQueryResponse)
-async def old_get_recommender_result(
-    query_id: UUID,
-) -> OldRecommenderUserQueryResponse:
-    return await get_query_results(
-        query_id, RecommenderUserQuery, return_entire_assets=False, old_schema=True
     )
 
 
 async def _submit_recommender_query(
-    asset_id: str,
+    asset_id: AssetId,
     asset_type: SupportedAssetType,
     output_asset_type: AssetTypeQueryParam,
     topk: int,

@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from app.config import settings
 from app.models.asset_collection import AssetCollection
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import recursive_aiod_asset_fetch
@@ -124,7 +125,7 @@ async def process_aiod_assets_wrapper(
     asset_type: SupportedAssetType,
 ) -> None:
     existing_asset_ids_from_past = embedding_store.get_all_asset_ids(asset_type)
-    newly_added_asset_ids: list[str] = []
+    newly_added_asset_ids: list[AssetId] = []
 
     last_update = asset_collection.last_update
     last_db_sync_datetime: datetime | None = getattr(last_update, "from_time", None)
@@ -216,10 +217,10 @@ async def process_aiod_assets_wrapper(
 def get_assets_to_add_and_delete(
     asset_type: SupportedAssetType,
     url_params: RequestParams,
-    existing_asset_ids_from_past: list[str],
-    newly_added_asset_ids: list[str],
+    existing_asset_ids_from_past: list[AssetId],
+    newly_added_asset_ids: list[AssetId],
     last_db_sync_datetime: datetime | None,
-) -> tuple[list[dict] | None, list[str] | None]:
+) -> tuple[list[dict] | None, list[AssetId] | None]:
     mark_recursions: list[int] = []
     assets = recursive_aiod_asset_fetch(asset_type, url_params, mark_recursions)
 
@@ -233,7 +234,7 @@ def get_assets_to_add_and_delete(
     if settings.AIOD.TESTING and url_params.offset >= 10:
         return None, None
 
-    asset_ids = [obj["identifier"] for obj in assets]
+    asset_ids: list[AssetId] = [obj["identifier"] for obj in assets]
     modified_dates = np.array([parse_aiod_asset_date(obj, none_value="now") for obj in assets])
 
     # new assets to store that we have never encountered before

@@ -16,6 +16,7 @@ from app.models.query import (
     RecommenderUserQuery,
     SimpleUserQuery,
 )
+from app.schemas.asset_id import AssetId
 from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
@@ -144,7 +145,7 @@ def search_asset_collection(
     user_query: BaseUserQuery,
     num_search_retries: int = 5,
 ) -> AssetResults:
-    asset_ids_to_remove_from_db: list[str] = []
+    asset_ids_to_remove_from_db: list[AssetId] = []
     all_assets_to_return = AssetResults()
 
     for _ in range(num_search_retries):
@@ -215,7 +216,7 @@ async def prepare_search_parameters(
         else SupportedAssetType.DATASETS  # a placeholder value that will be replaced
     )
     # ignore the asset itself from the search if necessary
-    asset_ids_to_exclude_from_search = (
+    asset_ids_to_exclude_from_search: list[AssetId] = (
         [user_query.asset_id]
         if isinstance(user_query, RecommenderUserQuery)
         and user_query.asset_type == user_query.output_asset_type
@@ -235,7 +236,7 @@ async def prepare_search_parameters(
 def validate_assets(
     results: SearchResults,
     search_params: VectorSearchParams,
-    asset_ids_to_remove_from_db: list[str],
+    asset_ids_to_remove_from_db: list[AssetId],
 ) -> AssetResults:
     if len(results) == 0:
         return AssetResults()
