@@ -52,7 +52,7 @@ async def validate_asset_type_or_raise(asset_type: BaseAssetType, apply_filterin
     if apply_filtering and asset_type.is_all():
         raise HTTPException(
             status_code=400,
-            detail=f"You need to specify a specific asset type to perform a filtered search",
+            detail=f"You need to specify a specific asset type to perform a filtered search on",
         )
 
     if not asset_type.is_all():

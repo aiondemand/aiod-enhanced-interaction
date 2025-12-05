@@ -31,6 +31,7 @@ ASSET_EXTRACTION_SCHEMA_MAPPING: dict[
     SupportedAssetType.EDUCATIONAL_RESOURCES: EducationalResource_AiExtractedMetadata,
 }
 
+
 QUERY_PARSING_SCHEMA_MAPPING: dict[
     SupportedAssetType, Type[AssetSpecific_UserQueryParsedMetadata]
 ] = {

@@ -59,17 +59,17 @@ app.include_router(recommender_router.router, prefix="/v2/recommender", tags=["r
 if settings.PERFORM_LLM_QUERY_PARSING:
     # Common endpoints across versions
     app.include_router(
-        filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
+        filtered_query_router.router, prefix="/filtered_query", tags=["filtered_query"]
     )
     app.include_router(
         filtered_query_router.router,
-        prefix="/v1/experimental/filtered_query",
+        prefix="/v1/filtered_query",
         tags=["filtered_query"],
         deprecated=True,
     )
     app.include_router(
         filtered_query_router.router,
-        prefix="/v2/experimental/filtered_query",
+        prefix="/v2/filtered_query",
         tags=["filtered_query"],
     )
 

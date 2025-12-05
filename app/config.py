@@ -10,25 +10,11 @@ from pydantic_settings import BaseSettings
 from app.schemas.enums import SupportedAssetType
 
 
-AIOD_TAXONOMIES: list[str] = [
-    "AI_paradigms",
-    "countries",
-    "educational_competencies",
-    "educational_levels",
-    "event_modes",
-    "event_statuses",
-    "industrial_sectors",
-    "languages",
-    "learning_modes",
-    "licenses",
-    "news_categories",
-    "numbers_of_employees",
-    "organisation_activity_types",
-    "organisation_types",
-    "publication_types",
-    "research_areas",
-    "scientific_domains",
-    "turnovers",
+SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING = [
+    SupportedAssetType.DATASETS,
+    SupportedAssetType.ML_MODELS,
+    SupportedAssetType.PUBLICATIONS,
+    SupportedAssetType.EDUCATIONAL_RESOURCES,
 ]
 
 
@@ -151,8 +137,16 @@ class AIoDConfig(BaseModel):
 
         if not set(types).issubset(set(self.ASSET_TYPES)):
             raise ValueError(
-                "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+                "AIoD assets for metadata extraction (env var: 'AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION') "
+                + "is not a subset of all AIoD assets we support (env var: 'AIOD__COMMA_SEPARATED_ASSET_TYPES')"
             )
+        if not set(types).issubset(set(SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING)):
+            diff = set(types) - set(SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING)
+
+            raise ValueError(
+                f"We DO NOT support the following asset types for metadata extraction: {[asset.value for asset in diff]}"
+            )
+
         return types
 
     def get_assets_url(self, asset_type: SupportedAssetType) -> str:
