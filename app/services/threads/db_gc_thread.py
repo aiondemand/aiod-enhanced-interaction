@@ -45,7 +45,7 @@ async def delete_expired_queries(current_time: datetime) -> None:
     ]
 
     for query_type in query_types_to_delete:
-        res = await query_type.delete_doc(
+        res = await query_type.delete_docs(
             query_type.expires_at != None,
             query_type.expires_at < current_time,  # type: ignore[operator]
         )

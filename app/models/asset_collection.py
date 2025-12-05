@@ -11,6 +11,9 @@ from app.schemas.enums import SupportedAssetType
 from app.models.mongo import MongoDocument, BaseDatabaseEntity
 
 
+# Do we wish to mention the asset_version field in here as well?
+
+
 class CollectionUpdate(BaseDatabaseEntity, ABC):
     embeddings_added: int = 0
     aiod_asset_offset: int = 0

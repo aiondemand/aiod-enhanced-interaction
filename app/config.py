@@ -74,6 +74,8 @@ class MetadataFilteringConfig(BaseModel):
     @classmethod
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
+
+
 class CrawlerConfig(BaseModel):
     COMMA_SEPARATED_WEBSITES: str = Field(...)
     COMMA_SEPARATED_API_WEBSITES: str = Field(...)

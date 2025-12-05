@@ -69,7 +69,9 @@ if settings.PERFORM_LLM_QUERY_PARSING:
         filtered_query_router.router, prefix=f"/filtered_query", tags=["filtered_query"]
     )
     app.include_router(
-        filtered_query_router.router, prefix=f"f{settings.API_VERSION}/filtered_query", tags=["filtered_query"]
+        filtered_query_router.router,
+        prefix=f"f{settings.API_VERSION}/filtered_query",
+        tags=["filtered_query"],
     )
 
 app.add_middleware(
@@ -78,6 +80,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 def setup_logfire() -> None:
     logfire.configure(

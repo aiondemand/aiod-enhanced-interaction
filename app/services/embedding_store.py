@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import inspect
 import json
 import logging
@@ -27,6 +28,12 @@ from app.services.resilience import retry_loop
 SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
 
 
+@dataclass
+class RemoveEmbeddingsResponse:
+    asset_versions: list[int] = field(default_factory=list)
+    emb_delete_count: int = 0
+
+
 class EmbeddingStore(Generic[SearchParams], ABC):
     @abstractmethod
     def create_search_params(self, **kwargs) -> SearchParams:
@@ -43,7 +50,9 @@ class EmbeddingStore(Generic[SearchParams], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def remove_embeddings(self, asset_ids: list[AssetId], asset_type: SupportedAssetType) -> int:
+    def remove_embeddings(
+        self, asset_ids: list[AssetId], asset_type: SupportedAssetType
+    ) -> RemoveEmbeddingsResponse:
         raise NotImplementedError
 
     @abstractmethod
@@ -126,6 +135,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             schema.add_field("id", DataType.INT64, is_primary=True)
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
             schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
+            schema.add_field("asset_version", DataType.INT64)
 
             if settings.extracts_metadata_from_asset(asset_type):
                 self._add_metadata_fields(schema, asset_type)
@@ -317,12 +327,25 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         return inserted
 
-    def remove_embeddings(self, asset_ids: list[AssetId], asset_type: SupportedAssetType) -> int:
+    def remove_embeddings(
+        self, asset_ids: list[AssetId], asset_type: SupportedAssetType
+    ) -> RemoveEmbeddingsResponse:
         collection_name = self.get_collection_name(asset_type)
 
-        return self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
+        data = self.client.query(
+            collection_name,
+            filter=f"asset_id in {asset_ids}",
+            output_fields=["asset_id", "asset_version"],
+        )
+        asset_versions = [item["asset_version"] for item in data]
+
+        delete_count = self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
             "delete_count"
         ]
+
+        return RemoveEmbeddingsResponse(
+            asset_versions=asset_versions, emb_delete_count=delete_count
+        )
 
     def retrieve_topk_asset_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)

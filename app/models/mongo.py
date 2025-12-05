@@ -35,7 +35,7 @@ class MongoDocument(Document):
 
     @classmethod
     @retry_loop(MongoUnavailableException)
-    async def delete_doc(cls, *args, **kwargs) -> DeleteResult:
+    async def delete_docs(cls, *args, **kwargs) -> DeleteResult:
         return await cls.find(*args, **kwargs).delete()
 
     @retry_loop(MongoUnavailableException)
