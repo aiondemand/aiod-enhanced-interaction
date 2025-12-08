@@ -61,15 +61,17 @@ async def compute_embeddings_for_aiod_assets_wrapper(
     if job_lock.acquire(blocking=False):
         try:
             log_msg = (
-                "[INITIAL UPDATE] Initial task for computing asset embeddings has started"
+                "[RECURRING AIOD UPDATE] Initial task for computing asset embeddings has started"
                 if first_invocation
-                else "[RECURRING UPDATE] Scheduled task for computing asset embeddings has started"
+                else "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has started"
             )
             logging.info(log_msg)
 
             model = AiModel(device=AiModel.get_device())
             await compute_embeddings_for_aiod_assets(model, first_invocation)
-            logging.info("Scheduled task for computing asset embeddings has ended.")
+            logging.info(
+                "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has ended."
+            )
         finally:
             # GPU memory cleanup
             model.to_device("cpu")
@@ -79,7 +81,9 @@ async def compute_embeddings_for_aiod_assets_wrapper(
 
             job_lock.release()
     else:
-        logging.info("Scheduled task for updating skipped (previous task is still running)")
+        logging.info(
+            "[RECURRING AIOD UPDATE] Scheduled task for updating skipped (previous task is still running)"
+        )
 
 
 async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: bool) -> None:
@@ -89,7 +93,9 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
         asset_collection = await fetch_asset_collection(asset_type, first_invocation)
         if asset_collection is None:
             continue
-        logging.info(f"\tComputing embeddings for asset type: {asset_type.value}")
+        logging.info(
+            f"\t[RECURRING AIOD UPDATE] Computing embeddings for asset type: {asset_type.value}"
+        )
         try:
             await process_aiod_assets_wrapper(
                 model=model,
@@ -103,7 +109,7 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
         except LocalServiceUnavailableException as e:
             logging.error(e)
             logging.error(
-                "The above error has been encountered in the embedding thread. "
+                "\t[RECURRING AIOD UPDATE] The above error has been encountered in the embedding thread. "
                 + "Entire Application is being terminated now"
             )
             os._exit(1)
@@ -111,7 +117,9 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
             # We don't wish to shutdown the application unless Milvus or Ollama is down
             # If we cannot reach AIoD, we can just skip the embedding process for that day
             logging.error(e)
-            logging.error("The above error has been encountered in the embedding thread.")
+            logging.error(
+                "\t[RECURRING AIOD UPDATE] The above error has been encountered in the embedding thread."
+            )
 
 
 async def fetch_asset_collection(
@@ -163,7 +171,9 @@ async def process_aiod_assets_wrapper(
     all_assets_day = settings.AIOD.DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS
     if last_update.to_time.day == all_assets_day and last_db_sync_datetime is not None:
         query_from_time = None
-        logging.info("\t\tIterating over entire database (recurring update)")
+        logging.info(
+            "\t\t[RECURRING AIOD UPDATE] Iterating over entire database (monthly occurrence)"
+        )
 
     url_params = RequestParams(
         offset=last_update.aiod_asset_offset,
@@ -172,7 +182,9 @@ async def process_aiod_assets_wrapper(
         to_time=last_update.to_time,
     )
     if url_params.offset > 0:
-        logging.info(f"\t\tContinue asset embedding process from asset offset={url_params.offset}")
+        logging.info(
+            f"\t\t[RECURRING AIOD UPDATE] Continue asset embedding process from asset offset={url_params.offset}"
+        )
 
     while True:
         assets_to_add, asset_ids_to_update = get_assets_to_add_and_update(
@@ -212,6 +224,13 @@ async def process_aiod_assets_wrapper(
 
     asset_collection.finish()
     await asset_collection.replace_doc()
+
+    total_added = asset_collection.last_update.embeddings_added
+    total_removed = getattr(asset_collection.last_update, "embeddings_removed", 0)
+
+    logging.info(
+        f"\t\t[RECURRING AIOD UPDATE] Report (asset_type={asset_type.value}): Embeddings added: {total_added} | Embeddings removed: {total_removed}"
+    )
 
 
 async def _remove_assets_to_update(
@@ -307,7 +326,7 @@ def get_assets_to_add_and_update(
         # The last page contained all but valid data
         # We need to jump to a next page
         return [], []
-    if settings.AIOD.TESTING and url_params.offset >= 10:
+    if settings.AIOD.TESTING and url_params.offset >= 20:
         return None, None
 
     asset_ids: list[AssetId] = [obj["identifier"] for obj in assets]

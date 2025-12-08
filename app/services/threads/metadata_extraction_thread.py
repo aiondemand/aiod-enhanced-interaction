@@ -25,12 +25,14 @@ async def extract_metadata_for_assets_wrapper() -> None:
                 "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has started"
             )
             await extract_metadata_for_assets()
-            logging.info("Scheduled task for extracting asset metadata has ended.")
+            logging.info(
+                "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has ended."
+            )
         finally:
             job_lock.release()
     else:
         logging.info(
-            "Scheduled task for metadata extraction skipped (previous task is still running)"
+            "[RECURRING METADATA EXTRACTION] Scheduled task for metadata extraction skipped (previous task is still running)"
         )
 
 
@@ -47,7 +49,7 @@ async def extract_metadata_for_assets() -> None:
         except LocalServiceUnavailableException as e:
             logging.error(e)
             logging.error(
-                "The above error has been encountered in the metadata extraction thread. "
+                "[RECURRING METADATA EXTRACTION] The above error has been encountered in the metadata extraction thread. "
                 + "Entire Application is being terminated now"
             )
             os._exit(1)
@@ -55,7 +57,7 @@ async def extract_metadata_for_assets() -> None:
             # Non-critical errors - log and continue with other asset types
             logging.error(e)
             logging.error(
-                f"The above error has been encountered while processing {asset_type.value} "
+                f"[RECURRING METADATA EXTRACTION] The above error has been encountered while processing {asset_type.value} "
                 + "in the metadata extraction thread. Continuing with other asset types."
             )
 
@@ -77,23 +79,20 @@ async def process_assets_for_metadata_extraction(
             for asset_doc in assets_batch
         ]
 
-        try:
-            num_updated_emb = await update_milvus_batch(
-                embedding_store=embedding_store,
-                assets_batch=assets_batch,
-                assets_metadata=assets_metadata,
-                asset_type=asset_type,
-            )
-            total_updated_emb += num_updated_emb
-        except Exception as e:
-            logging.error(f"\t\tFailed to process batch for {asset_type.value}: {e}")
+        num_updated_emb = await update_milvus_batch(
+            embedding_store=embedding_store,
+            assets_batch=assets_batch,
+            assets_metadata=assets_metadata,
+            asset_type=asset_type,
+        )
+        total_updated_emb += num_updated_emb
 
         await AssetForMetadataExtraction.delete_docs(
             In(AssetForMetadataExtraction.asset_id, [asset.asset_id for asset in assets_batch])
         )
 
     logging.info(
-        f"\tMetadata extraction for {asset_type.value} completed: {total_updated_emb} embeddings updated in Milvus."
+        f"\t\t[RECURRING METADATA EXTRACTION] Metadata extraction for {asset_type.value} completed: {total_updated_emb} embeddings updated in Milvus."
     )
 
 

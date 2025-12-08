@@ -30,22 +30,24 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
     if job_lock.acquire(blocking=False):
         try:
             logging.info(
-                "[RECURRING DELETE] Scheduled task for deleting asset embeddings has started."
+                "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has started."
             )
             embedding_store = MilvusEmbeddingStore()
             to_time = utc_now()
 
             for asset_type in settings.AIOD.ASSET_TYPES:
-                logging.info(f"\tDeleting embeddings of asset type: {asset_type.value}")
+                logging.info(
+                    f"\t[RECURRING MILVUS DELETE] Deleting embeddings of asset type: {asset_type.value}"
+                )
                 await delete_asset_embeddings(embedding_store, asset_type, to_time=to_time)
 
             logging.info(
-                "[RECURRING DELETE] Scheduled task for deleting asset embeddings has ended."
+                "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has ended."
             )
         except MilvusUnavailableException as e:
             logging.error(e)
             logging.error(
-                "The above error has been encountered in the Milvus garbage collection thread. "
+                "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection thread. "
                 + "Entire Application is being terminated now"
             )
             os._exit(1)
@@ -53,12 +55,14 @@ async def delete_embeddings_of_aiod_assets_wrapper() -> None:
             # No need to shutdown the application unless Milvus is down
             logging.error(e)
             logging.error(
-                "The above error has been encountered in the Milvus garbage collection thread."
+                "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection thread."
             )
         finally:
             job_lock.release()
     else:
-        logging.info("Scheduled task for deleting skipped (previous task is still running)")
+        logging.info(
+            "[RECURRING MILVUS DELETE] Scheduled task for deleting skipped (previous task is still running)"
+        )
 
 
 async def delete_asset_embeddings(
@@ -96,7 +100,7 @@ async def delete_asset_embeddings(
 
     if len(candidates_for_del) > 0:
         logging.info(
-            f"\t{len(candidates_for_del)} assets ({asset_type.value}) have been chosen as candidates for deletion."
+            f"\t\t[RECURRING MILVUS DELETE] {len(candidates_for_del)} assets ({asset_type.value}) have been chosen as candidates for deletion."
         )
 
     ids_to_really_delete = [
@@ -117,5 +121,5 @@ async def delete_asset_embeddings(
             )
 
         logging.info(
-            f"\t{len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
+            f"\t\t[RECURRING MILVUS DELETE] {len(ids_to_really_delete)} assets ({asset_type.value}) have been deleted from the Milvus database."
         )

@@ -1,3 +1,5 @@
+# TODO CURRENTLY DEPRECATED VERSION OF THIS FILE
+
 import json
 import os
 from argparse import ArgumentParser
