@@ -190,7 +190,7 @@ async def process_aiod_assets_wrapper(
             embedding_store=embedding_store,
             asset_type=asset_type,
         )
-        num_emb_added = await _upsert_assets(
+        num_emb_added = await _insert_assets(
             assets_to_add,
             updated_asset_versions=emb_removed_response.asset_versions,
             asset_ids_accum=asset_ids_accum,
@@ -236,7 +236,7 @@ async def _remove_assets_to_update(
     return emb_removed_response
 
 
-async def _upsert_assets(
+async def _insert_assets(
     assets_to_add: list[dict],
     updated_asset_versions: list[int],
     asset_ids_accum: AssetIdsAccum,
@@ -284,7 +284,7 @@ async def _upsert_assets(
     if settings.extracts_metadata_from_asset(asset_type):
         [
             await AssetForMetadataExtraction.create_asset(
-                asset, asset_type=asset_type, asset_version=version["version"]
+                asset, asset_type=asset_type, asset_version=version["asset_version"]
             ).create_doc()
             for asset, version in zip(assets_to_add, asset_versions)
         ]

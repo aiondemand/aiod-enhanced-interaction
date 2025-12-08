@@ -64,7 +64,7 @@ async def process_assets_for_metadata_extraction(
     embedding_store: MilvusEmbeddingStore,
     asset_type: SupportedAssetType,
 ) -> None:
-    total_updated = 0
+    total_updated_emb = 0
 
     while True:
         assets_batch = await _prepare_mongo_asset_batch(asset_type).to_list()
@@ -78,13 +78,13 @@ async def process_assets_for_metadata_extraction(
         ]
 
         try:
-            num_updated = await update_milvus_batch(
+            num_updated_emb = await update_milvus_batch(
                 embedding_store=embedding_store,
                 assets_batch=assets_batch,
                 assets_metadata=assets_metadata,
                 asset_type=asset_type,
             )
-            total_updated += num_updated
+            total_updated_emb += num_updated_emb
         except Exception as e:
             logging.error(f"\t\tFailed to process batch for {asset_type.value}: {e}")
 
@@ -93,7 +93,7 @@ async def process_assets_for_metadata_extraction(
         )
 
     logging.info(
-        f"\tMetadata extraction for {asset_type.value} completed: {total_updated} assets updated in Milvus."
+        f"\tMetadata extraction for {asset_type.value} completed: {total_updated_emb} embeddings updated in Milvus."
     )
 
 
@@ -130,6 +130,6 @@ def _prepare_mongo_asset_batch(
 ) -> FindMany[AssetForMetadataExtraction]:
     return (
         AssetForMetadataExtraction.find(AssetForMetadataExtraction.asset_type == asset_type)
-        .sort("created_at", 1)
+        .sort(+AssetForMetadataExtraction.created_at)  # type: ignore
         .limit(BATCH_SIZE)
     )

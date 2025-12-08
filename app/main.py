@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
 from app.services.logging import setup_logger
 from app.models.asset_collection import AssetCollection
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
@@ -31,6 +32,7 @@ from app.services.threads.metadata_extraction_thread import extract_metadata_for
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
 IMMEDIATE_CRAWLER_THREAD: Thread | None = None
+IMMEDIATE_METADATA_EXTRACTION_THREAD: Thread | None = None
 SCHEDULER: BackgroundScheduler | None = None
 
 
@@ -161,6 +163,12 @@ async def app_init() -> None:
     if settings.CHATBOT.USE_CHATBOT:
         IMMEDIATE_CRAWLER_THREAD = start_async_thread(target_func=scraping_wrapper)
 
+    global IMMEDIATE_METADATA_EXTRACTION_THREAD
+    if settings.PERFORM_METADATA_EXTRACTION:
+        IMMEDIATE_METADATA_EXTRACTION_THREAD = start_async_thread(
+            target_func=extract_metadata_for_assets_wrapper
+        )
+
 
 async def init_mongo_client() -> AsyncIOMotorClient:
     db = AsyncIOMotorClient(settings.MONGO.CONNECTION_STRING, uuidRepresentation="standard")[
@@ -172,7 +180,13 @@ async def init_mongo_client() -> AsyncIOMotorClient:
     # Github Issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/103
     await init_beanie(
         database=db,
-        document_models=[AssetCollection, SimpleUserQuery, FilteredUserQuery, RecommenderUserQuery],
+        document_models=[
+            AssetCollection,
+            SimpleUserQuery,
+            FilteredUserQuery,
+            RecommenderUserQuery,
+            AssetForMetadataExtraction,
+        ],
         multiprocessing_mode=True,  # temporary patch
     )
 
@@ -188,6 +202,8 @@ async def app_shutdown() -> None:
         IMMEDIATE_EMB_THREAD.join(timeout=5)
     if IMMEDIATE_CRAWLER_THREAD:
         IMMEDIATE_CRAWLER_THREAD.join(timeout=5)
+    if IMMEDIATE_METADATA_EXTRACTION_THREAD:
+        IMMEDIATE_METADATA_EXTRACTION_THREAD.join(timeout=5)
     if SCHEDULER:
         SCHEDULER.shutdown(wait=False)
 

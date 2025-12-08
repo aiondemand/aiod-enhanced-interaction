@@ -123,6 +123,7 @@ We don't have any development environment set up utilizing Docker containers.
 Create a Python v11 environment preferably using conda:
 - `conda create --name aiod-env python=3.11`
 - `conda activate aiod-env; pip install .`
+- Optional: `playwright install` (Required when `CHATBOT__USE_CHATBOT` is set to True)
 
 ### Dependencies
 

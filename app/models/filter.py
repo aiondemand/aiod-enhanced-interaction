@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Type
+from typing import Literal, Type, cast
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -38,7 +38,10 @@ class Filter(BaseModel):
     def build_from_llm_condition(condition: LLMStructedCondition) -> Filter:
         kwargs = condition.model_dump()
         for it in range(len(kwargs["expressions"])):
-            kwargs["expressions"][it]["value"] = kwargs["expressions"][it].pop("processed_value")
+            processed_value = kwargs["expressions"][it].pop("processed_value")
+            if processed_value is None:
+                raise ValueError("This should not be None")
+            kwargs["expressions"][it]["value"] = cast(PrimitiveTypes, processed_value)
 
         return Filter(**kwargs)
 

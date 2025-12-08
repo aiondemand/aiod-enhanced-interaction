@@ -289,7 +289,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                     {"vector": emb, "asset_id": asset_id, **meta}
                     for emb, asset_id, meta in zip(all_embeddings, all_asset_ids, all_metadata)
                 ]
-                total_inserted += self._upsert_records(collection_name, data)
+                total_inserted += self._insert_records(collection_name, data, upsert=False)
 
                 # Store data locally into JSON files as well if we wish to do so
                 # Used for storing cold start data in JSON format
@@ -313,9 +313,11 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         return total_inserted
 
-    def _upsert_records(self, collection_name: str, data: list[dict]) -> int:
+    def _insert_records(self, collection_name: str, data: list[dict], upsert: bool = False) -> int:
+        milvus_operation = self.client.upsert if upsert else self.client.insert
+
         try:
-            self.client.upsert(collection_name=collection_name, data=data)
+            milvus_operation(collection_name=collection_name, data=data)
             return len(data)
         except Exception:
             logging.warning("Failed to insert Milvus batch. Attempting per-row insert.")
@@ -323,7 +325,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         inserted = 0
         for row in data:
             try:
-                self.client.upsert(collection_name=collection_name, data=[row])
+                milvus_operation(collection_name=collection_name, data=[row])
                 inserted += 1
             except Exception:
                 logging.warning(
@@ -333,10 +335,10 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                 default_fields = ["vector", "asset_id", "asset_version"]
                 row_no_metadata = {field: row[field] for field in default_fields}
 
-                if row.get("id", None) is not None:
+                if upsert and row.get("id", None) is not None:
                     row_no_metadata.update({"id": row["id"]})
 
-                self.client.upsert(collection_name=collection_name, data=[row_no_metadata])
+                milvus_operation(collection_name=collection_name, data=[row_no_metadata])
                 inserted += 1
 
         return inserted
@@ -414,7 +416,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
     def upsert_records(self, records: list[dict], asset_type: SupportedAssetType) -> int:
         collection_name = self.get_collection_name(asset_type)
-        return self._upsert_records(collection_name, records)
+        return self._insert_records(collection_name, records, upsert=True)
 
     def read_records(self, asset_type: SupportedAssetType, **kwargs) -> list[dict]:
         collection_name = self.get_collection_name(asset_type)

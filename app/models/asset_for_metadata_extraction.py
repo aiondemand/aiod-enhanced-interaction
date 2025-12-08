@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
 from beanie import Indexed
 
 
 from app.schemas.asset_id import AssetId
-from app.models.mongo import MongoDocument
+from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.enums import SupportedAssetType
 
 
-class AssetForMetadataExtraction(MongoDocument):
-    asset_id: Indexed[AssetId]
+class AssetForMetadataExtraction(MongoDocument, BaseDatabaseEntity):
+    asset_id: Annotated[AssetId, Indexed()]
     asset_type: SupportedAssetType
     asset_json_str: str
 
