@@ -174,6 +174,12 @@ class AIoDConfig(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def change_window_size(self) -> AIoDConfig:
+        if self.TESTING:
+            self.WINDOW_SIZE = 10
+        return self
+
     @property
     def OFFSET_INCREMENT(self) -> int:
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))

@@ -177,7 +177,6 @@ async def process_aiod_assets_wrapper(
 
     url_params = RequestParams(
         offset=last_update.aiod_asset_offset,
-        limit=settings.AIOD.WINDOW_SIZE,
         from_time=query_from_time,
         to_time=last_update.to_time,
     )

@@ -71,7 +71,6 @@ async def delete_asset_embeddings(
     all_aiod_asset_ids: list[AssetId] = []
     url_params = RequestParams(
         offset=0,
-        limit=settings.AIOD.WINDOW_SIZE,
         to_time=to_time,
     )
     milvus_asset_ids = embedding_store.get_all_asset_ids(asset_type)

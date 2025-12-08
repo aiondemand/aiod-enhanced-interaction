@@ -57,7 +57,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 60s
+      start_period: 120s
     restart: always
     {% if USE_GPU == "true" %}
     deploy:
@@ -72,7 +72,7 @@ services:
 
   #Ollama service
   ollama:
-    image: ollama/ollama:0.5.4
+    image: ollama/ollama:0.11.0
     labels:
       autoheal-label: true
     restart: always

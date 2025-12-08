@@ -1,15 +1,13 @@
 from functools import lru_cache
-from urllib.parse import urljoin
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, ModelRetry, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
 from app.schemas.asset_metadata.base_schemas import (
     AssetSpecific_AiExtractedMetadata,
     AssetSpecific_UserQueryParsedMetadata,
 )
+from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.models.dependencies import NormalizationAgentDeps
 from app.services.metadata_filtering.models.outputs import LLM_NormalizedValue
 from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZATION_SYSTEM_PROMPT
@@ -17,12 +15,7 @@ from app.services.metadata_filtering.prompts.normalization_agent import NORMALIZ
 
 class NormalizationAgent:
     def __init__(self) -> None:
-        # Ollama model
-        ollama_url = urljoin(str(settings.OLLAMA.URI), "v1")
-        self.model = OpenAIChatModel(
-            model_name=settings.OLLAMA.MODEL_NAME,
-            provider=OpenAIProvider(base_url=ollama_url),
-        )
+        self.model = prepare_ollama_model()
         self.model_settings = ModelSettings(
             max_tokens=settings.OLLAMA.MAX_TOKENS,
         )

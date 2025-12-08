@@ -1,10 +1,9 @@
 from typing import cast
-from urllib.parse import urljoin
 
 from pydantic import TypeAdapter, ValidationError
-from pydantic_ai.models.openai import OpenAIChatModel
 
 from app.config import settings
+from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.services.metadata_filtering.field_valid_values import field_valid_value_service
 from app.schemas.enums import SupportedAssetType
@@ -19,23 +18,15 @@ from app.services.metadata_filtering.prompts.nl_condition_parsing_agent import (
 )
 
 from functools import lru_cache
-from urllib.parse import urljoin
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
 
 
 class NLConditionParsingAgent:
     def __init__(self) -> None:
-        # Ollama model
-        ollama_url = urljoin(str(settings.OLLAMA.URI), "v1")
-        self.model = OpenAIChatModel(
-            model_name=settings.OLLAMA.MODEL_NAME,
-            provider=OpenAIProvider(base_url=ollama_url),
-        )
+        self.model = prepare_ollama_model()
         self.model_settings = ModelSettings(
             max_tokens=settings.OLLAMA.MAX_TOKENS,
         )
