@@ -284,7 +284,7 @@ async def _upsert_assets(
     if settings.extracts_metadata_from_asset(asset_type):
         [
             await AssetForMetadataExtraction.create_asset(
-                asset, asset_type=asset_type, version=version["version"]
+                asset, asset_type=asset_type, asset_version=version["version"]
             ).create_doc()
             for asset, version in zip(assets_to_add, asset_versions)
         ]

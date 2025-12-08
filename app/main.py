@@ -26,6 +26,7 @@ from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_asse
 from app.services.threads.threads import run_async_in_thread, start_async_thread
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
 from app.services.threads.db_gc_thread import mongo_cleanup
+from app.services.threads.metadata_extraction_thread import extract_metadata_for_assets_wrapper
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
@@ -70,7 +71,7 @@ if settings.PERFORM_LLM_QUERY_PARSING:
     )
     app.include_router(
         filtered_query_router.router,
-        prefix=f"f{settings.API_VERSION}/filtered_query",
+        prefix=f"{settings.API_VERSION}/filtered_query",
         tags=["filtered_query"],
     )
 
@@ -129,6 +130,15 @@ async def app_init() -> None:
         ),
         CronTrigger(hour=0, minute=0),
     )
+    # Schedule to run daily at 2:00 AM to avoid conflicts with other jobs
+    if settings.PERFORM_METADATA_EXTRACTION:
+        SCHEDULER.add_job(
+            partial(
+                run_async_in_thread,
+                target_func=extract_metadata_for_assets_wrapper,
+            ),
+            CronTrigger(hour=2, minute=0),
+        )
     # Recurring scraping of AIoD websites
     if settings.CHATBOT.USE_CHATBOT:
         SCHEDULER.add_job(
@@ -145,6 +155,7 @@ async def app_init() -> None:
     IMMEDIATE_EMB_THREAD = start_async_thread(
         target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=True)
     )
+
     # Immediate crawling of AIoD websites
     global IMMEDIATE_CRAWLER_THREAD
     if settings.CHATBOT.USE_CHATBOT:

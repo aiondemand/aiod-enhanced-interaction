@@ -73,6 +73,16 @@ class EmbeddingStore(Generic[SearchParams], ABC):
     ) -> list[list[float]] | None:
         raise NotImplementedError
 
+    #### More general functions
+
+    @abstractmethod
+    def upsert_records(self, records: list[dict], asset_type: SupportedAssetType) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def read_records(self, asset_type: SupportedAssetType, **kwargs) -> list[dict]:
+        raise NotImplementedError
+
 
 class MilvusClientResilientWrapper(MilvusClient):
     def __init__(self, uri: str, token: str | None = None) -> None:
@@ -279,7 +289,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                     {"vector": emb, "asset_id": asset_id, **meta}
                     for emb, asset_id, meta in zip(all_embeddings, all_asset_ids, all_metadata)
                 ]
-                total_inserted += self._insert_records(collection_name, data)
+                total_inserted += self._upsert_records(collection_name, data)
 
                 # Store data locally into JSON files as well if we wish to do so
                 # Used for storing cold start data in JSON format
@@ -303,9 +313,9 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         return total_inserted
 
-    def _insert_records(self, collection_name: str, data: list[dict]) -> int:
+    def _upsert_records(self, collection_name: str, data: list[dict]) -> int:
         try:
-            self.client.insert(collection_name=collection_name, data=data)
+            self.client.upsert(collection_name=collection_name, data=data)
             return len(data)
         except Exception:
             logging.warning("Failed to insert Milvus batch. Attempting per-row insert.")
@@ -313,16 +323,20 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         inserted = 0
         for row in data:
             try:
-                self.client.insert(collection_name=collection_name, data=[row])
+                self.client.upsert(collection_name=collection_name, data=[row])
                 inserted += 1
             except Exception:
                 logging.warning(
                     "Failed to insert Milvus row for asset '%s' with metadata. Retrying without metadata.",
                     row.get("asset_id"),
                 )
-                row_no_metadata = {"vector": row["vector"], "asset_id": row["asset_id"]}
+                default_fields = ["vector", "asset_id", "asset_version"]
+                row_no_metadata = {field: row[field] for field in default_fields}
 
-                self.client.insert(collection_name=collection_name, data=[row_no_metadata])
+                if row.get("id", None) is not None:
+                    row_no_metadata.update({"id": row["id"]})
+
+                self.client.upsert(collection_name=collection_name, data=[row_no_metadata])
                 inserted += 1
 
         return inserted
@@ -397,3 +411,11 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         except Exception as e:
             logging.error(f"Failed to retrieve embeddings for asset_id '{asset_id}': {e}")
             return None
+
+    def upsert_records(self, records: list[dict], asset_type: SupportedAssetType) -> int:
+        collection_name = self.get_collection_name(asset_type)
+        return self._upsert_records(collection_name, records)
+
+    def read_records(self, asset_type: SupportedAssetType, **kwargs) -> list[dict]:
+        collection_name = self.get_collection_name(asset_type)
+        return list(self.client.query(collection_name, **kwargs))

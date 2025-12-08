@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from beanie import Indexed
+
 
 from app.schemas.asset_id import AssetId
 from app.models.mongo import MongoDocument
@@ -9,23 +11,25 @@ from app.schemas.enums import SupportedAssetType
 
 
 class AssetForMetadataExtraction(MongoDocument):
-    # TODO create index on top of the asset_id
-    asset_id: AssetId
+    asset_id: Indexed[AssetId]
     asset_type: SupportedAssetType
     asset_json_str: str
 
     # We check whether the version found in the MongoDB is the same as the last version found in the Milvus
-    version: int
+    asset_version: int
+
+    class Settings:
+        name = "assetsForMetadataExtraction"
 
     @classmethod
     def create_asset(
-        cls, asset: dict, asset_type: SupportedAssetType, version: int = 0
+        cls, asset: dict, asset_type: SupportedAssetType, asset_version: int = 0
     ) -> AssetForMetadataExtraction:
         return cls(
             asset_id=asset["identifier"],
             asset_json_str=json.dumps(asset),
             asset_type=asset_type,
-            version_number=version,
+            asset_version=asset_version,
         )
 
     @property

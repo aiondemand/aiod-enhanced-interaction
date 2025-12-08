@@ -301,16 +301,18 @@ class Settings(BaseSettings):
 
     def extracts_metadata_from_asset(self, asset_type: SupportedAssetType) -> bool:
         return (
-            self.USING_OLLAMA
-            and self.METADATA_FILTERING.ENABLED
+            self.PERFORM_METADATA_EXTRACTION
             and asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         )
 
     @property
+    def PERFORM_METADATA_EXTRACTION(self) -> bool:
+        return self.USING_OLLAMA and self.METADATA_FILTERING.ENABLED
+
+    @property
     def PERFORM_LLM_QUERY_PARSING(self) -> bool:
         return (
-            self.USING_OLLAMA
-            and self.METADATA_FILTERING.ENABLED
+            self.PERFORM_METADATA_EXTRACTION
             and len(self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION) > 0
         )
 

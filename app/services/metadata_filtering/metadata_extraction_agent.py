@@ -41,7 +41,7 @@ class MetadataExtractionWrapper:
         return {k: v for k, v in obj.items() if not_empty(v)}
 
     @classmethod
-    async def extract_metadata(cls, obj: dict, asset_type: SupportedAssetType):
+    async def extract_metadata(cls, obj: dict, asset_type: SupportedAssetType) -> dict:
         if metadata_extractor_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 

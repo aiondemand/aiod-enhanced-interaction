@@ -108,7 +108,10 @@ async def get_fields_to_filter_by(
         fields_schema[field].pop("default", None)
         fields_schema[field].pop("title", None)
 
-    return {"$defs": model_schema["$defs"], "fields_to_filter_by": fields_schema}
+    response_dict = {"fields_to_filter_by": fields_schema}
+    if model_schema.get("$defs", None) is not None:
+        response_dict.update({"$defs": model_schema["$defs"]})
+    return response_dict
 
 
 @router.get("/schemas/get_filter_schema")
