@@ -1,28 +1,31 @@
 from __future__ import annotations
 
-from functools import partial
-from typing import Annotated, Any, Callable, Literal, Type, TypeAlias
+from typing import Literal, Type, cast
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError
 
-from app.schemas.asset_metadata.operations import SchemaOperations
+from app.schemas.asset_metadata.types import ComparisonOperator, LogicalOperator, PrimitiveTypes
 from app.schemas.enums import SupportedAssetType
-
-PrimitiveTypes: TypeAlias = int | float | Annotated[str, Field(max_length=50)]
+from app.services.metadata_filtering.models.outputs import LLMStructedCondition
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 
 
 class Expression(BaseModel):
+    """An Expression represents a single comparison between a value and a metadata field"""
+
     value: PrimitiveTypes = Field(..., description="Value to be compared to the metadata field")
-    comparison_operator: Literal["<", ">", "<=", ">=", "==", "!="] = Field(
+    comparison_operator: ComparisonOperator = Field(
         ...,
-        description="Allowed comparison operator to be used for comparing the value to the metadata field",
+        description="Comparison operator to be used for comparing the value to the metadata field",
     )
 
 
 class Filter(BaseModel):
+    """A filter consists of one or more expressions joined with a logical operator"""
+
     field: str = Field(..., max_length=30, description="Name of the metadata field to filter by")
-    logical_operator: Literal["AND", "OR"] = Field(
+    logical_operator: LogicalOperator = Field(
         ..., description="Allowed logical operator to be used for combining multiple expressions"
     )
     expressions: list[Expression] = Field(
@@ -31,26 +34,24 @@ class Filter(BaseModel):
         max_length=5,
     )
 
-    @field_validator("field", mode="before")
-    @classmethod
-    def validate_field(cls, v: str) -> str:
-        return v.lower()
+    @staticmethod
+    def build_from_llm_condition(condition: LLMStructedCondition) -> Filter:
+        kwargs = condition.model_dump()
+        for it in range(len(kwargs["expressions"])):
+            processed_value = kwargs["expressions"][it].pop("processed_value")
+            if processed_value is None:
+                raise ValueError("This should not be None")
+            kwargs["expressions"][it]["value"] = cast(PrimitiveTypes, processed_value)
 
-    @field_validator("logical_operator", mode="before")
-    @classmethod
-    def validate_logical_operator(cls, v: str) -> str:
-        return v.upper()
-
-    @classmethod
-    def _filter_validator_wrapper(cls, value: Any, func: Callable) -> Any:
-        return func(value)
+        return Filter(**kwargs)
 
     @classmethod
     def create_field_specific_filter_type(
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
-        asset_schema = SchemaOperations.get_asset_schema(asset_type)
-        if field_name not in SchemaOperations.get_schema_field_names(asset_schema):
+        asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
+
+        if field_name not in list(asset_schema.model_fields.keys()):
             raise HTTPException(status_code=400, detail=f"Invalid field value '{field_name}'")
 
         expression_class = cls._create_field_specific_expression_type(asset_type, field_name)
@@ -66,29 +67,11 @@ class Filter(BaseModel):
                 ..., description=Filter.model_fields["logical_operator"].description
             ),
             "expressions": Field(
-                ..., description=Filter.model_fields["expressions"].description, max_length=5
+                ...,
+                description=Filter.model_fields["expressions"].description,
+                max_length=5,
             ),
         }
-
-        # apply original validators from the Filter class
-        field_validators = SchemaOperations.get_field_validators(Filter, "field")
-        logical_operator_validators = SchemaOperations.get_field_validators(
-            Filter, "logical_operator"
-        )
-        field_names = ["field"] * len(field_validators) + ["logical_operator"] * len(
-            logical_operator_validators
-        )
-        filter_class_dict.update(
-            {
-                f"{func_name}_wrapper": field_validator(field_name, mode=decor.info.mode)(
-                    partial(cls._filter_validator_wrapper, func=getattr(Filter, func_name))
-                )
-                for (func_name, decor), field_name in zip(
-                    field_validators + logical_operator_validators, field_names
-                )
-            }
-        )
-
         return type(
             f"Filter_{asset_type.value.capitalize()}_{field_name.capitalize()}",
             (BaseModel,),
@@ -99,9 +82,8 @@ class Filter(BaseModel):
     def _create_field_specific_expression_type(
         cls, asset_type: SupportedAssetType, field_name: str
     ) -> Type[BaseModel]:
-        asset_schema = SchemaOperations.get_asset_schema(asset_type)
-        annotation = SchemaOperations.get_inner_annotation(asset_schema, field_name)
-        field_info = SchemaOperations.get_inner_field_info(asset_schema, field_name)
+        asset_schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
+        annotation = asset_schema.get_inner_annotation(field_name, with_valid_values_enum=True)
 
         expression_class_dict = {
             "__annotations__": {
@@ -110,16 +92,11 @@ class Filter(BaseModel):
                     *asset_schema.get_supported_comparison_operators(field_name)
                 ],
             },
-            "value": field_info,
+            "value": Field(..., description=asset_schema.model_fields[field_name].description),
             "comparison_operator": Field(
                 ..., description=Expression.model_fields["comparison_operator"].description
             ),
         }
-        expression_class_dict.update(
-            SchemaOperations.create_new_field_validators(
-                asset_schema, orig_field_name=field_name, new_field_name="value"
-            )
-        )
         return type(
             f"Expression_{asset_type.value.capitalize()}_{field_name.capitalize()}",
             (BaseModel,),
@@ -152,10 +129,11 @@ class Filter(BaseModel):
                 ],
             ).model_dump(),
             Filter(
-                field="datapoints_lower_bound",
+                field="modalities",
                 logical_operator="AND",
                 expressions=[
-                    Expression(value=10000, comparison_operator=">"),
+                    Expression(value="image", comparison_operator="=="),
+                    Expression(value="text", comparison_operator="!="),
                 ],
             ).model_dump(),
         ]

@@ -1,7 +1,7 @@
 from beanie import init_beanie
+import logfire
 from motor.motor_asyncio import AsyncIOMotorClient
 from functools import partial
-import logging
 from contextlib import asynccontextmanager
 from threading import Thread
 
@@ -11,6 +11,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app.services.logging import setup_logger
 from app.models.asset_collection import AssetCollection
 from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.routers import filtered_sem_search as filtered_query_router
@@ -25,10 +27,12 @@ from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_asse
 from app.services.threads.threads import run_async_in_thread, start_async_thread
 from app.services.threads.search_thread import QUERY_QUEUE, search_thread
 from app.services.threads.db_gc_thread import mongo_cleanup
+from app.services.threads.metadata_extraction_thread import extract_metadata_for_assets_wrapper
 
 QUERY_THREAD: Thread | None = None
 IMMEDIATE_EMB_THREAD: Thread | None = None
 IMMEDIATE_CRAWLER_THREAD: Thread | None = None
+IMMEDIATE_METADATA_EXTRACTION_THREAD: Thread | None = None
 SCHEDULER: BackgroundScheduler | None = None
 
 
@@ -65,11 +69,11 @@ app.include_router(
 
 if settings.PERFORM_LLM_QUERY_PARSING:
     app.include_router(
-        filtered_query_router.router, prefix="/experimental/filtered_query", tags=["filtered_query"]
+        filtered_query_router.router, prefix=f"/filtered_query", tags=["filtered_query"]
     )
     app.include_router(
         filtered_query_router.router,
-        prefix=f"{settings.API_VERSION}/experimental/filtered_query",
+        prefix=f"{settings.API_VERSION}/filtered_query",
         tags=["filtered_query"],
     )
 
@@ -81,17 +85,16 @@ app.add_middleware(
 )
 
 
-def setup_logger() -> None:
-    format_string = "%(asctime)s [%(levelname)s] %(name)s - %(message)s (%(filename)s:%(lineno)d)"
-    logging.basicConfig(
-        level=logging.INFO,
-        format=format_string,
-        datefmt="%Y-%m-%dT%H:%M:%S%z",
+def setup_logfire() -> None:
+    logfire.configure(
+        token=settings.LOGFIRE_TOKEN, send_to_logfire="if-token-present", console=False
     )
+    logfire.instrument_pydantic_ai()
 
 
 async def app_init() -> None:
     setup_logger()
+    setup_logfire()
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()
@@ -129,6 +132,15 @@ async def app_init() -> None:
         ),
         CronTrigger(hour=0, minute=0),
     )
+    # Schedule to run daily at 2:00 AM to avoid conflicts with other jobs
+    if settings.PERFORM_METADATA_EXTRACTION:
+        SCHEDULER.add_job(
+            partial(
+                run_async_in_thread,
+                target_func=extract_metadata_for_assets_wrapper,
+            ),
+            CronTrigger(hour=2, minute=0),
+        )
     # Recurring scraping of AIoD websites
     if settings.CHATBOT.USE_CHATBOT:
         SCHEDULER.add_job(
@@ -145,10 +157,17 @@ async def app_init() -> None:
     IMMEDIATE_EMB_THREAD = start_async_thread(
         target_func=partial(compute_embeddings_for_aiod_assets_wrapper, first_invocation=True)
     )
+
     # Immediate crawling of AIoD websites
     global IMMEDIATE_CRAWLER_THREAD
     if settings.CHATBOT.USE_CHATBOT:
         IMMEDIATE_CRAWLER_THREAD = start_async_thread(target_func=scraping_wrapper)
+
+    global IMMEDIATE_METADATA_EXTRACTION_THREAD
+    if settings.PERFORM_METADATA_EXTRACTION:
+        IMMEDIATE_METADATA_EXTRACTION_THREAD = start_async_thread(
+            target_func=extract_metadata_for_assets_wrapper
+        )
 
 
 async def init_mongo_client() -> AsyncIOMotorClient:
@@ -161,7 +180,13 @@ async def init_mongo_client() -> AsyncIOMotorClient:
     # Github Issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/103
     await init_beanie(
         database=db,
-        document_models=[AssetCollection, SimpleUserQuery, FilteredUserQuery, RecommenderUserQuery],
+        document_models=[
+            AssetCollection,
+            SimpleUserQuery,
+            FilteredUserQuery,
+            RecommenderUserQuery,
+            AssetForMetadataExtraction,
+        ],
         multiprocessing_mode=True,  # temporary patch
     )
 
@@ -177,6 +202,8 @@ async def app_shutdown() -> None:
         IMMEDIATE_EMB_THREAD.join(timeout=5)
     if IMMEDIATE_CRAWLER_THREAD:
         IMMEDIATE_CRAWLER_THREAD.join(timeout=5)
+    if IMMEDIATE_METADATA_EXTRACTION_THREAD:
+        IMMEDIATE_METADATA_EXTRACTION_THREAD.join(timeout=5)
     if SCHEDULER:
         SCHEDULER.shutdown(wait=False)
 

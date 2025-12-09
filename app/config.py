@@ -12,6 +12,14 @@ from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 
 
+SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING = [
+    SupportedAssetType.DATASETS,
+    SupportedAssetType.ML_MODELS,
+    SupportedAssetType.PUBLICATIONS,
+    SupportedAssetType.EDUCATIONAL_RESOURCES,
+]
+
+
 class Validators:
     @classmethod
     def validate_bool(cls, value: str | bool) -> bool:
@@ -35,7 +43,6 @@ class MilvusConfig(BaseModel):
     COLLECTION_PREFIX: str = Field(..., max_length=100)
     BATCH_SIZE: int = Field(500, gt=0)
     STORE_CHUNKS: bool = Field(True)
-    EXTRACT_METADATA: bool = Field(False)
     TIMEOUT: int = Field(60, gt=0)
 
     @field_validator("COLLECTION_PREFIX", mode="before")
@@ -47,7 +54,7 @@ class MilvusConfig(BaseModel):
             raise ValueError("Collection name can only contain letters, numbers, and underscores.")
         return value
 
-    @field_validator("STORE_CHUNKS", "EXTRACT_METADATA", mode="before")
+    @field_validator("STORE_CHUNKS", mode="before")
     @classmethod
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
@@ -55,6 +62,18 @@ class MilvusConfig(BaseModel):
     @property
     def MILVUS_TOKEN(self):
         return f"{self.USER}:{self.PASS}"
+
+
+class MetadataFilteringConfig(BaseModel):
+    ENABLED: bool = Field(True)
+    # Whether we wish to run a subagent checking values adhere to fields' associated enums
+    # For both the metadata extraction & user query parsing
+    ENFORCE_ENUMS: bool = Field(True)
+
+    @field_validator("ENABLED", "ENFORCE_ENUMS", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str | bool) -> bool:
+        return Validators.validate_bool(value)
 
 
 class CrawlerConfig(BaseModel):
@@ -106,17 +125,15 @@ class CrawlerConfig(BaseModel):
 
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
-    MODEL_NAME: str = Field("llama3.1:8b", max_length=50)
-    NUM_PREDICT: int = Field(1_024, gt=0)
-    NUM_CTX: int = Field(4_096, gt=0)
-    TIMEOUT: int = Field(120, gt=0)
+    MODEL_NAME: str = Field("qwen3:8b")
+    MAX_TOKENS: int = Field(1_024, gt=0)
 
 
 class AIoDConfig(BaseModel):
     URL: AnyUrl = Field(...)
     COMMA_SEPARATED_ASSET_TYPES: str = Field(...)
     COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: str = Field(...)
-    WINDOW_SIZE: int = Field(1000, le=1000, gt=1)
+    WINDOW_SIZE: int = Field(1000, le=1000, ge=1)
     WINDOW_OVERLAP: float = Field(0.1, lt=1, ge=0)
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
     SEARCH_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(0.1, ge=0)
@@ -157,6 +174,12 @@ class AIoDConfig(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def change_window_size(self) -> AIoDConfig:
+        if self.TESTING:
+            self.WINDOW_SIZE = 10
+        return self
+
     @property
     def OFFSET_INCREMENT(self) -> int:
         return int(settings.AIOD.WINDOW_SIZE * (1 - settings.AIOD.WINDOW_OVERLAP))
@@ -173,8 +196,16 @@ class AIoDConfig(BaseModel):
 
         if not set(types).issubset(set(self.ASSET_TYPES)):
             raise ValueError(
-                "AIoD assets for metadata extraction is not a subset of all AIoD assets we support"
+                "AIoD assets for metadata extraction (env var: 'AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION') "
+                + "is not a subset of all AIoD assets we support (env var: 'AIOD__COMMA_SEPARATED_ASSET_TYPES')"
             )
+        if not set(types).issubset(set(SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING)):
+            diff = set(types) - set(SUPPORTED_ASSET_TYPES_FOR_METADATA_FILTERING)
+
+            raise ValueError(
+                f"We DO NOT support the following asset types for metadata extraction: {[asset.value for asset in diff]}"
+            )
+
         return types
 
     def get_assets_url(self, asset_type: SupportedAssetType) -> str:
@@ -182,6 +213,9 @@ class AIoDConfig(BaseModel):
 
     def get_asset_by_id_url(self, asset_id: AssetId, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
+
+    def get_taxonomy_url(self, taxonomy: str) -> str:
+        return urljoin(str(self.URL), f"{taxonomy}")
 
 
 class MongoConfig(BaseModel):
@@ -238,7 +272,8 @@ class Settings(BaseSettings):
     MILVUS: MilvusConfig = Field(...)
     MONGO: MongoConfig = Field(...)
     AIOD: AIoDConfig = Field(...)
-    OLLAMA: OllamaConfig = Field(...)
+    METADATA_FILTERING: MetadataFilteringConfig = Field(default=MetadataFilteringConfig())
+    OLLAMA: OllamaConfig = Field(default=OllamaConfig())
     CHATBOT: ChatbotConfig = Field(...)
     CRAWLER: CrawlerConfig = Field(...)
 
@@ -249,6 +284,8 @@ class Settings(BaseSettings):
     CONNECTION_NUM_RETRIES: int = Field(5, gt=0)
     CONNECTION_SLEEP_TIME: int = Field(30, gt=0)
     QUERY_EXPIRATION_TIME_IN_MINUTES: int = Field(10, gt=0)
+
+    LOGFIRE_TOKEN: str | None = Field(None)
 
     @field_validator("USE_GPU", mode="before")
     @classmethod
@@ -265,10 +302,23 @@ class Settings(BaseSettings):
         raise ValueError("Invalid loadpath for the model.")
 
     @property
+    def USING_OLLAMA(self) -> bool:
+        return self.OLLAMA.URI is not None
+
+    def extracts_metadata_from_asset(self, asset_type: SupportedAssetType) -> bool:
+        return (
+            self.PERFORM_METADATA_EXTRACTION
+            and asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
+        )
+
+    @property
+    def PERFORM_METADATA_EXTRACTION(self) -> bool:
+        return self.USING_OLLAMA and self.METADATA_FILTERING.ENABLED
+
+    @property
     def PERFORM_LLM_QUERY_PARSING(self) -> bool:
         return (
-            self.MILVUS.EXTRACT_METADATA
-            and self.OLLAMA.URI is not None
+            self.PERFORM_METADATA_EXTRACTION
             and len(self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION) > 0
         )
 

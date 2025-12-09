@@ -33,7 +33,7 @@ async def mongo_cleanup() -> None:
             job_lock.release()
     else:
         logging.info(
-            "Scheduled task for cleaning up MongoDB skipped (previous task is still running)"
+            "[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB skipped (previous task is still running)"
         )
 
 
@@ -45,12 +45,14 @@ async def delete_expired_queries(current_time: datetime) -> None:
     ]
 
     for query_type in query_types_to_delete:
-        res = await query_type.delete_doc(
+        res = await query_type.delete_docs(
             query_type.expires_at != None,
             query_type.expires_at < current_time,  # type: ignore[operator]
         )
         if res.deleted_count > 0:
-            logging.info(f"\tDeleted {res.deleted_count} {query_type.__name__} queries")
+            logging.info(
+                f"\t[RECURRING MONGODB DELETE] Deleted {res.deleted_count} {query_type.__name__} queries"
+            )
 
 
 async def delete_empty_asset_collections() -> None:

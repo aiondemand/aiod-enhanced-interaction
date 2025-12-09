@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import inspect
 import json
 import logging
 import os
 from abc import ABC, abstractmethod
 from functools import partial
+from pathlib import Path
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from pymilvus import DataType, MilvusClient, MilvusUnavailableException
+from pymilvus import DataType, MilvusClient, MilvusUnavailableException, CollectionSchema
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -24,6 +26,12 @@ from app.services.inference.model import AiModel
 from app.services.resilience import retry_loop
 
 SearchParams = TypeVar("SearchParams", bound=VectorSearchParams)
+
+
+@dataclass
+class RemoveEmbeddingsResponse:
+    asset_versions: list[int] = field(default_factory=list)
+    emb_delete_count: int = 0
 
 
 class EmbeddingStore(Generic[SearchParams], ABC):
@@ -42,7 +50,9 @@ class EmbeddingStore(Generic[SearchParams], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def remove_embeddings(self, asset_ids: list[AssetId], asset_type: SupportedAssetType) -> int:
+    def remove_embeddings(
+        self, asset_ids: list[AssetId], asset_type: SupportedAssetType
+    ) -> RemoveEmbeddingsResponse:
         raise NotImplementedError
 
     @abstractmethod
@@ -61,6 +71,16 @@ class EmbeddingStore(Generic[SearchParams], ABC):
     def get_asset_embeddings(
         self, asset_id: AssetId, asset_type: SupportedAssetType
     ) -> list[list[float]] | None:
+        raise NotImplementedError
+
+    #### More general functions
+
+    @abstractmethod
+    def upsert_records(self, records: list[dict], asset_type: SupportedAssetType) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def read_records(self, asset_type: SupportedAssetType, **kwargs) -> list[dict]:
         raise NotImplementedError
 
 
@@ -86,9 +106,9 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         verbose: bool = False,
     ) -> None:
         self.emb_dimensionality = 1024
-        self.extract_metadata = settings.MILVUS.EXTRACT_METADATA
         self.chunk_embedding_store = settings.MILVUS.STORE_CHUNKS
         self.verbose = verbose
+        self.metadata_field_config = self._load_metadata_field_config()
 
         try:
             self.client = MilvusClientResilientWrapper(
@@ -125,40 +145,10 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             schema.add_field("id", DataType.INT64, is_primary=True)
             schema.add_field("vector", DataType.FLOAT_VECTOR, dim=1024)
             schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
+            schema.add_field("asset_version", DataType.INT64)
 
-            if self.extract_metadata:
-                if asset_type == SupportedAssetType.DATASETS:
-                    # TODO
-                    # Currently this schema reflects some what easily accessible and constant
-                    # metadata we can retrieve from HuggingFace
-
-                    # TODO once we have arbitrary metadata fields, we should come up with some
-                    # value restrictions (e.g., string max length, array max capacity, etc.)
-                    # This will be done under the issue #21 (https://github.com/aiondemand/aiod-enhanced-interaction/issues/21)
-                    schema.add_field(
-                        "date_published", DataType.VARCHAR, max_length=22, nullable=True
-                    )
-                    schema.add_field("size_in_mb", DataType.FLOAT, nullable=True)
-                    schema.add_field("license", DataType.VARCHAR, max_length=20, nullable=True)
-
-                    schema.add_field(
-                        "task_types",
-                        DataType.ARRAY,
-                        element_type=DataType.VARCHAR,
-                        max_length=50,
-                        max_capacity=100,
-                        nullable=True,
-                    )
-                    schema.add_field(
-                        "languages",
-                        DataType.ARRAY,
-                        element_type=DataType.VARCHAR,
-                        max_length=2,
-                        max_capacity=200,
-                        nullable=True,
-                    )
-                    schema.add_field("datapoints_upper_bound", DataType.INT64, nullable=True)
-                    schema.add_field("datapoints_lower_bound", DataType.INT64, nullable=True)
+            if settings.extracts_metadata_from_asset(asset_type):
+                self._add_metadata_fields(schema, asset_type)
 
             schema.verify()
 
@@ -190,6 +180,60 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                 schema=schema,
                 index_params=index_params,
             )
+
+    def _load_metadata_field_config(self) -> dict:
+        config_path = Path("app/data/milvus_metadata_fields.json")
+        if not config_path.exists():
+            raise ValueError("Incorrect path to the Milvus Metadata Fields file")
+        with config_path.open("r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
+        return config
+
+    def _metadata_fields_for(self, asset_type: SupportedAssetType) -> list[dict[str, Any]]:
+        base_fields = self.metadata_field_config.get("base", [])
+        type_fields = self.metadata_field_config.get(asset_type.value, [])
+        return [*base_fields, *type_fields]
+
+    def _add_metadata_fields(
+        self, schema: CollectionSchema, asset_type: SupportedAssetType
+    ) -> None:
+        for field in self._metadata_fields_for(asset_type):
+            try:
+                self._add_metadata_field(schema, field)
+            except Exception as exc:
+                logging.warning(
+                    "Failed to register Milvus metadata field '%s' for asset type '%s': %s",
+                    field.get("field_name"),
+                    asset_type.value,
+                    exc,
+                )
+
+    @staticmethod
+    def _resolve_data_type(data_type_name: str) -> DataType:
+        try:
+            return getattr(DataType, data_type_name)
+        except AttributeError as exc:
+            raise ValueError(f"Unsupported Milvus data type: {data_type_name}") from exc
+
+    def _add_metadata_field(
+        self, schema: CollectionSchema, field_definition: dict[str, Any]
+    ) -> None:
+        if "field_name" not in field_definition or "data_type" not in field_definition:
+            raise ValueError("Field configuration must contain 'field_name' and 'data_type'")
+
+        field_name = field_definition["field_name"]
+        data_type = self._resolve_data_type(field_definition["data_type"])
+
+        field_kwargs: dict[str, Any] = {
+            key: value
+            for key, value in field_definition.items()
+            if key not in {"field_name", "data_type", "element_type"}
+        }
+
+        if "element_type" in field_definition:
+            field_kwargs["element_type"] = self._resolve_data_type(field_definition["element_type"])
+
+        schema.add_field(field_name, data_type, **field_kwargs)
 
     def exists_collection(self, asset_type: SupportedAssetType) -> bool:
         return self.client.has_collection(self.get_collection_name(asset_type))
@@ -245,9 +289,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
                     {"vector": emb, "asset_id": asset_id, **meta}
                     for emb, asset_id, meta in zip(all_embeddings, all_asset_ids, all_metadata)
                 ]
-                total_inserted += self.client.insert(collection_name=collection_name, data=data)[
-                    "insert_count"
-                ]
+                total_inserted += self._insert_records(collection_name, data, upsert=False)
 
                 # Store data locally into JSON files as well if we wish to do so
                 # Used for storing cold start data in JSON format
@@ -271,12 +313,55 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         return total_inserted
 
-    def remove_embeddings(self, asset_ids: list[AssetId], asset_type: SupportedAssetType) -> int:
+    def _insert_records(self, collection_name: str, data: list[dict], upsert: bool = False) -> int:
+        milvus_operation = self.client.upsert if upsert else self.client.insert
+
+        try:
+            milvus_operation(collection_name=collection_name, data=data)
+            return len(data)
+        except Exception:
+            logging.warning("Failed to insert Milvus batch. Attempting per-row insert.")
+
+        inserted = 0
+        for row in data:
+            try:
+                milvus_operation(collection_name=collection_name, data=[row])
+                inserted += 1
+            except Exception:
+                logging.warning(
+                    "Failed to insert Milvus row for asset '%s' with metadata. Retrying without metadata.",
+                    row.get("asset_id"),
+                )
+                default_fields = ["vector", "asset_id", "asset_version"]
+                row_no_metadata = {field: row[field] for field in default_fields}
+
+                if upsert and row.get("id", None) is not None:
+                    row_no_metadata.update({"id": row["id"]})
+
+                milvus_operation(collection_name=collection_name, data=[row_no_metadata])
+                inserted += 1
+
+        return inserted
+
+    def remove_embeddings(
+        self, asset_ids: list[AssetId], asset_type: SupportedAssetType
+    ) -> RemoveEmbeddingsResponse:
         collection_name = self.get_collection_name(asset_type)
 
-        return self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
+        data = self.client.query(
+            collection_name,
+            filter=f"asset_id in {asset_ids}",
+            output_fields=["asset_id", "asset_version"],
+        )
+        asset_versions = [item["asset_version"] for item in data]
+
+        delete_count = self.client.delete(collection_name, filter=f"asset_id in {asset_ids}")[
             "delete_count"
         ]
+
+        return RemoveEmbeddingsResponse(
+            asset_versions=asset_versions, emb_delete_count=delete_count
+        )
 
     def retrieve_topk_asset_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
@@ -328,3 +413,11 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
         except Exception as e:
             logging.error(f"Failed to retrieve embeddings for asset_id '{asset_id}': {e}")
             return None
+
+    def upsert_records(self, records: list[dict], asset_type: SupportedAssetType) -> int:
+        collection_name = self.get_collection_name(asset_type)
+        return self._insert_records(collection_name, records, upsert=True)
+
+    def read_records(self, asset_type: SupportedAssetType, **kwargs) -> list[dict]:
+        collection_name = self.get_collection_name(asset_type)
+        return list(self.client.query(collection_name, **kwargs))

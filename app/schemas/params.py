@@ -2,18 +2,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 
 
 class RequestParams(BaseModel):
     offset: int = 0
-    limit: int
+    limit: int = settings.AIOD.WINDOW_SIZE
     from_time: datetime | None = None
     to_time: datetime | None = None
+    direction: Literal["asc", "desc"] = "asc"
+    sort: Literal["date_created", "date_modified"] = "date_modified"
 
     def new_page(self, offset: int | None = None, limit: int | None = None) -> RequestParams:
         new_obj = RequestParams(**self.model_dump())

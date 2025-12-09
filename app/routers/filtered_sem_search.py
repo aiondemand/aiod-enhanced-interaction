@@ -14,8 +14,8 @@ from app.routers.sem_search import (
     validate_asset_type_or_raise,
     validate_query_or_raise,
 )
-from app.schemas.asset_metadata.operations import SchemaOperations
 from app.schemas.enums import SupportedAssetType
+from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.schemas.query import FilteredUserQueryResponse
 
 
@@ -85,28 +85,33 @@ async def get_fields_to_filter_by(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SchemaOperations.get_asset_schema(asset_type)
-    field_names = SchemaOperations.get_schema_field_names(schema)
+    schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
+    field_names = list(schema.model_fields.keys())
 
     inner_class_dict: dict[str, Any] = {
         "__annotations__": {},
     }
     for field in field_names:
-        inner_class_dict[field] = SchemaOperations.get_inner_field_info(schema, field)
-        inner_class_dict["__annotations__"][field] = SchemaOperations.get_inner_annotation(
-            schema, field
+        inner_class_dict[field] = Field(..., description=schema.model_fields[field].description)
+        inner_class_dict["__annotations__"][field] = schema.get_inner_annotation(
+            field, with_valid_values_enum=True
         )
 
     fields_class: Type[BaseModel] = type(
         f"Fields_{asset_type.value}", (BaseModel,), inner_class_dict
     )
-    output_schema = fields_class.model_json_schema()["properties"]
 
-    for field in output_schema.keys():
-        output_schema[field].pop("default", None)
-        output_schema[field].pop("title", None)
+    model_schema = fields_class.model_json_schema()
+    fields_schema = model_schema["properties"]
 
-    return output_schema
+    for field in fields_schema.keys():
+        fields_schema[field].pop("default", None)
+        fields_schema[field].pop("title", None)
+
+    response_dict = {"fields_to_filter_by": fields_schema}
+    if model_schema.get("$defs", None) is not None:
+        response_dict.update({"$defs": model_schema["$defs"]})
+    return response_dict
 
 
 @router.get("/schemas/get_filter_schema")
@@ -123,8 +128,8 @@ async def get_filter_schema(
             detail=f"We currently do not support asset type '{asset_type.value}'",
         )
 
-    schema = SchemaOperations.get_asset_schema(asset_type)
-    if field_name not in SchemaOperations.get_schema_field_names(schema):
+    schema = QUERY_PARSING_SCHEMA_MAPPING[asset_type]
+    if field_name not in list(schema.model_fields.keys()):
         raise HTTPException(
             status_code=400,
             detail=f"Asset type '{asset_type.value}' does not support field name '{field_name}'",

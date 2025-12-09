@@ -1,0 +1,364 @@
+{
+  "base": [
+    {
+      "field_name": "platform",
+      "data_type": "VARCHAR",
+      "max_length": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "name",
+      "data_type": "VARCHAR",
+      "max_length": 256,
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
+    },
+    {
+      "field_name": "date_published",
+      "data_type": "VARCHAR",
+      "max_length": 22,
+      "nullable": true
+    },
+    {
+      "field_name": "same_as",
+      "data_type": "VARCHAR",
+      "max_length": 256,
+      "nullable": true
+    },
+    {
+      "field_name": "research_areas",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "ml_tasks",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 64,
+      "nullable": true
+    },
+    {
+      "field_name": "modalities",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 16,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "languages",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 4,
+      "max_capacity": 128,
+      "nullable": true
+    },
+    {
+      "field_name": "industrial_sectors",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "application_areas",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "license",
+      "data_type": "VARCHAR",
+      "max_length": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "frameworks",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 32,
+      "nullable": true
+    }
+  ],
+  "datasets": [
+    {
+      "field_name": "datapoint_count",
+      "data_type": "INT64",
+      "nullable": true
+    },
+    {
+      "field_name": "feature_count",
+      "data_type": "INT64",
+      "nullable": true
+    },
+    {
+      "field_name": "data_formats",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 16,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "label_types",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "collection_methods",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "source_type",
+      "data_type": "VARCHAR",
+      "max_length": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "update_frequency",
+      "data_type": "VARCHAR",
+      "max_length": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "dataset_size_gigabytes",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "class_count",
+      "data_type": "INT64",
+      "nullable": true
+    },
+    {
+      "field_name": "geo_coverage",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 4,
+      "max_capacity": 64,
+      "nullable": true
+    },
+    {
+      "field_name": "temporal_coverage_start",
+      "data_type": "VARCHAR",
+      "max_length": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "temporal_coverage_end",
+      "data_type": "VARCHAR",
+      "max_length": 16,
+      "nullable": true
+    }
+  ],
+  "ml_models": [
+    {
+      "field_name": "parameter_count_millions",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "model_size_gigabytes",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "architecture_families",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "fine_tuned",
+      "data_type": "BOOL",
+      "nullable": true
+    },
+    {
+      "field_name": "training_techniques",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "training_compute_gpu_hours",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "llm_max_sequence_length",
+      "data_type": "INT64",
+      "nullable": true
+    },
+    {
+      "field_name": "vocab_size",
+      "data_type": "INT64",
+      "nullable": true
+    },
+    {
+      "field_name": "llm_training_data_volume_tokens",
+      "data_type": "INT64",
+      "nullable": true
+    }
+  ],
+  "publications": [
+    {
+      "field_name": "authors",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 64,
+      "nullable": true
+    },
+    {
+      "field_name": "affiliations",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 32,
+      "nullable": true
+    },
+    {
+      "field_name": "publication_types",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "publication_venues",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 4,
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
+    },
+    {
+      "field_name": "news_categories",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "peer_reviewed",
+      "data_type": "BOOL",
+      "nullable": true
+    },
+    {
+      "field_name": "open_access",
+      "data_type": "BOOL",
+      "nullable": true
+    },
+    {
+      "field_name": "doi",
+      "data_type": "VARCHAR",
+      "max_length": 128,
+      "nullable": true
+    },
+    {
+      "field_name": "citation_count",
+      "data_type": "INT64",
+      "nullable": true
+    }
+  ],
+  "educational_resources": [
+    {
+      "field_name": "resource_types",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "educational_levels",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 8,
+      "nullable": true
+    },
+    {
+      "field_name": "competency_levels",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "learning_modes",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "educational_paces",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 32,
+      "max_capacity": 4,
+      "nullable": true
+    },
+    {
+      "field_name": "prerequisites",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 128,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "target_audiences",
+      "data_type": "ARRAY",
+      "element_type": "VARCHAR",
+      "max_length": 64,
+      "max_capacity": 16,
+      "nullable": true
+    },
+    {
+      "field_name": "estimated_duration_hours",
+      "data_type": "FLOAT",
+      "nullable": true
+    },
+    {
+      "field_name": "provider",
+      "data_type": "VARCHAR",
+      "max_length": 128,
+      "nullable": true,
+      "enable_analyzer": true,
+      "enable_match": true
+    },
+    {
+      "field_name": "certification_available",
+      "data_type": "BOOL",
+      "nullable": true
+    }
+  ]
+}

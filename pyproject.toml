@@ -13,17 +13,15 @@ dependencies = [
     "uvicorn==0.34.0",
     "numpy==2.2.4",
     "pandas==2.2.3",
-    "pydantic==2.10.6",
+    "pydantic==2.11.9",
     "pydantic-settings==2.8.1",
+    "pydantic-ai-slim[openai,logfire]==1.11.0",
     "tqdm==4.67.1",
     "python-dotenv==1.1.0",
     "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
     "apscheduler==3.10.4",
-    "langchain-core==0.3.47",
-    "langchain-ollama==0.2.3",
-    "ollama==0.4.7",
     "beanie==1.29.0",
     "motor==3.7.1",
     "pymongo==4.13.0",
@@ -31,7 +29,8 @@ dependencies = [
     "Crawl4AI==0.7.2",
     "beautifulsoup4==4.13.4",
     "mistralai==1.9.2",
-    "nltk==3.9.1"
+    "nltk==3.9.1",
+    "ollama==0.4.7"
 ]
 readme = "README.md"
 
@@ -41,7 +40,12 @@ dev = [
     "flake8==7.2.0",
     "isort==6.0.1",
     "pre-commit==3.3.3",
-    "torch==2.6.0"
+    "torch==2.6.0",
+    "jupyter_core==5.8.1",
+    "tornado>=6.2",
+    "pyzmq>=23.0",
+    "ipykernel==7.1.0"
+
 ]
 
 [tool.setuptools]
