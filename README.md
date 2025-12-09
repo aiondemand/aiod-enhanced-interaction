@@ -80,38 +80,53 @@ In this file you find the following ENV variables:
     - `Alibaba-NLP/gte-large-en-v1.5`: To download the specific model from the HuggingFace
     - `<PATH_TO_LOCAL_MODEL>`: To load the weights of GTE large model from the local path on your machine / in the container
 - `MODEL_BATCH_SIZE`: Number of assets model can compute embeddings for in parallel
-- `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
-- `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
-- `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
-- `MILVUS__COLLECTION_PREFIX`: Prefix to use for naming our Milvus collections
-- `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database
-- `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings of the individual chunks of each document or to have only one embedding representing the entire asset.
-- `MILVUS__EXTRACT_METADATA`: Boolean value representing whether we wish to store metadata information in Milvus database and in turn also utilize LLM either for user query parsing or for asset metadata extraction.
-- `MONGO__HOST`: Hostname of MongoDB database. *(Is overwritten in docker-compose.yml)*
-- `MONGO__PORT`: Port of the database within MongoDB to store our data in *(Is overwritten in docker-compose.yml)*
-- `MONGO__USER`: Username of the admin of the database within MongoDB to store our data in
-- `MONGO__PASSWORD`: Password of the admin of the database within MongoDB to store our data in
-- `MONGO__DBNAME`: Name of the database within MongoDB to store our data in
-- Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`MILVUS__EXTRACT_METADATA` is set to False))
+- `CONNECTION_NUM_RETRIES`: Number of retry attempts when connecting to external services
+- `CONNECTION_SLEEP_TIME`: Sleep time in seconds between retry attempts when connecting to services
+- `QUERY_EXPIRATION_TIME_IN_MINUTES`: Time in minutes after which query results expire and are removed
+- `LOGFIRE_TOKEN`: API Token for Logfire service that monitors LLM traces
+- Milvus config (`MILVUS__*`):
+    - `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
+    - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
+    - `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
+    - `MILVUS__COLLECTION_PREFIX`: Prefix to use for naming our Milvus collections
+    - `MILVUS__BATCH_SIZE`: Number of embeddings to accumulate into batch before storing it in Milvus database
+    - `MILVUS__STORE_CHUNKS`: Boolean value that denotes whether we wish to store the embeddings of the individual chunks of each document or to have only one embedding representing the entire asset.
+- Mongo config (`MONGO__*`):
+    - `MONGO__HOST`: Hostname of MongoDB database. *(Is overwritten in docker-compose.yml)*
+    - `MONGO__PORT`: Port of the database within MongoDB to store our data in *(Is overwritten in docker-compose.yml)*
+    - `MONGO__USER`: Username of the admin of the database within MongoDB to store our data in
+    - `MONGO__PASSWORD`: Password of the admin of the database within MongoDB to store our data in
+    - `MONGO__DBNAME`: Name of the database within MongoDB to store our data in
+- Metadata filtering config (`METADATA_FILTERING__*`):
+    - `METADATA_FILTERING__ENABLED`: Boolean value that enables/disables metadata filtering functionality
+    - `METADATA_FILTERING__ENFORCE_ENUMS`: Boolean value that enforces enum validation for metadata field values (this leads to performing additional checks and multiple LLM passes over the same assets)
+- Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`METADATA_FILTERING__ENABLED` is set to False))
     - `OLLAMA__URI`: URI of the Ollama server.
     - `OLLAMA__MODEL_NAME`: Name of an Ollama model we wish to use for metadata filtering purposes.
-    - `OLLAMA__NUM_PREDICT`: The maximum number of tokens an LLM generates for metadata filtering purposes.
-    - `OLLAMA__NUM_CTX`: The maximum number of tokens that are considered to be within model context when an LLM generates an output for metadata filtering purposes.
-- `CHATBOT__USE_CHATBOT`: Boolean value that denotes whether you wish to enable the chatbot functionality
-- `CHATBOT__MISTRAL_KEY`: API key required to access the Mistral AI API for chatbot functionality
-- `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
-- `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
-- `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
-- `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
-- `AIOD__WINDOW_SIZE`: Asset window size (limit of pagination) we use for retrieving assets from AIoD API during the initial setup, by iterating over all the AIoD assets.
-- `AIOD__WINDOW_OVERLAP`: Asset window overlap representing relative size of an overlap we maintain between the pages in pagination. The overlap is necessary so that we wouldn't potentionally skip on some new assets to process if any particular assets were to be deleted in parallel with our update logic, making the whole data returned by AIoD platform slightly shifted.
-- `AIOD__JOB_WAIT_INBETWEEN_REQUESTS_SEC`: Number of seconds we wait when performing JOBs (for updating/deleting assets) in between AIoD requests in order not to overload their API.
-- `AIOD__SEARCH_WAIT_INBETWEEN_REQUESTS_SEC`: Number of seconds we wait in between AIoD requests in order not to overload their API. This wait is used when validating the existence of retrieved Milvus assets that are supposed to be the most relevant to a user query.
-- `AIOD__DAY_IN_MONTH_FOR_EMB_CLEANING`: The day of the month we wish to perform Milvus embedding cleaning. We compare the stored documents to the AIoD platform and delete the embeddings corresponding to old assets that are no longer present on AIoD.
-- `AIOD__DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS`: The day of the month we wish to perform recurrent AIoD update that iterates over all the data on said platform rather than only examining assets updated within a specific timeframe. The objective of this particular database update is to double-check we have not missed any new AIoD assets that might've been overlooked due to large number of assets having been deleted in the past.
-- `AIOD__TESTING`: Boolean value you should keep set to false unless you intentionally wish to retrieve only a fraction of all the AIoD assets. This variable is used for testing purposes only
-- `AIOD__STORE_DATA_IN_JSON`: Boolean value you should keep set to false unless you wish to store AIoD embeddings and metadata in JSON files for subsequent database population process on another machine. This flag is especially useful if you don't have an access to GPU or LLM for embedding computation / metadata extraction on the production machine for instance, but you do possess one on your local setup. This way you can precompute all the information to be stored into the Milvus DB and simply migrate said data onto production to expedite the deployment process.
-- `AIOD__JSON_SAVEPATH`: Path where to store JSON files if `AIOD__STORE_DATA_IN_JSON` env var is set to True
+    - `OLLAMA__MAX_TOKENS`: The maximum number of tokens an LLM generates.
+- Crawler settings (`CRAWLER__*`):
+    - `CRAWLER__COMMA_SEPARATED_WEBSITES`: Comma-separated list of website URLs to crawl for chatbot knowledge base
+    - `CRAWLER__COMMA_SEPARATED_API_WEBSITES`: Comma-separated list of API website URLs to crawl for chatbot knowledge base
+    - `CRAWLER__COMMA_SEPARATED_BLOCKED_WEBSITES`: Comma-separated list of website domains to block during crawling
+- Chatbot config (`CHATBOT__*`):
+    - `CHATBOT__USE_CHATBOT`: Boolean value that denotes whether you wish to enable the chatbot functionality
+    - `CHATBOT__MISTRAL_KEY`: API key required to access the Mistral AI API for chatbot functionality
+    - `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
+    - `CHATBOT__TOP_K_ASSETS_TO_SEARCH`: Number of top assets to retrieve when searching for assets in chatbot responses
+    - `CHATBOT__MYLIBRARY_URL`: Base URL for the MyLibrary service used to generate links to AIoD assets
+- AIoD config (`AIOD__*`):
+    - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
+    - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
+    - `AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION`: Comma-separated list of values representing all the asset types we wish to apply metadata filtering on. Only include an asset type into this list if all the setup regarding metadata filtering (manual/automatic extraction of metadata from assets, automatic extraction of filter in user queries)
+    - `AIOD__WINDOW_SIZE`: Asset window size (limit of pagination) we use for retrieving assets from AIoD API during the initial setup, by iterating over all the AIoD assets.
+    - `AIOD__WINDOW_OVERLAP`: Asset window overlap representing relative size of an overlap we maintain between the pages in pagination. The overlap is necessary so that we wouldn't potentionally skip on some new assets to process if any particular assets were to be deleted in parallel with our update logic, making the whole data returned by AIoD platform slightly shifted.
+    - `AIOD__JOB_WAIT_INBETWEEN_REQUESTS_SEC`: Number of seconds we wait when performing JOBs (for updating/deleting assets) in between AIoD requests in order not to overload their API.
+    - `AIOD__SEARCH_WAIT_INBETWEEN_REQUESTS_SEC`: Number of seconds we wait in between AIoD requests in order not to overload their API. This wait is used when validating the existence of retrieved Milvus assets that are supposed to be the most relevant to a user query.
+    - `AIOD__DAY_IN_MONTH_FOR_EMB_CLEANING`: The day of the month we wish to perform Milvus embedding cleaning. We compare the stored documents to the AIoD platform and delete the embeddings corresponding to old assets that are no longer present on AIoD.
+    - `AIOD__DAY_IN_MONTH_FOR_TRAVERSING_ALL_AIOD_ASSETS`: The day of the month we wish to perform recurrent AIoD update that iterates over all the data on said platform rather than only examining assets updated within a specific timeframe. The objective of this particular database update is to double-check we have not missed any new AIoD assets that might've been overlooked due to large number of assets having been deleted in the past.
+    - `AIOD__TESTING`: Boolean value you should keep set to false unless you intentionally wish to retrieve only a fraction of all the AIoD assets. This variable is used for testing purposes only
+    - `AIOD__STORE_DATA_IN_JSON`: Boolean value you should keep set to false unless you wish to store AIoD embeddings and metadata in JSON files for subsequent database population process on another machine. This flag is especially useful if you don't have an access to GPU or LLM for embedding computation / metadata extraction on the production machine for instance, but you do possess one on your local setup. This way you can precompute all the information to be stored into the Milvus DB and simply migrate said data onto production to expedite the deployment process.
+    - `AIOD__JSON_SAVEPATH`: Path where to store JSON files if `AIOD__STORE_DATA_IN_JSON` env var is set to True
 
 ## Development
 

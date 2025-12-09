@@ -19,14 +19,6 @@ class RequestParams(BaseModel):
     direction: Literal["asc", "desc"] = "asc"
     sort: Literal["date_created", "date_modified"] = "date_modified"
 
-    # @field_validator("limit", mode="before")
-    # @classmethod
-    # def preprocess_limit(self, value: int) -> int:
-    #     if value == -1:
-    #         return settings.AIOD.WINDOW_SIZE
-    #     else:
-    #         return value
-
     def new_page(self, offset: int | None = None, limit: int | None = None) -> RequestParams:
         new_obj = RequestParams(**self.model_dump())
 
