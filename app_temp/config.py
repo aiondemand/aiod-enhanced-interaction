@@ -34,6 +34,7 @@ class AIoDConfig(BaseModel):
     JOB_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(1, ge=0)
     SEARCH_WAIT_INBETWEEN_REQUESTS_SEC: float = Field(0.1, ge=0)
     TESTING: bool = Field(False)
+    START_OFFSET: int = Field(0, ge=0)
 
     @classmethod
     def convert_csv_to_asset_types(cls, value: str) -> list[SupportedAssetType]:

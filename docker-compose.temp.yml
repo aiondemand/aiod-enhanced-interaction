@@ -1,0 +1,29 @@
+services:
+  # FastAPI service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.temp
+    env_file:
+      - .env.app
+    environment:
+      - MONGO__HOST=mongo
+      - MONGO__PORT=27017
+      - MONGO__USER=${MONGO_USER}
+      - MONGO__PASSWORD=${MONGO_PASSWORD}
+      - MONGO__DBNAME=aiod
+    ports:
+      - "${APP_HOST_PORT:-8000}:80"
+    depends_on:
+      mongo:
+        condition: service_healthy
+        restart: false
+    healthcheck:
+      # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
+      # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
+    restart: always
