@@ -182,17 +182,10 @@ async def init_mongo_client() -> AsyncIOMotorClient:
         database=db,
         document_models=[
             AssetCollection,
-<<<<<<< HEAD
             AssetForMetadataExtraction,
             SimpleUserQuery,
             FilteredUserQuery,
             RecommenderUserQuery,
-=======
-            SimpleUserQuery,
-            FilteredUserQuery,
-            RecommenderUserQuery,
-            AssetForMetadataExtraction,
->>>>>>> main
         ],
         multiprocessing_mode=True,  # temporary patch
     )

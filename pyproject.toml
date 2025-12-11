@@ -30,12 +30,8 @@ dependencies = [
     "beautifulsoup4==4.13.4",
     "mistralai==1.9.2",
     "nltk==3.9.1",
-<<<<<<< HEAD
     "ollama==0.4.7",
     "requests==2.32.3"
-=======
-    "ollama==0.4.7"
->>>>>>> main
 ]
 readme = "README.md"
 

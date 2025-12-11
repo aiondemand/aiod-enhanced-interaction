@@ -18,5 +18,4 @@ COPY ./scripts/populate_milvus.py ./
 
 USER $USERNAME
 
-# TODO specify relevant CLI arguments
 CMD ["/bin/sh", "-c", "python populate_milvus.py -i $INPUT_DIRPATH --uri $MILVUS_URI -u $MILVUS_USER -p $MILVUS_PASS --old-collection-prefix $OLD_MILVUS_COLLECTION_PREFIX --new-collection-prefix $NEW_MILVUS_COLLECTION_PREFIX"]

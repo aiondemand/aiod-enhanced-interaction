@@ -26,18 +26,6 @@
             "justMyCode": true
         },
         {
-            "name": "Debug Temporary FastAPI Helper service",
-            "type": "debugpy",
-            "request": "launch",
-            "program":"${workspaceFolder}/app_temp/main.py",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${cwd}"
-            },
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
             "name": "Debug arbitrary Python file",
             "type": "debugpy",
             "request": "launch",
