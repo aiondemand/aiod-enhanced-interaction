@@ -49,7 +49,7 @@ Varchar256 = Annotated[str, Field(max_length=256)]
 CountryCode = Annotated[str, Field(description="ISO-3166 country code", pattern=r"^[A-Z]{2}$")]
 LanguageCode = Annotated[str, Field(description="ISO-639-1 language code", pattern=r"^[a-z]{2}$")]
 DateString = Annotated[
-    str, Field(description="Date in the format: YYYY-MM-DD", pattern=r"^\d{4}-\d{2}-\d{2}")
+    str, Field(description="Date in the format: YYYY-MM-DD", pattern=r"^\d{4}-\d{2}-\d{2}$")
 ]
 DatePublished = Annotated[
     str,
