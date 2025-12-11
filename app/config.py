@@ -214,6 +214,9 @@ class AIoDConfig(BaseModel):
     def get_asset_by_id_url(self, asset_id: AssetId, asset_type: SupportedAssetType) -> str:
         return urljoin(str(self.URL), f"{asset_type.value}/{asset_id}")
 
+    def get_taxonomy_url(self, taxonomy: str) -> str:
+        return urljoin(str(self.URL), f"{taxonomy}")
+
 
 class MongoConfig(BaseModel):
     HOST: str = Field(...)

@@ -1,0 +1,14 @@
+# deprecated
+# TODO delete
+
+FROM python:3.11
+
+WORKDIR /code
+
+COPY scripts/api_v2_migration/requirements.txt ./
+
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+
+COPY scripts/api_v2_migration/migrate_aiod_ids.py ./
+
+CMD ["/bin/sh", "-c", "python migrate_aiod_ids.py"]
