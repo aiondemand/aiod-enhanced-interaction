@@ -16,9 +16,9 @@ if [ -z "$INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH" ]; then
   exit 1
 fi
 
-# Check if INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH is set
-if [ -z "$MONGO_ASSETCOLS_DUMP_FILEPATH" ]; then
-  echo "$MONGO_ASSETCOLS_DUMP_FILEPATH is not set"
+# Check if MONGO_DUMP_DIRPATH is set
+if [ -z "$MONGO_DUMP_DIRPATH" ]; then
+  echo "$MONGO_DUMP_DIRPATH is not set"
   exit 1
 fi
 
@@ -41,9 +41,13 @@ if [ $EXIT_CODE -eq 0 ]; then
   echo "Population of vector DB has run successfully."
 
   CONTAINER_NAME_MONGO="${COMPOSE_PROJECT_NAME}-mongo-1"
-  docker cp $MONGO_ASSETCOLS_DUMP_FILEPATH ${CONTAINER_NAME_MONGO}:.
+
+  docker cp "${MONGO_DUMP_DIRPATH}/assetCollections.json" ${CONTAINER_NAME_MONGO}:.
+  docker cp "${MONGO_DUMP_DIRPATH}/assetsForMetadataExtraction.json" ${CONTAINER_NAME_MONGO}:.
   EXIT_CODE_2a=$?
-  docker exec $CONTAINER_NAME_MONGO mongoimport --db=aiod --collection=assetCollections --file=$(basename $MONGO_ASSETCOLS_DUMP_FILEPATH) --jsonArray --username=${MONGO_USER} --password=${MONGO_PASSWORD} --authenticationDatabase=admin
+
+  docker exec $CONTAINER_NAME_MONGO mongoimport --db=aiod --collection=assetCollections --file=assetCollections.json --jsonArray --username=${MONGO_USER} --password=${MONGO_PASSWORD} --authenticationDatabase=${MONGO_AUTH_DBNAME:=admin}
+  docker exec $CONTAINER_NAME_MONGO mongoimport --db=aiod --collection=assetsForMetadataExtraction --file=assetsForMetadataExtraction.json --jsonArray --username=${MONGO_USER} --password=${MONGO_PASSWORD} --authenticationDatabase=${MONGO_AUTH_DBNAME:=admin}
   EXIT_CODE_2b=$?
 
   if [ $EXIT_CODE_2a -eq 0 ] && [ $EXIT_CODE_2b -eq 0 ]; then

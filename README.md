@@ -97,6 +97,7 @@ In this file you find the following ENV variables:
     - `MONGO__USER`: Username of the admin of the database within MongoDB to store our data in
     - `MONGO__PASSWORD`: Password of the admin of the database within MongoDB to store our data in
     - `MONGO__DBNAME`: Name of the database within MongoDB to store our data in
+    - `MONGO__AUTH_DBNAME`: Name of the database within MongoDB we use for authentication
 - Metadata filtering config (`METADATA_FILTERING__*`):
     - `METADATA_FILTERING__ENABLED`: Boolean value that enables/disables metadata filtering functionality
     - `METADATA_FILTERING__ENFORCE_ENUMS`: Boolean value that enforces enum validation for metadata field values (this leads to performing additional checks and multiple LLM passes over the same assets)
@@ -205,7 +206,7 @@ Perform the following steps to deploy the service:
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
     - `USE_CHATBOT`: Whether we wish to expose endpoints that allow users to communicate with AIoD chatbot. By enabling this variable, we also automatically crawl AIoD platform on daily basis to retrieve the most up-to-date information the chatbot can subsequently have an access to.
     - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`: An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
-    - `MONGO_ASSETCOLS_DUMP_FILEPATH`: An optional variable representing a filepath to a JSON file containing a list of documents used for populating MongoDB database, more specifically the `assetCollections` collection. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
+    - `MONGO_DUMP_DIRPATH`: An optional variable representing a dirpath to a directory containing JSON files representing a list of documents used for populating MongoDB database, more specifically the `assetCollections` and `assetsForMetadataExtraction` collections. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
 
     - Milvus credentials to use/initiate services with:
         - `MILVUS_NEW_ROOT_PASS`: New root password used to replace a default one. The password change is only performed during the first initialization of the Milvus service.
@@ -219,6 +220,7 @@ Perform the following steps to deploy the service:
     - Mongo credential setup:
         - `MONGO_USER`: Username of the admin MongoDB user
         - `MONGO_PASSWORD`: Password of the admin MongoDB user
+        - `MONGO_AUTH_DBNAME`: Name of the auth DB (only used in `./scripts/populate-db.sh`)
 
     - Mapping of host ports to Docker services:
         - `APP_HOST_PORT`: Host port we wish the FastAPI service to be mapped to
@@ -232,13 +234,14 @@ Perform the following steps to deploy the service:
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
     1. Set the `MODEL_LOADPATH` variable accordingly, so that it points to the model weights. This ENV variable needs to point inside the `/model` directory where the model weights are accessible to the Docker container.
-1. **[CURRENTLY DEPRECATED, SKIP THIS STEP]** If you wish to populate the vector database with already precomputed embeddings, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `MONGO_ASSETCOLS_DUMP_FILEPATH` variables and then execute the following bash script that takes care of populating the database: `./scripts/populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
+1. If you wish to populate the vector database and MongoDB with already precomputed embeddings or other data respectively, set the `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH` and `MONGO_DUMP_DIRPATH` variables and then execute the following bash script that takes care of populating the database: `./scripts/populate-db.sh`. This script is blocking, so you can have a direct feedback whether it finishes successfully or not. It will print out its status on stdout.
     - **Prerequisites for populating databases:**
         - Precomputed asset embeddings and their associated metadata fields for each Milvus collection all stored in multiple JSON files that follow a specific file-hierarchy
-        - MongoDB documents of `assetCollections` collection stored in a JSON format
+        - MongoDB documents of `assetCollections` and `assetsForMetadataExtraction` collections stored in a JSON format
 
     - **Notice: This script will only work with the newly created Milvus database (without prior data in vector DB) that hasn't been created yet which is acceptable behavior as we don't want to perform this step anytime else but solely at the beginning, as a part of the application setup.**
     - **Notice**: We don't advise using this step unless you're fairly familiar with the project and know the format the data is supposed to have for populating the databases.
+    - **Notice**: If you don't see any progress (logs) in the populate-db container, try to list them explicitly in a new terminal while keeping the original terminal with the script running open
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `USE_LLM` ENV variables: `./deploy.sh`
 

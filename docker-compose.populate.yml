@@ -10,7 +10,10 @@ services:
     environment:
       - INPUT_DIRPATH=/data_to_populate
       - MILVUS_URI=http://milvus-standalone:19530
-      - EXTRACT_METADATA=${USE_LLM}
+      - MILVUS_USER=root
+      - MILVUS_PASS=Milvus
+      - OLD_MILVUS_COLLECTION_PREFIX=AIoD_STS_GTE
+      - NEW_MILVUS_COLLECTION_PREFIX=aiod           # should equal to MILVUS__COLLECTION_PREFIX in env.app
     depends_on:
       milvus-standalone:
         condition: service_healthy
