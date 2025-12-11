@@ -1,4 +1,0 @@
-python-dotenv==1.1.0
-pymilvus==2.5.5
-pandas==2.2.3
-tqdm==4.67.1

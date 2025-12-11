@@ -2,10 +2,12 @@
 mongoexport --db=<DB_NAME> --collection=<COL_NAME> --out=cols.json --jsonArray --username=<MONGO_USER> --password=<MONGO_PASS> --authenticationDatabase=admin
 
 # Export example
-# mongoexport --db=aiod --collection=assetCollections --out=cols.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
+mongoexport --db=aiod --collection=assetsForMetadataExtraction --out=assetsForMetadataExtraction.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
+mongoexport --db=aiod --collection=assetCollections --out=assetCollections.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
 
 # run this command within MongoDB container to import a collection from a JSON file
 mongoimport --db=<DB_NAME> --collection=<COL_NAME> --file=cols.json --jsonArray --username=<MONGO_USER> --password=<MONGO_PASS> --authenticationDatabase=admin
 
 # Import example
-# mongoimport --db=aiod --collection=assetCollections --file=cols.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
+mongoexport --db=aiod --collection=assetsForMetadataExtraction --out=assetsForMetadataExtraction.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
+mongoimport --db=aiod --collection=assetCollections --file=assetCollections.json --jsonArray --username=aiod --password=mongopassword --authenticationDatabase=admin
