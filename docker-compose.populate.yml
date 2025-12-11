@@ -9,7 +9,7 @@ services:
         USER_GID: ${USER_GID}
     environment:
       - INPUT_DIRPATH=/data_to_populate
-      - MILVUS_URI=http://milvus-standalone:19530
+      - MILVUS_URI=http://milvus-standalone:${MILVUS_HOST_PORT_19530}
       - MILVUS_USER=root
       - MILVUS_PASS=Milvus
       - OLD_MILVUS_COLLECTION_PREFIX=AIoD_STS_GTE
