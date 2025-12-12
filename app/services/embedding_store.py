@@ -377,9 +377,9 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
     def retrieve_topk_asset_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
-
         if self.client.has_collection(collection_name) is False:
-            raise ValueError(f"Collection '{collection_name}' does not exist")
+            return SearchResults()
+
         self.client.load_collection(collection_name)
 
         query_results = list(
