@@ -125,7 +125,7 @@ class CrawlerConfig(BaseModel):
 
 class OllamaConfig(BaseModel):
     URI: AnyUrl | None = Field(None)
-    MODEL_NAME: str = Field("qwen3:8b")
+    MODEL_NAME: str = Field("qwen3:4b-instruct")
     MAX_TOKENS: int = Field(1_024, gt=0)
 
 
