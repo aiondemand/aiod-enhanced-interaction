@@ -30,6 +30,9 @@ VALID_ASSET_TYPES = [
     "services",
 ]
 
+# Buffer to add to VARCHAR max_length as a precaution
+VARCHAR_BUFFER_CHARS = 10
+
 
 class InputArgs(BaseModel):
     input_dirpath: str
@@ -73,8 +76,17 @@ def add_metadata_field(schema: CollectionSchema, field_definition: dict[str, Any
         if key not in {"field_name", "data_type", "element_type"}
     }
 
+    # Add buffer to VARCHAR max_length if applicable
+    if data_type == DataType.VARCHAR and "max_length" in field_kwargs:
+        field_kwargs["max_length"] = field_kwargs["max_length"] + VARCHAR_BUFFER_CHARS
+
     if "element_type" in field_definition:
-        field_kwargs["element_type"] = resolve_data_type(field_definition["element_type"])
+        element_type = resolve_data_type(field_definition["element_type"])
+        field_kwargs["element_type"] = element_type
+
+        # Add buffer to VARCHAR element_type max_length if applicable
+        if element_type == DataType.VARCHAR and "max_length" in field_kwargs:
+            field_kwargs["max_length"] = field_kwargs["max_length"] + VARCHAR_BUFFER_CHARS
 
     schema.add_field(field_name, data_type, **field_kwargs)
 

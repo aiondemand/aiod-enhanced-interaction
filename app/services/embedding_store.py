@@ -99,6 +99,9 @@ class MilvusClientResilientWrapper(MilvusClient):
 
 
 class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
+    # Buffer to add to VARCHAR max_length as a precaution
+    VARCHAR_BUFFER_CHARS = 10
+
     # TODO
     # In the future we should pass an embedding_dim as an argument
     def __init__(
@@ -230,8 +233,17 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
             if key not in {"field_name", "data_type", "element_type"}
         }
 
+        # Add buffer to VARCHAR max_length if applicable
+        if data_type == DataType.VARCHAR and "max_length" in field_kwargs:
+            field_kwargs["max_length"] = field_kwargs["max_length"] + self.VARCHAR_BUFFER_CHARS
+
         if "element_type" in field_definition:
-            field_kwargs["element_type"] = self._resolve_data_type(field_definition["element_type"])
+            element_type = self._resolve_data_type(field_definition["element_type"])
+            field_kwargs["element_type"] = element_type
+
+            # Add buffer to VARCHAR element_type max_length if applicable
+            if element_type == DataType.VARCHAR and "max_length" in field_kwargs:
+                field_kwargs["max_length"] = field_kwargs["max_length"] + self.VARCHAR_BUFFER_CHARS
 
         schema.add_field(field_name, data_type, **field_kwargs)
 
@@ -365,9 +377,9 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
     def retrieve_topk_asset_ids(self, search_params: MilvusSearchParams) -> SearchResults:
         collection_name = self.get_collection_name(search_params.asset_type)
-
         if self.client.has_collection(collection_name) is False:
-            raise ValueError(f"Collection '{collection_name}' does not exist")
+            return SearchResults()
+
         self.client.load_collection(collection_name)
 
         query_results = list(

@@ -4,6 +4,7 @@ from copy import deepcopy
 import logging
 import os
 from queue import Queue
+from time import sleep
 from typing import Type
 
 from uuid import UUID
@@ -135,6 +136,8 @@ async def search_across_assets_wrapper(
         search_results.append(
             search_asset_collection(embedding_store, temp_search_params, user_query)
         )
+        # artificial halt to decrease the load on Metadata Catalogue that caused some issues prior
+        sleep(1)
 
     return AssetResults.merge_results(search_results, k=user_query.topk)
 

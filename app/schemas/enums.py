@@ -28,6 +28,8 @@ class SupportedAssetType(BaseAssetType, Enum):
     EDUCATIONAL_RESOURCES = "educational_resources"
     EXPERIMENTS = "experiments"
     SERVICES = "services"
+    COMPUTATIONAL_ASSETS = "computational_assets"
+    RESOURCE_BUNDLES = "resource_bundles"
 
 
 # TODO come up with a way to get rid of this duplication of enum values
@@ -40,3 +42,5 @@ class AssetTypeQueryParam(BaseAssetType, Enum):
     EDUCATIONAL_RESOURCES = "educational_resources"
     EXPERIMENTS = "experiments"
     SERVICES = "services"
+    COMPUTATIONAL_ASSETS = "computational_assets"
+    RESOURCE_BUNDLES = "resource_bundles"

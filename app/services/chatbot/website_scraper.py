@@ -207,7 +207,6 @@ def create_content_collection(client: MilvusClient, collection_name: str) -> Non
     )  # max_length = between 1 and 65535 bytes
     schema.add_field(field_name="url", datatype=DataType.VARCHAR, max_length=256)
     schema.add_field(field_name="last_modified", datatype=DataType.VARCHAR, max_length=256)
-    # schema.add_field(field_name="hash", datatype=DataType.INT64)
 
     schema.verify()
 
@@ -281,16 +280,20 @@ def prepare_data(
     result_content: list[str] = []
     result_url = []
     result_last_modified = []
-    for index, _ in website_content.iterrows():
-        content = website_content["content"].iloc[index]
-        url = website_content["url"].iloc[index]
-        last_modified = website_content["last_modified"].iloc[index]
 
+    for _, row in website_content.iterrows():
+        content = row["content"] or ""
+        url = row["url"] or ""
+        last_modified = row["last_modified"] or ""
+
+        if not content:
+            continue
         if model.text_splitter is None:
             # TODO this is somewhat brittle, we need to change this later on...
             raise ValueError(
                 "Text splitter is not set. You need to change the model to use chunking -> STORE_CHUNKS"
             )
+
         chunks = model.text_splitter(content)
         chunks = [chunk for chunk in chunks if len(chunk.strip()) > 0]
         if len(chunks) == 0:

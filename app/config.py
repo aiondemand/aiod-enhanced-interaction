@@ -256,10 +256,12 @@ class ChatbotConfig(BaseModel):
             SupportedAssetType.DATASETS: "Dataset",
             SupportedAssetType.ML_MODELS: "AIModel",
             SupportedAssetType.PUBLICATIONS: "Publication",
-            SupportedAssetType.CASE_STUDIES: r"Case%20studies",
+            SupportedAssetType.CASE_STUDIES: r"Success%stories",
             SupportedAssetType.EDUCATIONAL_RESOURCES: r"Educational%20resource",
             SupportedAssetType.EXPERIMENTS: "Experiment",
             SupportedAssetType.SERVICES: "Service",
+            SupportedAssetType.COMPUTATIONAL_ASSETS: r"Computational%20asset",
+            SupportedAssetType.RESOURCE_BUNDLES: r"Resource%20Bundle",
         }
 
         return urljoin(

@@ -1,4 +1,5 @@
 import logging
+from time import sleep
 
 from app.models.query import RecommenderUserQuery
 from app.services.aiod import get_aiod_asset
@@ -15,6 +16,10 @@ def get_precomputed_embeddings_for_recommender(
     precomputed_embeddings = embedding_store.get_asset_embeddings(
         user_query.asset_id, user_query.asset_type
     )
+
+    # artificial halt to decrease the load on Metadata Catalogue that caused some issues prior
+    sleep(1)
+
     if precomputed_embeddings is None:
         logging.warning(
             f"No embedding found for asset_id='{user_query.asset_id}' ({user_query.asset_type.value}) in Milvus."
