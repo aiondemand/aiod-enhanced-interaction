@@ -308,10 +308,7 @@ class Settings(BaseSettings):
         return self.OLLAMA.URI is not None
 
     def extracts_metadata_from_asset(self, asset_type: SupportedAssetType) -> bool:
-        return (
-            self.PERFORM_METADATA_EXTRACTION
-            and asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
-        )
+        return asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
 
     @property
     def PERFORM_METADATA_EXTRACTION(self) -> bool:
