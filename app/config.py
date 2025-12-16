@@ -37,6 +37,7 @@ class Validators:
 
 
 class MilvusConfig(BaseModel):
+    USE_LITE: bool = Field(default=False)
     FILEPATH: Path | None = Field(default=None)  # specify path to the file-based Milvus Lite DB
     URI: AnyUrl = Field(...)
     USER: str = Field(...)
@@ -55,22 +56,25 @@ class MilvusConfig(BaseModel):
             raise ValueError("Collection name can only contain letters, numbers, and underscores.")
         return value
 
-    @field_validator("STORE_CHUNKS", mode="before")
+    @field_validator("STORE_CHUNKS", "USE_LITE", mode="before")
     @classmethod
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
 
-    @property
-    def LITE(self) -> bool:
-        return self.FILEPATH is not None
+    @model_validator(mode="after")
+    def check_lite(self) -> MilvusConfig:
+        if self.USE_LITE and self.FILEPATH is None:
+            raise ValueError("You need to specify the path to Milvus Lite DB file.")
+
+        return self
 
     @property
     def HOST(self) -> str:
-        return str(self.FILEPATH) if self.LITE else str(self.URI)
+        return str(self.FILEPATH) if self.USE_LITE else str(self.URI)
 
     @property
     def MILVUS_TOKEN(self) -> str:
-        return "" if self.LITE else f"{self.USER}:{self.PASS}"
+        return "" if self.USE_LITE else f"{self.USER}:{self.PASS}"
 
 
 class MetadataFilteringConfig(BaseModel):
@@ -314,7 +318,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def check_milvus_lite(self) -> Settings:
-        if self.MILVUS.LITE and self.METADATA_FILTERING.ENABLED:
+        if self.MILVUS.USE_LITE and self.METADATA_FILTERING.ENABLED:
             raise ValueError("We don't support Metadata Filtering when using Milvus Lite")
         else:
             return self
@@ -325,7 +329,7 @@ class Settings(BaseSettings):
 
     def extracts_metadata_from_asset(self, asset_type: SupportedAssetType) -> bool:
         return (
-            self.MILVUS.LITE is False
+            self.MILVUS.USE_LITE is False
             and asset_type in self.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION
         )
 

@@ -124,7 +124,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
     @property
     def vector_index_kwargs(self) -> dict:
-        if settings.MILVUS.LITE:
+        if settings.MILVUS.USE_LITE:
             return {
                 "index_type": "FLAT",
                 "metric_type": "COSINE",

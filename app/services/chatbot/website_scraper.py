@@ -211,9 +211,9 @@ def create_content_collection(client: MilvusClient, collection_name: str) -> Non
     schema.verify()
 
     vector_index_kwargs = {
-        "index_type": "FLAT" if settings.MILVUS.LITE else "HNSW_SQ",
+        "index_type": "FLAT" if settings.MILVUS.USE_LITE else "HNSW_SQ",
         "metric_type": "COSINE",
-        "params": {} if settings.MILVUS.LITE else {"sq_type": "SQ8"},
+        "params": {} if settings.MILVUS.USE_LITE else {"sq_type": "SQ8"},
     }
     index_params = client.prepare_index_params()
     index_params.add_index(field_name="vector", **vector_index_kwargs)
