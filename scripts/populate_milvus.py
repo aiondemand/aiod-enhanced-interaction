@@ -353,9 +353,9 @@ def create_new_collection(
         asset_type = None
 
     vector_index_kwargs = {
-        "index_type": "HNSW_SQ",
+        "index_type": "FLAT" if is_lite else "HNSW_SQ",
         "metric_type": "COSINE",
-        "params": {"sq_type": "SQ8"},
+        "params": {} if is_lite else {"sq_type": "SQ8"},
     }
     scalar_index_kwargs = {"index_type": "INVERTED"}
 
