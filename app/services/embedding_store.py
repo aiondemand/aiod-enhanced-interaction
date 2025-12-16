@@ -85,8 +85,8 @@ class EmbeddingStore(Generic[SearchParams], ABC):
 
 
 class MilvusClientResilientWrapper(MilvusClient):
-    def __init__(self, uri: str, token: str | None = None) -> None:
-        super().__init__(uri=uri, token=token)
+    def __init__(self, host: str, token: str | None = None) -> None:
+        super().__init__(uri=host, token=token)
 
     def __getattribute__(self, name: str) -> Any:
         attr = super().__getattribute__(name)
@@ -115,7 +115,7 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
         try:
             self.client = MilvusClientResilientWrapper(
-                uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN
+                host=settings.MILVUS.HOST, token=settings.MILVUS.MILVUS_TOKEN
             )
         except Exception as e:
             logging.error(e)
@@ -124,11 +124,18 @@ class MilvusEmbeddingStore(EmbeddingStore[MilvusSearchParams]):
 
     @property
     def vector_index_kwargs(self) -> dict:
-        return {
-            "index_type": "HNSW_SQ",
-            "metric_type": "COSINE",
-            "params": {"sq_type": "SQ8"},
-        }
+        if settings.MILVUS.LITE:
+            return {
+                "index_type": "FLAT",
+                "metric_type": "COSINE",
+                "params": {},
+            }
+        else:
+            return {
+                "index_type": "HNSW_SQ",
+                "metric_type": "COSINE",
+                "params": {"sq_type": "SQ8"},
+            }
 
     @property
     def scalar_index_kwargs(self) -> dict:

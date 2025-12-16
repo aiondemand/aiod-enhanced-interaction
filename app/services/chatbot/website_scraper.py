@@ -42,7 +42,7 @@ async def scraping_wrapper() -> None:
 
 async def populate_collections_wrapper() -> None:
     # TODO we should use MilvusEmbeedingStore instead
-    client = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
+    client = MilvusClient(uri=settings.MILVUS.HOST, token=settings.MILVUS.MILVUS_TOKEN)
     model = AiModel(device=AiModel.get_device())
 
     website_df = pd.concat([await scraper(website) for website in settings.CRAWLER.WEBSITES])
@@ -211,9 +211,9 @@ def create_content_collection(client: MilvusClient, collection_name: str) -> Non
     schema.verify()
 
     vector_index_kwargs = {
-        "index_type": "HNSW_SQ",
+        "index_type": "FLAT" if settings.MILVUS.LITE else "HNSW_SQ",
         "metric_type": "COSINE",
-        "params": {"sq_type": "SQ8"},
+        "params": {} if settings.MILVUS.LITE else {"sq_type": "SQ8"},
     }
     index_params = client.prepare_index_params()
     index_params.add_index(field_name="vector", **vector_index_kwargs)

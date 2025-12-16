@@ -85,6 +85,9 @@ In this file you find the following ENV variables:
 - `QUERY_EXPIRATION_TIME_IN_MINUTES`: Time in minutes after which query results expire and are removed
 - `LOGFIRE_TOKEN`: API Token for Logfire service that monitors LLM traces
 - Milvus config (`MILVUS__*`):
+    - `MILVUS__FILEPATH`: A path to the a local file representing the contents of the database. If you wish not to deploy a fully-fledged Milvus database, but rather want something light-weight but limited in functionality, you can opt for Milvus Lite.
+        - **Important:** If you specify this variable, you automatically opt for using Milvus Lite and you can't perform the Metadata Filtering functionality
+        - *We suggest using Milvus Lite only when the data you wish to vectorize is small enough (less than 1m vectors)*
     - `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
     - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
     - `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
