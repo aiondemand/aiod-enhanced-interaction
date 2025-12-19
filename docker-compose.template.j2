@@ -9,16 +9,26 @@ services:
         USER_GID: ${USER_GID}
     labels:
       autoheal-label: true
+    {% if USE_MILVUS_LITE == "true" %}
+    command: /bin/sh -c "uvicorn app.main:app --host 0.0.0.0 --port 80"
+    {% else %}
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
+    {% endif %}
     env_file:
       - .env.app
     environment:
       - USE_GPU={{ USE_GPU }}
+      - MILVUS__USE_LITE={{ USE_MILVUS_LITE }}
+      {% if USE_MILVUS_LITE == "true" %}
+      - MILVUS__FILEPATH=/data/milvus.db
+      - METADATA_FILTERING__ENABLED=false
+      {% else %}
       - MILVUS__URI=http://milvus-standalone:19530
       - MILVUS__USER=${MILVUS_AIOD_USER}
       - MILVUS__PASS=${MILVUS_AIOD_PASS}
-      - METADATA_FILTERING__ENABLED={{ USE_LLM }}
       - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
+      - METADATA_FILTERING__ENABLED={{ USE_LLM }}
+      {% endif %}
       - MONGO__HOST=mongo
       - MONGO__PORT=27017
       - MONGO__USER=${MONGO_USER}
@@ -32,9 +42,11 @@ services:
     ports:
       - "${APP_HOST_PORT:-8000}:80"
     depends_on:
+      {% if USE_MILVUS_LITE == "false" %}
       milvus-standalone:
         condition: service_healthy
         restart: false
+      {% endif %}
       mongo:
         condition: service_healthy
         restart: false
@@ -46,6 +58,9 @@ services:
     volumes:
       - ${DATA_DIRPATH}/model:/model
       - ${DATA_DIRPATH}/cold_data:/cold_data
+      {% if USE_MILVUS_LITE == "true" %}
+      - ${DATA_DIRPATH}/volumes:/data
+      {% endif %}
     healthcheck:
       # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
       # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76

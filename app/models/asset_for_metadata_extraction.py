@@ -11,6 +11,9 @@ from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.enums import SupportedAssetType
 
 
+# Regardless of whether we have metadata extraction turned on or off, we should still
+# keep track of all the assets we wish to extract metadata from, so that if after some
+# time we actually turn on the metadata extraction logic, we wouldn't need to do any additional migration logic
 class AssetForMetadataExtraction(MongoDocument, BaseDatabaseEntity):
     asset_id: Annotated[AssetId, Indexed()]
     asset_type: SupportedAssetType

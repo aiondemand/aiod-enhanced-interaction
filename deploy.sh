@@ -34,6 +34,12 @@ if [ -z "$DATA_DIRPATH" ]; then
   exit 1
 fi
 
+# Check if USE_MILVUS_LITE is set
+if [ -z "$USE_MILVUS_LITE" ]; then
+  echo "USE_MILVUS_LITE is not set"
+  exit 1
+fi
+
 # What operation we wish to perform
 if [ "$#" -eq 0 ]; then
   COMPOSE_COMMAND="up -d --build"
@@ -68,4 +74,8 @@ else
   exit 1
 fi
 
-docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
+if [ "$USE_MILVUS_LITE" = "true" ]; then
+  docker compose -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
+else
+  docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
+fi

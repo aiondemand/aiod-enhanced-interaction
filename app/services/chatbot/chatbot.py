@@ -23,7 +23,7 @@ from app.config import settings
 
 ASSET_TYPES = [typ.value for typ in settings.AIOD.ASSET_TYPES]
 MISTRAL_CLIENT = Mistral(api_key=settings.CHATBOT.MISTRAL_KEY)
-MILVUS_CLIENT = MilvusClient(uri=str(settings.MILVUS.URI), token=settings.MILVUS.MILVUS_TOKEN)
+MILVUS_CLIENT = MilvusClient(uri=settings.MILVUS.HOST, token=settings.MILVUS.MILVUS_TOKEN)
 EMBEDDING_MODEL = AiModel(device="cpu")
 
 
