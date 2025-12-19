@@ -1,0 +1,27 @@
+# Default values for aiod-enhanced-interaction
+# This is a minimal values file - will be expanded later
+
+# Application image
+app:
+  image:
+    repository: app
+    tag: latest
+  replicas: 1
+
+# MongoDB configuration
+mongo:
+  image:
+    repository: mongo
+    tag: "8.0.9"
+  replicas: 1
+
+# Ollama configuration
+ollama:
+  image:
+    repository: ollama/ollama
+    tag: "0.11.0"
+  replicas: 1
+
+# Storage class
+storageClass:
+  name: aiod-storage-class

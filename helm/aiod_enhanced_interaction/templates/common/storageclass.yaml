@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  labels:
+    {{- include "aiod-enhanced-interaction.labels" . | nindent 4 }}
+provisioner: k8s.io/minikube-hostpath
+volumeBindingMode: Immediate
+reclaimPolicy: Retain
+allowVolumeExpansion: true

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-model-pvc
+  labels:
+    {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.storageClass.name }}
+  resources:
+    requests:
+      storage: 5Gi  # Adjust based on your model size
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-cold-data-pvc
+  labels:
+    {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.storageClass.name }}
+  resources:
+    requests:
+      storage: 20Gi  # Adjust based on your cold data requirements

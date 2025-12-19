@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.mongo.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: 27017
+    targetPort: 27017
+    name: mongo
+  selector:
+    {{- include "aiod-enhanced-interaction.mongo.selectorLabels" . | nindent 4 }}
