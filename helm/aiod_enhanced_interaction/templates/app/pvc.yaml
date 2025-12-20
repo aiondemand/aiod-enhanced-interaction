@@ -4,6 +4,8 @@ metadata:
   name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-model-pvc
   labels:
     {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce
@@ -20,6 +22,8 @@ metadata:
   name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-cold-data-pvc
   labels:
     {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce
@@ -36,6 +40,8 @@ metadata:
   name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-milvus-data-pvc
   labels:
     {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce

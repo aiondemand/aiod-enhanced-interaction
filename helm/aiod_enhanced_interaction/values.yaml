@@ -1,6 +1,3 @@
-# Default values for aiod-enhanced-interaction
-# This is a minimal values file - will be expanded later
-
 # Application image
 app:
   image:
@@ -28,3 +25,114 @@ ollama:
 # Storage class
 storageClass:
   name: aiod-storage-class
+
+################## SECRETS ##################
+# All secrets should be provided by the end user via a values file (e.g., my-values.yaml)
+# DO NOT commit actual secrets to version control
+#
+# Example usage:
+#   Create a my-values.yaml file with your secrets and configuration (see my-values.yaml.example)
+#   helm install my-release . -f my-values.yaml
+#
+# Note: Only logfireToken is optional and can be omitted.
+# All other secrets must be provided in your values file.
+secrets:
+  # MongoDB credentials
+  mongo:
+    username: ""  # REQUIRED: MongoDB root username
+    password: ""  # REQUIRED: MongoDB root password
+  
+  # Milvus credentials
+  milvus:
+    user: "root"  # Default root user when authorization is enabled
+    password: ""  # REQUIRED: Set this - will be used in Milvus extraConfigFiles (user.yaml)
+    
+  # Application secrets
+  chatbot:
+    mistralKey: "mistral_api_key"  # REQUIRED: Mistral API key for chatbot functionality
+  
+  # Optional: Logfire token for logging
+  logfireToken: "logfire_token"  # Optional: Logfire token for observability
+
+################## DEPENDENCIES ##################
+
+# Milvus dependency
+milvus:
+  enabled: true  # Set to false to disable Milvus dependency
+  cluster:
+    enabled: false
+  image:
+    all:
+      tag: v2.5.5
+  # Extra config files for Milvus
+  # Use extraConfigFiles to specify additional Milvus configuration
+  # This will be merged into milvus.yaml with highest priority
+  # REQUIRED: Override this in your values file (e.g., my-values.yaml) with actual credentials
+  # See my-values.yaml for an example of the complete configuration
+  extraConfigFiles:
+    user.yaml: |+
+      etcd:
+        log:
+          level: warn
+      minio:
+        logLevel: warn
+        accessKeyID: ""  # REQUIRED: Override in your values file
+        secretAccessKey: ""  # REQUIRED: Override in your values file
+      log:
+        level: warn
+      queryNode:
+        cache:
+          warmup: async
+      common:
+        security:
+          authorizationEnabled: true
+          defaultRootPassword: ""  # REQUIRED: Override in your values file
+  log:
+    level: warn
+    persistence:
+      enabled: true
+      persistentVolumeClaim:
+        storageClass: aiod-storage-class
+        size: 10Gi
+  standalone:
+    replicas: 1
+    resources:
+      requests:
+        memory: 1Gi
+      limits:
+        memory: 8Gi
+    persistence:
+      enabled: true
+      persistentVolumeClaim:
+        storageClass: aiod-storage-class
+        size: 20Gi
+  minio:
+    enabled: true
+    mode: standalone
+    # MinIO credentials - REQUIRED: Set these values
+    # These are used in the Milvus ConfigMap for MinIO authentication
+    accessKey: ""  # REQUIRED: MinIO access key
+    secretKey: ""  # REQUIRED: MinIO secret key
+    resources:
+      requests:
+        memory: 1Gi
+      limits:
+        memory: 4Gi
+    persistence:
+      enabled: true
+      storageClass: aiod-storage-class
+      size: 50Gi
+  etcd:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    persistence:
+      enabled: true
+      storageClass: aiod-storage-class
+      size: 5Gi
+  pulsarv3:
+    enabled: false

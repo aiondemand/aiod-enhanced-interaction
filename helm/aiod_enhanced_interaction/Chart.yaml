@@ -4,3 +4,8 @@ description: A Helm chart for AIoD Enhanced Interaction application
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
+
+dependencies:
+  - name: milvus
+    version: "4.2.40"
+    repository: "https://zilliztech.github.io/milvus-helm/"

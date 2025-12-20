@@ -15,7 +15,7 @@ data:
   MODEL_BATCH_SIZE: "4"
 
   # Metadata filtering
-  METADATA_FILTERING__ENABLED: "false"
+  METADATA_FILTERING__ENABLED: "true"
   METADATA_FILTERING__ENFORCE_ENUMS: "false"
 
   # AIoD configuration
@@ -26,8 +26,7 @@ data:
   AIOD__TESTING: "true"
 
   # Milvus configuration
-  MILVUS__USE_LITE: "true"
-  MILVUS__FILEPATH: "/data/milvus.db"
+  MILVUS__USE_LITE: "false"
   MILVUS__COLLECTION_PREFIX: "aiod"
   MILVUS__STORE_CHUNKS: "true"
 
@@ -48,6 +47,3 @@ data:
   # Ollama configuration
   OLLAMA__MODEL_NAME: "qwen3:4b-instruct"
   OLLAMA__MAX_TOKENS: "1024"
-
-  # Optional: Logfire configuration
-  LOGFIRE_TOKEN: "pylf_v1_eu_WmrbKyzWn5sbz7PQw11W6jd7n1h0pr9SZnRz8HMT0rXR"

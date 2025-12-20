@@ -116,3 +116,10 @@ Ollama fullname
 {{- define "aiod-enhanced-interaction.ollama.fullname" -}}
 {{- printf "%s-ollama" (include "aiod-enhanced-interaction.fullname" .) }}
 {{- end }}
+
+{{/*
+Milvus fullname (service name from dependency chart)
+*/}}
+{{- define "aiod-enhanced-interaction.milvus.fullname" -}}
+{{- printf "%s-milvus" .Release.Name }}
+{{- end }}

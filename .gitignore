@@ -196,3 +196,10 @@ db/
 # but for the sake of keeping the reposiroty clean we may as well ignore them
 Dockerfile.final
 docker-compose.final.yml
+
+
+# Helm Chart dependencies
+/helm/**/charts/*
+!/helm/**/charts/*.tgz
+
+/helm/**/values.override.yaml

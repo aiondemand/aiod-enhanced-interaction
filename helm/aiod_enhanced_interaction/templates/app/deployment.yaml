@@ -47,10 +47,9 @@ spec:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
               key: password
-        # TODO fix later
         # Milvus configuration
         - name: MILVUS__URI
-          value: "http://milvus-milvus:19530"  # Adjust based on Milvus Helm chart service name
+          value: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:19530"
         - name: MILVUS__USER
           valueFrom:
             secretKeyRef:
@@ -61,11 +60,13 @@ spec:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
               key: milvus-pass
+        {{- if .Values.secrets.milvus.newRootPassword }}
         - name: MILVUS_NEW_ROOT_PASS
           valueFrom:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
               key: milvus-new-root-pass
+        {{- end }}
         # Hardcoded paths and service URLs
         - name: AIOD__JSON_SAVEPATH
           value: "/cold_data"
