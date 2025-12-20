@@ -8,5 +8,5 @@ metadata:
     {{- include "aiod-enhanced-interaction.labels" . | nindent 4 }}
 provisioner: k8s.io/minikube-hostpath
 volumeBindingMode: Immediate
-reclaimPolicy: Retain
+reclaimPolicy: Delete
 allowVolumeExpansion: true

@@ -21,6 +21,7 @@ spec:
       containers:
       - name: app
         image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+        imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
         ports:
         - containerPort: 80
           name: http
@@ -30,7 +31,6 @@ spec:
             name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-config
         # MongoDB configuration (hardcoded values)
         env:
-        # TODO mongo host/port should be the same as the MongoDB service
         - name: MONGO__HOST
           value: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
         - name: MONGO__PORT
@@ -47,6 +47,7 @@ spec:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
               key: password
+        # TODO fix later
         # Milvus configuration
         - name: MILVUS__URI
           value: "http://milvus-milvus:19530"  # Adjust based on Milvus Helm chart service name
@@ -87,19 +88,13 @@ spec:
           mountPath: /model
         - name: cold-data
           mountPath: /cold_data
+        - name: milvus-data
+          mountPath: /data
         # Run Milvus credentials setup script before starting the application
         command:
         - /bin/sh
         - -c
-        - |
-          echo "Waiting for Milvus to be ready..."
-          # Wait for Milvus service to be available
-          until python -c "import socket; s = socket.socket(); s.settimeout(2); result = s.connect_ex(('milvus-milvus', 19530)); s.close(); exit(0 if result == 0 else 1)" 2>/dev/null; do
-            echo "Milvus not ready, waiting..."
-            sleep 2
-          done
-          echo "Milvus is ready, running credentials setup..."
-          python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80
+        - uvicorn app.main:app --host 0.0.0.0 --port 80
         resources:
           requests:
             memory: "2Gi"
@@ -132,6 +127,9 @@ spec:
       - name: cold-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-cold-data-pvc
+      - name: milvus-data
+        persistentVolumeClaim:
+          claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-milvus-data-pvc
       # Uncomment the following section if GPU support is needed
       # nodeSelector:
       #   accelerator: nvidia-tesla-k80  # Adjust based on your GPU node labels

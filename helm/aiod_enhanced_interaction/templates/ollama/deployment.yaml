@@ -17,6 +17,7 @@ spec:
       containers:
       - name: ollama
         image: "{{ .Values.ollama.image.repository }}:{{ .Values.ollama.image.tag }}"
+        imagePullPolicy: {{ .Values.ollama.image.imagePullPolicy }}
         ports:
         - containerPort: 11434
           name: ollama
@@ -56,14 +57,6 @@ spec:
       - name: ollama-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}-pvc
-      # Uncomment the following section if GPU support is needed
-      # nodeSelector:
-      #   accelerator: nvidia-tesla-k80  # Adjust based on your GPU node labels
-      # tolerations:
-      # - key: nvidia.com/gpu
-      #   operator: Exists
-      #   effect: NoSchedule
-      # If GPU is available, add:
       # resources:
       #   limits:
       #     nvidia.com/gpu: 1

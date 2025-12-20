@@ -10,10 +10,12 @@ data:
 
   # API configuration
   API_VERSION: "/v2"
-  USE_GPU: "false"
+  USE_GPU: "true"
+  MODEL_LOADPATH: "Alibaba-NLP/gte-large-en-v1.5"
+  MODEL_BATCH_SIZE: "4"
 
   # Metadata filtering
-  METADATA_FILTERING__ENABLED: "true"
+  METADATA_FILTERING__ENABLED: "false"
   METADATA_FILTERING__ENFORCE_ENUMS: "false"
 
   # AIoD configuration
@@ -24,6 +26,8 @@ data:
   AIOD__TESTING: "true"
 
   # Milvus configuration
+  MILVUS__USE_LITE: "true"
+  MILVUS__FILEPATH: "/data/milvus.db"
   MILVUS__COLLECTION_PREFIX: "aiod"
   MILVUS__STORE_CHUNKS: "true"
 
@@ -31,7 +35,7 @@ data:
   MONGO__DBNAME: "aiod"
 
   # Chatbot configuration
-  CHATBOT__USE_CHATBOT: "true"
+  CHATBOT__USE_CHATBOT: "false"
   CHATBOT__MISTRAL_MODEL: "mistral-medium-latest"
   CHATBOT__TOP_K_ASSETS_TO_SEARCH: "10"
   CHATBOT__MYLIBRARY_URL: "https://mylibrary.aiod.eu"

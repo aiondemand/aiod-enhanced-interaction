@@ -18,6 +18,7 @@ spec:
       containers:
       - name: mongo
         image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
+        imagePullPolicy: {{ .Values.mongo.image.imagePullPolicy }}
         ports:
         - containerPort: 27017
           name: mongo

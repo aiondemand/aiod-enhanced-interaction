@@ -4,8 +4,9 @@
 # Application image
 app:
   image:
-    repository: app
-    tag: latest
+    repository: aiod-ei
+    tag: gpu    # [gpu, cpu]
+    imagePullPolicy: IfNotPresent
   replicas: 1
 
 # MongoDB configuration
@@ -13,6 +14,7 @@ mongo:
   image:
     repository: mongo
     tag: "8.0.9"
+    imagePullPolicy: IfNotPresent
   replicas: 1
 
 # Ollama configuration
@@ -20,6 +22,7 @@ ollama:
   image:
     repository: ollama/ollama
     tag: "0.11.0"
+    imagePullPolicy: IfNotPresent
   replicas: 1
 
 # Storage class
