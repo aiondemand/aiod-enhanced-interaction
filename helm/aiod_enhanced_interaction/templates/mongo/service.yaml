@@ -5,9 +5,9 @@ metadata:
   labels:
     {{- include "aiod-enhanced-interaction.mongo.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.mongo.service.type }}
   ports:
-  - port: 27017
+  - port: {{ .Values.mongo.service.port }}
     targetPort: 27017
     name: mongo
   selector:

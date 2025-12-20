@@ -33,16 +33,15 @@ spec:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
               key: password
+        {{- if .Values.mongo.persistence.enabled }}
         volumeMounts:
         - name: mongo-data
           mountPath: /data/db
+        {{- end }}
+        {{- with .Values.mongo.resources }}
         resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         readinessProbe:
           exec:
             command:
@@ -65,12 +64,14 @@ spec:
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 3
+  {{- if .Values.mongo.persistence.enabled }}
   volumeClaimTemplates:
   - metadata:
       name: mongo-data
     spec:
       accessModes: [ "ReadWriteOnce" ]
-      storageClassName: {{ .Values.storageClass.name }}
+      storageClassName: {{ .Values.mongo.persistence.storageClass | default .Values.storageClass.name }}
       resources:
         requests:
-          storage: 10Gi
+          storage: {{ .Values.mongo.persistence.size }}
+  {{- end }}

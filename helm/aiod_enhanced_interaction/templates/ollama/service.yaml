@@ -5,9 +5,9 @@ metadata:
   labels:
     {{- include "aiod-enhanced-interaction.ollama.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.ollama.service.type }}
   ports:
-  - port: 11434
+  - port: {{ .Values.ollama.service.port }}
     targetPort: 11434
     name: ollama
   selector:

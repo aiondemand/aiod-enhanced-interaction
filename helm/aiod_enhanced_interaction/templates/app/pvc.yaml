@@ -1,3 +1,4 @@
+{{- if .Values.app.persistence.model.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -9,13 +10,15 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storageClass.name }}
+  storageClassName: {{ .Values.app.persistence.model.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
-      storage: 5Gi  # Adjust based on your model size
+      storage: {{ .Values.app.persistence.model.size }}
+{{- end }}  
 
 ---
 
+{{- if .Values.app.persistence.coldData.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -27,13 +30,15 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storageClass.name }}
+  storageClassName: {{ .Values.app.persistence.coldData.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
-      storage: 20Gi  # Adjust based on your cold data requirements
+      storage: {{ .Values.app.persistence.coldData.size }}
+{{- end }}
 
 ---
 
+{{- if .Values.app.persistence.milvusData.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -45,7 +50,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storageClass.name }}
+  storageClassName: {{ .Values.app.persistence.milvusData.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
-      storage: 20Gi  # Adjust based on your cold data requirements
+      storage: {{ .Values.app.persistence.milvusData.size }}
+{{- end }}

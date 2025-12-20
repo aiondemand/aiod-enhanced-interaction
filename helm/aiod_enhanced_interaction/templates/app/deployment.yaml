@@ -11,10 +11,6 @@ spec:
       {{- include "aiod-enhanced-interaction.app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
         {{- include "aiod-enhanced-interaction.app.selectorLabels" . | nindent 8 }}
     spec:
@@ -29,14 +25,16 @@ spec:
         envFrom:
         - configMapRef:
             name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-config
-        # MongoDB configuration (hardcoded values)
+        # Import entire app Secret as environment variables
+        - secretRef:
+            name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
+            optional: false
         env:
+        # MongoDB service connection
         - name: MONGO__HOST
           value: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
         - name: MONGO__PORT
-          value: "27017"
-        # MongoDB credentials from Secret
-        # TODO share secrets among multiple resources
+          value: {{ .Values.mongo.service.port | quote }}
         - name: MONGO__USER
           valueFrom:
             secretKeyRef:
@@ -47,62 +45,35 @@ spec:
             secretKeyRef:
               name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
               key: password
-        # Milvus configuration
+        # Milvus service connection
         - name: MILVUS__URI
-          value: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:19530"
-        - name: MILVUS__USER
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
-              key: milvus-user
-        - name: MILVUS__PASS
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
-              key: milvus-pass
-        {{- if .Values.secrets.milvus.newRootPassword }}
-        - name: MILVUS_NEW_ROOT_PASS
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
-              key: milvus-new-root-pass
-        {{- end }}
-        # Hardcoded paths and service URLs
-        - name: AIOD__JSON_SAVEPATH
-          value: "/cold_data"
+          value: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:{{ .Values.milvus.service.port }}"
+        # Ollama service connection
         - name: OLLAMA__URI
-          value: "http://{{ include "aiod-enhanced-interaction.ollama.fullname" . }}:11434"
-        # Secrets from app-secret
-        - name: CHATBOT__MISTRAL_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
-              key: CHATBOT__MISTRAL_KEY
-        - name: LOGFIRE_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
-              key: LOGFIRE_TOKEN
-              optional: true
+          value: "http://{{ include "aiod-enhanced-interaction.ollama.fullname" . }}:{{ .Values.ollama.service.port }}"
+        {{- if or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled .Values.app.persistence.milvusData.enabled }}
         volumeMounts:
+        {{- if .Values.app.persistence.model.enabled }}
         - name: model-data
           mountPath: /model
+        {{- end }}
+        {{- if .Values.app.persistence.coldData.enabled }}
         - name: cold-data
           mountPath: /cold_data
+        {{- end }}
+        {{- if .Values.app.persistence.milvusData.enabled }}
         - name: milvus-data
           mountPath: /data
-        # Run Milvus credentials setup script before starting the application
+        {{- end }}
+        {{- end }}
         command:
         - /bin/sh
         - -c
         - uvicorn app.main:app --host 0.0.0.0 --port 80
+        {{- with .Values.app.resources }}
         resources:
-          requests:
-            memory: "2Gi"
-            cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         readinessProbe:
           httpGet:
             path: /health
@@ -121,24 +92,21 @@ spec:
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 3
+      {{- if or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled .Values.app.persistence.milvusData.enabled }}
       volumes:
+      {{- if .Values.app.persistence.model.enabled }}
       - name: model-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-model-pvc
+      {{- end }}
+      {{- if .Values.app.persistence.coldData.enabled }}
       - name: cold-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-cold-data-pvc
+      {{- end }}
+      {{- if .Values.app.persistence.milvusData.enabled }}
       - name: milvus-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-milvus-data-pvc
-      # Uncomment the following section if GPU support is needed
-      # nodeSelector:
-      #   accelerator: nvidia-tesla-k80  # Adjust based on your GPU node labels
-      # tolerations:
-      # - key: nvidia.com/gpu
-      #   operator: Exists
-      #   effect: NoSchedule
-      # If GPU is available, add to container resources:
-      # resources:
-      #   limits:
-      #     nvidia.com/gpu: 1
+      {{- end }}
+      {{- end }}

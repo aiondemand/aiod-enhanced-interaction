@@ -1,10 +1,90 @@
-# Application image
+# Application configuration
 app:
   image:
     repository: aiod-ei
     tag: gpu    # [gpu, cpu]
     imagePullPolicy: IfNotPresent
   replicas: 1
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "2Gi"
+    limits:
+      memory: "4Gi"
+  
+  # Persistent Volume Claims configuration
+  persistence:
+    model:
+      enabled: true
+      size: 5Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+    coldData:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+    milvusData:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+  
+  # Application configuration (ConfigMap values)
+  config:
+    # API configuration
+    api:
+      version: "/v2"
+    
+    # Model configuration
+    model:
+      useGpu: "true"
+      loadPath: "Alibaba-NLP/gte-large-en-v1.5"
+      batchSize: "1"
+    
+    # Metadata filtering
+    metadataFiltering:
+      enabled: "true"
+      enforceEnums: "false"
+    
+    # AIoD configuration
+    aiod:
+      url: "https://aiod-rest-api-ncsr.dev.deployai.eu/v2"
+      commaSeparatedAssetTypes: "datasets,ml_models,publications,educational_resources"
+      commaSeparatedAssetTypesForMetadataExtraction: "datasets,ml_models,publications,educational_resources"
+      windowSize: "1000"
+      testing: "true"
+    
+    # Milvus configuration
+    milvus:
+      useLite: "false"
+      collectionPrefix: "aiod"
+      storeChunks: "true"
+    
+    # MongoDB configuration
+    mongo:
+      dbName: "aiod"
+    
+    # Chatbot configuration
+    chatbot:
+      useChatbot: "false"
+      mistralModel: "mistral-medium-latest"
+      topKAssetsToSearch: "10"
+      mylibraryUrl: "https://mylibrary.aiod.eu"
+    
+    # Crawler configuration
+    crawler:
+      commaSeparatedWebsites: "https://aiod.eu"
+      commaSeparatedApiWebsites: "https://aiondemand.github.io/AIOD-rest-api,https://api.aiod.eu"
+      commaSeparatedBlockedWebsites: "https://auth.aiod.eu"
+    
+    # Ollama configuration
+    ollama:
+      modelName: "qwen3:4b-instruct"
+      maxTokens: "1024"
 
 # MongoDB configuration
 mongo:
@@ -13,6 +93,24 @@ mongo:
     tag: "8.0.9"
     imagePullPolicy: IfNotPresent
   replicas: 1
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 27017
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "512Mi"
+    limits:
+      memory: "2Gi"
+  
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Uses global storageClass.name if empty
 
 # Ollama configuration
 ollama:
@@ -21,6 +119,24 @@ ollama:
     tag: "0.11.0"
     imagePullPolicy: IfNotPresent
   replicas: 1
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 11434
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "4Gi"
+    limits:
+      memory: "8Gi"
+  
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 30Gi
+    storageClass: ""  # Uses global storageClass.name if empty
 
 # Storage class
 storageClass:
@@ -87,6 +203,9 @@ milvus:
         security:
           authorizationEnabled: true
           defaultRootPassword: ""  # REQUIRED: Override in your values file
+  service:
+    type: ClusterIP
+    port: 19530
   log:
     level: warn
     persistence:

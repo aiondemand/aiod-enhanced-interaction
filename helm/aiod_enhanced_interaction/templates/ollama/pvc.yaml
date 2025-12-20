@@ -1,3 +1,4 @@
+{{- if .Values.ollama.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -9,7 +10,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storageClass.name }}
+  storageClassName: {{ .Values.ollama.persistence.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
-      storage: 30Gi
+      storage: {{ .Values.ollama.persistence.size }}
+{{- end }}

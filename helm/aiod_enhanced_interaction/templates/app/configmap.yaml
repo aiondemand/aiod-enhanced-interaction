@@ -9,41 +9,42 @@ data:
   # This allows using envFrom to import all values at once
 
   # API configuration
-  API_VERSION: "/v2"
-  USE_GPU: "true"
-  MODEL_LOADPATH: "Alibaba-NLP/gte-large-en-v1.5"
-  MODEL_BATCH_SIZE: "4"
-
+  API_VERSION: {{ .Values.app.config.api.version | quote }}
+  USE_GPU: {{ .Values.app.config.model.useGpu | quote }}
+  MODEL_LOADPATH: {{ .Values.app.config.model.loadPath | quote }}
+  MODEL_BATCH_SIZE: {{ .Values.app.config.model.batchSize | quote }}
+  
   # Metadata filtering
-  METADATA_FILTERING__ENABLED: "true"
-  METADATA_FILTERING__ENFORCE_ENUMS: "false"
+  METADATA_FILTERING__ENABLED: {{ .Values.app.config.metadataFiltering.enabled | quote }}
+  METADATA_FILTERING__ENFORCE_ENUMS: {{ .Values.app.config.metadataFiltering.enforceEnums | quote }}
 
   # AIoD configuration
-  AIOD__URL: "https://aiod-rest-api-ncsr.dev.deployai.eu/v2"
-  AIOD__COMMA_SEPARATED_ASSET_TYPES: "datasets,ml_models,publications,educational_resources"
-  AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: "datasets,ml_models,publications,educational_resources"
-  AIOD__WINDOW_SIZE: "1000"
-  AIOD__TESTING: "true"
+  AIOD__URL: {{ .Values.app.config.aiod.url | quote }}
+  AIOD__COMMA_SEPARATED_ASSET_TYPES: {{ .Values.app.config.aiod.commaSeparatedAssetTypes | quote }}
+  AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: {{ .Values.app.config.aiod.commaSeparatedAssetTypesForMetadataExtraction | quote }}
+  AIOD__WINDOW_SIZE: {{ .Values.app.config.aiod.windowSize | quote }}
+  AIOD__TESTING: {{ .Values.app.config.aiod.testing | quote }}
+  AIOD__JSON_SAVEPATH: "/cold_data"
 
   # Milvus configuration
-  MILVUS__USE_LITE: "false"
-  MILVUS__COLLECTION_PREFIX: "aiod"
-  MILVUS__STORE_CHUNKS: "true"
+  MILVUS__USE_LITE: {{ .Values.app.config.milvus.useLite | quote }}
+  MILVUS__COLLECTION_PREFIX: {{ .Values.app.config.milvus.collectionPrefix | quote }}
+  MILVUS__STORE_CHUNKS: {{ .Values.app.config.milvus.storeChunks | quote }}
 
   # Mongo configuration
-  MONGO__DBNAME: "aiod"
+  MONGO__DBNAME: {{ .Values.app.config.mongo.dbName | quote }}
 
   # Chatbot configuration
-  CHATBOT__USE_CHATBOT: "false"
-  CHATBOT__MISTRAL_MODEL: "mistral-medium-latest"
-  CHATBOT__TOP_K_ASSETS_TO_SEARCH: "10"
-  CHATBOT__MYLIBRARY_URL: "https://mylibrary.aiod.eu"
+  CHATBOT__USE_CHATBOT: {{ .Values.app.config.chatbot.useChatbot | quote }}
+  CHATBOT__MISTRAL_MODEL: {{ .Values.app.config.chatbot.mistralModel | quote }}
+  CHATBOT__TOP_K_ASSETS_TO_SEARCH: {{ .Values.app.config.chatbot.topKAssetsToSearch | quote }}
+  CHATBOT__MYLIBRARY_URL: {{ .Values.app.config.chatbot.mylibraryUrl | quote }}
 
   # Crawler configuration
-  CRAWLER__COMMA_SEPARATED_WEBSITES: "https://aiod.eu"
-  CRAWLER__COMMA_SEPARATED_API_WEBSITES: "https://aiondemand.github.io/AIOD-rest-api,https://api.aiod.eu"
-  CRAWLER__COMMA_SEPARATED_BLOCKED_WEBSITES: "https://auth.aiod.eu"
+  CRAWLER__COMMA_SEPARATED_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedWebsites | quote }}
+  CRAWLER__COMMA_SEPARATED_API_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedApiWebsites | quote }}
+  CRAWLER__COMMA_SEPARATED_BLOCKED_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedBlockedWebsites | quote }}
 
   # Ollama configuration
-  OLLAMA__MODEL_NAME: "qwen3:4b-instruct"
-  OLLAMA__MAX_TOKENS: "1024"
+  OLLAMA__MODEL_NAME: {{ .Values.app.config.ollama.modelName | quote }}
+  OLLAMA__MAX_TOKENS: {{ .Values.app.config.ollama.maxTokens | quote }}

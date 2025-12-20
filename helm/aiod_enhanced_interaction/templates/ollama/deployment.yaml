@@ -21,16 +21,15 @@ spec:
         ports:
         - containerPort: 11434
           name: ollama
+        {{- if .Values.ollama.persistence.enabled }}
         volumeMounts:
         - name: ollama-data
           mountPath: /root/.ollama/
+        {{- end }}
+        {{- with .Values.ollama.resources }}
         resources:
-          requests:
-            memory: "4Gi"
-            cpu: "1000m"
-          limits:
-            memory: "8Gi"
-            cpu: "2000m"
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         readinessProbe:
           exec:
             command:
@@ -53,10 +52,9 @@ spec:
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 3
+      {{- if .Values.ollama.persistence.enabled }}
       volumes:
       - name: ollama-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}-pvc
-      # resources:
-      #   limits:
-      #     nvidia.com/gpu: 1
+      {{- end }}
