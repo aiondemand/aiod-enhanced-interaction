@@ -1,0 +1,34 @@
+{{- if .Values.dbPopulation.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aiod-enhanced-interaction.fullname" . }}-db-population-config
+  labels:
+    {{- include "aiod-enhanced-interaction.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-population
+data:
+  # Milvus population configuration
+  INPUT_DIRPATH: "/data/embeddings"
+  MILVUS_USE_LITE: {{ not .Values.milvus.enabled | quote }}
+  {{- if .Values.milvus.enabled }}
+  MILVUS_HOST: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.milvus.service.port }}"
+  {{- else }}
+  MILVUS_HOST: "/data/milvus.db"
+  {{- end }}
+  OLD_MILVUS_COLLECTION_PREFIX: "AIoD_STS_GTE"  # Prefix used in existing data
+  NEW_MILVUS_COLLECTION_PREFIX: "aiod"  # Should match app.config.milvus.collectionPrefix
+
+  METADATA_FIELDS_PATH: "/code/milvus_metadata_fields.json"
+
+  # MongoDB population configuration
+  MONGO_HOST: "{{ include "aiod-enhanced-interaction.mongo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local"
+  MONGO_PORT: {{ .Values.mongo.service.port | quote }}
+  MONGO_DBNAME: {{ .Values.app.config.mongo.dbName | quote }}
+  MONGO_AUTH_DBNAME: "admin"
+
+  # Service names for init containers
+  MILVUS_SERVICE_NAME: "{{ include "aiod-enhanced-interaction.milvus.fullname" . }}"
+  MILVUS_SERVICE_PORT: {{ .Values.milvus.service.port | quote }}
+  MONGO_SERVICE_NAME: "{{ include "aiod-enhanced-interaction.mongo.fullname" . }}"
+  MONGO_SERVICE_PORT: {{ .Values.mongo.service.port | quote }}
+{{- end }}

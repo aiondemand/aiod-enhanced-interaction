@@ -1,0 +1,182 @@
+{{- if .Values.dbPopulation.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aiod-enhanced-interaction.fullname" . }}-populate-databases
+  labels:
+    {{- include "aiod-enhanced-interaction.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-population
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "aiod-enhanced-interaction.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: db-population
+    spec:
+      restartPolicy: Never
+      initContainers:
+      # Wait for Milvus to be ready
+      {{- if .Values.milvus.enabled }}
+      - name: wait-for-milvus
+        image: busybox:1.35
+        envFrom:
+        - configMapRef:
+            name: {{ include "aiod-enhanced-interaction.fullname" . }}-db-population-config
+        env:
+        - name: NAMESPACE
+          value: {{ .Release.Namespace | quote }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for Milvus to be ready..."
+          until nc -z $MILVUS_SERVICE_NAME.$NAMESPACE.svc.cluster.local $MILVUS_SERVICE_PORT; do
+            echo "Milvus not ready yet, waiting..."
+            sleep 2
+          done
+          echo "Milvus is ready!"
+      {{- end }}
+
+      # Wait for MongoDB to be ready
+      - name: wait-for-mongodb
+        image: busybox:1.35
+        envFrom:
+        - configMapRef:
+            name: {{ include "aiod-enhanced-interaction.fullname" . }}-db-population-config
+        env:
+        - name: NAMESPACE
+          value: {{ .Release.Namespace | quote }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for MongoDB to be ready..."
+          until nc -z $MONGO_SERVICE_NAME.$NAMESPACE.svc.cluster.local $MONGO_SERVICE_PORT; do
+            echo "MongoDB not ready yet, waiting..."
+            sleep 2
+          done
+          echo "MongoDB is ready!"
+
+      containers:
+      # Populate Milvus database
+      - name: populate-milvus
+        image: {{ .Values.dbPopulation.image | quote }}
+        imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "aiod-enhanced-interaction.fullname" . }}-db-population-config
+        env:
+        - name: MILVUS_USER
+          value: {{ if .Values.milvus.enabled }}{{ .Values.secrets.milvus.user | quote }}{{ else }}"root"{{ end }}
+        - name: MILVUS_PASS
+          value: {{ if .Values.milvus.enabled }}{{ .Values.secrets.milvus.password | quote }}{{ else }}""{{ end }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Starting Milvus population..."
+          python populate_milvus.py \
+            -i $INPUT_DIRPATH \
+            --lite $MILVUS_USE_LITE \
+            --uri $MILVUS_HOST \
+            -u $MILVUS_USER \
+            -p $MILVUS_PASS \
+            --old-collection-prefix $OLD_MILVUS_COLLECTION_PREFIX \
+            --new-collection-prefix $NEW_MILVUS_COLLECTION_PREFIX \
+            --metadata-fields-path $METADATA_FIELDS_PATH
+          echo "Milvus population completed successfully!"
+        volumeMounts:
+        - name: db-dumps
+          mountPath: /data
+          readOnly: true
+        {{- with .Values.dbPopulation.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+
+      # Populate MongoDB database
+      - name: populate-mongodb
+        image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
+        imagePullPolicy: {{ .Values.mongo.image.imagePullPolicy }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "aiod-enhanced-interaction.fullname" . }}-db-population-config
+        env:
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: username
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: password
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Waiting for MongoDB to be fully ready..."
+          until mongosh --host $MONGO_HOST \
+            --username $MONGO_USERNAME --password $MONGO_PASSWORD \
+            --authenticationDatabase $MONGO_AUTH_DBNAME \
+            --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+            echo "MongoDB not ready yet, waiting..."
+            sleep 2
+          done
+
+          echo "MongoDB is ready. Starting import..."
+
+          # Import assetCollections
+          if [ -f /dump/mongo-dumps/assetCollections.json ]; then
+            echo "Importing assetCollections..."
+            mongoimport --host $MONGO_HOST \
+              --username $MONGO_USERNAME --password $MONGO_PASSWORD \
+              --authenticationDatabase $MONGO_AUTH_DBNAME \
+              --db $MONGO_DBNAME \
+              --collection assetCollections \
+              --file /dump/mongo-dumps/assetCollections.json \
+              --jsonArray \
+              --drop
+            echo "assetCollections imported successfully"
+          else
+            echo "Warning: assetCollections.json not found, skipping..."
+          fi
+
+          # Import assetsForMetadataExtraction (only if not using Milvus Lite)
+          {{- if .Values.milvus.enabled }}
+          if [ -f /dump/mongo-dumps/assetsForMetadataExtraction.json ]; then
+            echo "Importing assetsForMetadataExtraction..."
+            mongoimport --host $MONGO_HOST \
+              --username $MONGO_USERNAME --password $MONGO_PASSWORD \
+              --authenticationDatabase $MONGO_AUTH_DBNAME \
+              --db $MONGO_DBNAME \
+              --collection assetsForMetadataExtraction \
+              --file /dump/mongo-dumps/assetsForMetadataExtraction.json \
+              --jsonArray \
+              --drop
+            echo "assetsForMetadataExtraction imported successfully"
+          else
+            echo "Skipping assetsForMetadataExtraction (file not found)"
+          fi
+          {{- else }}
+          echo "Skipping assetsForMetadataExtraction (Milvus Lite mode)"
+          {{- end }}
+
+          echo "MongoDB population completed successfully!"
+        volumeMounts:
+        - name: db-dumps
+          mountPath: /dump
+          readOnly: true
+        {{- with .Values.dbPopulation.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+
+      volumes:
+      - name: db-dumps
+        persistentVolumeClaim:
+          claimName: {{ include "aiod-enhanced-interaction.fullname" . }}-db-dumps-pvc
+{{- end }}

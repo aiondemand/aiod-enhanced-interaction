@@ -2,11 +2,11 @@ secrets:
   mongo:
     username: "your-mongo-username"
     password: "your-mongo-password"
-  
+
   milvus:
     password: "your-milvus-root-password"
 
-  chatbot: 
+  chatbot:
     mistralKey: "your-mistral-api-key"
 
   logfireToken: ""
@@ -37,4 +37,3 @@ milvus:
         security:
           authorizationEnabled: true
           defaultRootPassword: "your-milvus-root-password"
-

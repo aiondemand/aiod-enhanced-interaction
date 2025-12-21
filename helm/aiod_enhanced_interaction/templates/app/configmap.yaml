@@ -1,3 +1,4 @@
+{{- if .Values.app.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,10 +11,10 @@ data:
 
   # API configuration
   API_VERSION: {{ .Values.app.config.api.version | quote }}
-  USE_GPU: {{ .Values.app.config.model.useGpu | quote }}
+  USE_GPU: {{ .Values.use_gpu | quote }}
   MODEL_LOADPATH: {{ .Values.app.config.model.loadPath | quote }}
   MODEL_BATCH_SIZE: {{ .Values.app.config.model.batchSize | quote }}
-  
+
   # Metadata filtering
   {{- if and .Values.use_llm (not .Values.milvus.enabled) }}
   {{- fail "Metadata filtering is not allowed when use_llm is enabled and Milvus dependency is disabled" }}
@@ -52,3 +53,4 @@ data:
   # Ollama configuration
   OLLAMA__MODEL_NAME: {{ .Values.app.config.ollama.modelName | quote }}
   OLLAMA__MAX_TOKENS: {{ .Values.app.config.ollama.maxTokens | quote }}
+{{- end }}

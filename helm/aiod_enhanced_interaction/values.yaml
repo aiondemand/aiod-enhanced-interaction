@@ -5,23 +5,25 @@ use_chatbot: true
 
 # Application configuration
 app:
+  enabled: true # You only wish to set this to False for debugging purposes
+
   image:
     repository: aiod-ei
     imagePullPolicy: IfNotPresent
   replicas: 1
-  
+
   # Service configuration
   service:
     type: ClusterIP
     port: 80
-  
+
   # Resource requests and limits
   resources:
     requests:
       memory: "2Gi"
     limits:
       memory: "4Gi"
-  
+
   # Persistent Volume Claims configuration
   persistence:
     model:
@@ -36,22 +38,22 @@ app:
       enabled: true
       size: 20Gi
       storageClass: ""  # Uses global storageClass.name if empty
-  
+
   # Application configuration (ConfigMap values)
   config:
     # API configuration
     api:
       version: "/v2"
-    
+
     # Model configuration
     model:
       loadPath: "Alibaba-NLP/gte-large-en-v1.5"
       batchSize: "1"
-    
+
     # Metadata filtering
     metadataFiltering:
       enforceEnums: "false"
-    
+
     # AIoD configuration
     aiod:
       url: "https://aiod-rest-api-ncsr.dev.deployai.eu/v2"
@@ -59,28 +61,28 @@ app:
       commaSeparatedAssetTypesForMetadataExtraction: "datasets,ml_models,publications,educational_resources"
       windowSize: "1000"
       testing: "true"
-    
+
     # Milvus configuration
     milvus:
       collectionPrefix: "aiod"
       storeChunks: "true"
-    
+
     # MongoDB configuration
     mongo:
       dbName: "aiod"
-    
+
     # Chatbot configuration
     chatbot:
       mistralModel: "mistral-medium-latest"
       topKAssetsToSearch: "10"
       mylibraryUrl: "https://mylibrary.aiod.eu"
-    
+
     # Crawler configuration
     crawler:
       commaSeparatedWebsites: "https://aiod.eu"
       commaSeparatedApiWebsites: "https://aiondemand.github.io/AIOD-rest-api,https://api.aiod.eu"
       commaSeparatedBlockedWebsites: "https://auth.aiod.eu"
-    
+
     # Ollama configuration
     ollama:
       modelName: "qwen3:4b-instruct"
@@ -93,19 +95,19 @@ mongo:
     tag: "8.0.9"
     imagePullPolicy: IfNotPresent
   replicas: 1
-  
+
   # Service configuration
   service:
     type: ClusterIP
     port: 27017
-  
+
   # Resource requests and limits
   resources:
     requests:
       memory: "512Mi"
     limits:
       memory: "2Gi"
-  
+
   # Persistent Volume Claims configuration
   persistence:
     enabled: true
@@ -119,19 +121,19 @@ ollama:
     tag: "0.11.0"
     imagePullPolicy: IfNotPresent
   replicas: 1
-  
+
   # Service configuration
   service:
     type: ClusterIP
     port: 11434
-  
+
   # Resource requests and limits
   resources:
     requests:
       memory: "4Gi"
     limits:
       memory: "8Gi"
-  
+
   # Persistent Volume Claims configuration
   persistence:
     enabled: true
@@ -141,6 +143,25 @@ ollama:
 # Storage class
 storageClass:
   name: aiod-storage-class
+
+################## DATABASE POPULATION ##################
+# Database population configuration for initial data setup
+# This allows you to populate Milvus and MongoDB with initial data before deploying the app
+dbPopulation:
+  image: aiod-ei:populate-db
+
+  enabled: false  # Set to true to enable database population resources
+  # PVC for storing database dumps
+  pvc:
+    size: 20Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+
+  resources:
+    requests:
+      memory: 2Gi
+    limits:
+      memory: 4Gi
+
 
 ################## SECRETS ##################
 # All secrets should be provided by the end user via a values file (e.g., my-values.yaml)
@@ -157,16 +178,16 @@ secrets:
   mongo:
     username: ""  # REQUIRED: MongoDB root username
     password: ""  # REQUIRED: MongoDB root password
-  
+
   # Milvus credentials
   milvus:
     user: "root"  # Default root user when authorization is enabled
     password: ""  # REQUIRED: Set this - will be used in Milvus extraConfigFiles (user.yaml)
-    
+
   # Application secrets
   chatbot:
     mistralKey: "mistral_api_key"  # REQUIRED: Mistral API key for chatbot functionality
-  
+
   # Optional: Logfire token for logging
   logfireToken: "logfire_token"  # Optional: Logfire token for observability
 

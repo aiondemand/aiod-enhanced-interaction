@@ -1,4 +1,4 @@
-{{- if .Values.app.persistence.model.enabled }}
+{{- if and .Values.app.enabled .Values.app.persistence.model.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -14,11 +14,11 @@ spec:
   resources:
     requests:
       storage: {{ .Values.app.persistence.model.size }}
-{{- end }}  
+{{- end }}
 
 ---
 
-{{- if .Values.app.persistence.coldData.enabled }}
+{{- if and .Values.app.enabled .Values.app.persistence.coldData.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -38,7 +38,7 @@ spec:
 
 ---
 
-{{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
+{{- if and .Values.app.enabled (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

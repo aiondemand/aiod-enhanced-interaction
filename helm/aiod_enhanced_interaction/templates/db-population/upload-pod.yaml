@@ -1,0 +1,24 @@
+{{- if and .Values.dbPopulation.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "aiod-enhanced-interaction.fullname" . }}-upload-data
+  labels:
+    {{- include "aiod-enhanced-interaction.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-population
+spec:
+  restartPolicy: Never
+  containers:
+  - name: uploader
+    image: busybox:1.35
+    command:
+    - sleep
+    - "86400"
+    volumeMounts:
+    - name: db-dumps
+      mountPath: /data
+  volumes:
+  - name: db-dumps
+    persistentVolumeClaim:
+      claimName: {{ include "aiod-enhanced-interaction.fullname" . }}-db-dumps-pvc
+{{- end }}
