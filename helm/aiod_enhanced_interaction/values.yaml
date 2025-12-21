@@ -1,8 +1,12 @@
+# Main config
+use_gpu: true
+use_llm: true
+use_chatbot: true
+
 # Application configuration
 app:
   image:
     repository: aiod-ei
-    tag: gpu    # [gpu, cpu]
     imagePullPolicy: IfNotPresent
   replicas: 1
   
@@ -41,13 +45,11 @@ app:
     
     # Model configuration
     model:
-      useGpu: "true"
       loadPath: "Alibaba-NLP/gte-large-en-v1.5"
       batchSize: "1"
     
     # Metadata filtering
     metadataFiltering:
-      enabled: "true"
       enforceEnums: "false"
     
     # AIoD configuration
@@ -60,7 +62,6 @@ app:
     
     # Milvus configuration
     milvus:
-      useLite: "false"
       collectionPrefix: "aiod"
       storeChunks: "true"
     
@@ -70,7 +71,6 @@ app:
     
     # Chatbot configuration
     chatbot:
-      useChatbot: "false"
       mistralModel: "mistral-medium-latest"
       topKAssetsToSearch: "10"
       mylibraryUrl: "https://mylibrary.aiod.eu"

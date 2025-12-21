@@ -15,7 +15,10 @@ data:
   MODEL_BATCH_SIZE: {{ .Values.app.config.model.batchSize | quote }}
   
   # Metadata filtering
-  METADATA_FILTERING__ENABLED: {{ .Values.app.config.metadataFiltering.enabled | quote }}
+  {{- if and .Values.use_llm (not .Values.milvus.enabled) }}
+  {{- fail "Metadata filtering is not allowed when use_llm is enabled and Milvus dependency is disabled" }}
+  {{- end }}
+  METADATA_FILTERING__ENABLED: {{ .Values.use_llm | quote }}
   METADATA_FILTERING__ENFORCE_ENUMS: {{ .Values.app.config.metadataFiltering.enforceEnums | quote }}
 
   # AIoD configuration
@@ -27,7 +30,8 @@ data:
   AIOD__JSON_SAVEPATH: "/cold_data"
 
   # Milvus configuration
-  MILVUS__USE_LITE: {{ .Values.app.config.milvus.useLite | quote }}
+  MILVUS__USE_LITE: {{ not .Values.milvus.enabled | quote }}
+  MILVUS__FILEPATH: "/data/milvus.db"
   MILVUS__COLLECTION_PREFIX: {{ .Values.app.config.milvus.collectionPrefix | quote }}
   MILVUS__STORE_CHUNKS: {{ .Values.app.config.milvus.storeChunks | quote }}
 
@@ -35,7 +39,7 @@ data:
   MONGO__DBNAME: {{ .Values.app.config.mongo.dbName | quote }}
 
   # Chatbot configuration
-  CHATBOT__USE_CHATBOT: {{ .Values.app.config.chatbot.useChatbot | quote }}
+  CHATBOT__USE_CHATBOT: {{ .Values.use_chatbot | quote }}
   CHATBOT__MISTRAL_MODEL: {{ .Values.app.config.chatbot.mistralModel | quote }}
   CHATBOT__TOP_K_ASSETS_TO_SEARCH: {{ .Values.app.config.chatbot.topKAssetsToSearch | quote }}
   CHATBOT__MYLIBRARY_URL: {{ .Values.app.config.chatbot.mylibraryUrl | quote }}

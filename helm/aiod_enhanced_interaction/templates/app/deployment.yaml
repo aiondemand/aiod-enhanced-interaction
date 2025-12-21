@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+        image: "{{ .Values.app.image.repository }}:{{ if .Values.use_gpu }}gpu{{ else }}cpu{{ end }}"
         imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
         ports:
         - containerPort: 80
@@ -49,9 +49,12 @@ spec:
         - name: MILVUS__URI
           value: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:{{ .Values.milvus.service.port }}"
         # Ollama service connection
+        {{- if .Values.use_llm }}
         - name: OLLAMA__URI
           value: "http://{{ include "aiod-enhanced-interaction.ollama.fullname" . }}:{{ .Values.ollama.service.port }}"
-        {{- if or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled .Values.app.persistence.milvusData.enabled }}
+        {{- end }}
+        {{- $hasVolumes := or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled (and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled) }}
+        {{- if $hasVolumes }}
         volumeMounts:
         {{- if .Values.app.persistence.model.enabled }}
         - name: model-data
@@ -61,7 +64,7 @@ spec:
         - name: cold-data
           mountPath: /cold_data
         {{- end }}
-        {{- if .Values.app.persistence.milvusData.enabled }}
+        {{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
         - name: milvus-data
           mountPath: /data
         {{- end }}
@@ -92,7 +95,8 @@ spec:
           timeoutSeconds: 5
           successThreshold: 1
           failureThreshold: 3
-      {{- if or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled .Values.app.persistence.milvusData.enabled }}
+      {{- $hasVolumes := or .Values.app.persistence.model.enabled .Values.app.persistence.coldData.enabled (and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled) }}
+      {{- if $hasVolumes }}
       volumes:
       {{- if .Values.app.persistence.model.enabled }}
       - name: model-data
@@ -104,7 +108,7 @@ spec:
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-cold-data-pvc
       {{- end }}
-      {{- if .Values.app.persistence.milvusData.enabled }}
+      {{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
       - name: milvus-data
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-milvus-data-pvc

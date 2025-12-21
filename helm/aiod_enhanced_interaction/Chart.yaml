@@ -9,3 +9,4 @@ dependencies:
   - name: milvus
     version: "4.2.40"
     repository: "https://zilliztech.github.io/milvus-helm/"
+    condition: milvus.enabled

@@ -1,3 +1,4 @@
+{{- if .Values.use_llm }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -58,3 +59,4 @@ spec:
         persistentVolumeClaim:
           claimName: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}-pvc
       {{- end }}
+{{- end }}

@@ -38,7 +38,7 @@ spec:
 
 ---
 
-{{- if .Values.app.persistence.milvusData.enabled }}
+{{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

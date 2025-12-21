@@ -199,7 +199,6 @@ docker-compose.final.yml
 
 
 # Helm Chart dependencies
-/helm/**/charts/*
-!/helm/**/charts/*.tgz
-
-/helm/**/values.override.yaml
+/helm/aiod_enhanced_interaction/charts/*
+!/helm/aiod_enhanced_interaction/charts/*.tgz
+/helm/aiod_enhanced_interaction/values.override.yaml
