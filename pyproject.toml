@@ -21,7 +21,7 @@ dependencies = [
     "pymilvus==2.5.5",
     "transformers==4.44.2",
     "sentence-transformers==3.0.1",
-    "apscheduler==3.10.4",
+    "celery[redis]==5.6.0",
     "beanie==1.29.0",
     "motor==3.7.1",
     "pymongo==4.13.0",
@@ -46,7 +46,6 @@ dev = [
     "tornado>=6.2",
     "pyzmq>=23.0",
     "ipykernel==7.1.0"
-
 ]
 
 [tool.setuptools]

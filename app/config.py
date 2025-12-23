@@ -283,10 +283,26 @@ class ChatbotConfig(BaseModel):
         )
 
 
+class CeleryConfig(BaseModel):
+    """Celery configuration for distributed task processing."""
+
+    BROKER_URL: str = Field(
+        ..., description="RabbitMQ broker URL (e.g., amqp://user:pass@host:port//)"
+    )
+    RESULT_BACKEND_URL: str = Field(
+        ..., description="Redis result backend URL (e.g., redis://host:port/0)"
+    )
+
+    # TODO add other Celery settings here
+
+
 class Settings(BaseSettings):
+    AIOD: AIoDConfig = Field(...)
+
     MILVUS: MilvusConfig = Field(...)
     MONGO: MongoConfig = Field(...)
-    AIOD: AIoDConfig = Field(...)
+    CELERY: CeleryConfig = Field(...)
+
     METADATA_FILTERING: MetadataFilteringConfig = Field(default=MetadataFilteringConfig())
     OLLAMA: OllamaConfig = Field(default=OllamaConfig())
     CHATBOT: ChatbotConfig = Field(...)

@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
-import os
-from queue import Queue
 from time import sleep
 from typing import Type
 
 from uuid import UUID
-from beanie.odm.operators.find.logical import Or
 import numpy as np
 from app.config import settings
 from app.models.query import (
@@ -22,79 +19,13 @@ from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
-from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.embedding_store import EmbeddingStore
 from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
-from app.services.resilience import LocalServiceUnavailableException
 
-
-QUERY_QUEUE: Queue[tuple[UUID | None, Type[BaseUserQuery] | None]] = Queue()
-
-
-async def fill_query_queue() -> None:
-    async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
-        return await typ.find_all_docs(
-            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
-        )
-
-    simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
-    filtered_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(FilteredUserQuery)
-    similar_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(RecommenderUserQuery)
-
-    queries_to_process: list[BaseUserQuery] = sorted(
-        simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
-        key=BaseUserQuery.sort_function_to_populate_queue,
-    )
-    if len(queries_to_process) == 0:
-        return
-    for query in queries_to_process:
-        QUERY_QUEUE.put((query.id, type(query)))
-
-    logging.info(
-        f"Query queue has been populated with {len(queries_to_process)} queries to process."
-    )
-
-
-async def search_thread() -> None:
-    await fill_query_queue()
-
-    model = AiModel("cpu")
-    embedding_store = MilvusEmbeddingStore()
-
-    while True:
-        query_id, query_type = QUERY_QUEUE.get()
-        if query_id is None or query_type is None:
-            break
-
-        user_query = await fetch_user_query(query_id, query_type)
-        if user_query is None:
-            continue
-        logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
-
-        try:
-            results = await search_across_assets_wrapper(
-                model,
-                embedding_store,
-                user_query,
-            )
-            user_query.result_set = results
-            user_query.update_status(QueryStatus.COMPLETED)
-            await user_query.replace_doc()
-        except LocalServiceUnavailableException as e:
-            logging.error(e)
-            logging.error(
-                "The above error has been encountered in the embedding thread. "
-                + "Entire Application is being terminated now"
-            )
-            os._exit(1)
-        except Exception as e:
-            user_query.update_status(QueryStatus.FAILED)
-            await user_query.replace_doc()
-            logging.error(e)
-            logging.error(
-                f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
-            )
+# Note: QUERY_QUEUE and search_thread() have been removed and replaced with Celery tasks
+# See app/celery_tasks/search_tasks.py for the Celery task implementation
 
 
 async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:

@@ -8,14 +8,16 @@ from app.models.asset_collection import AssetCollection
 from app.models.query import BaseUserQuery
 from app.schemas.enums import BaseAssetType
 from app.schemas.query import BaseUserQueryResponse
-from app.services.threads.search_thread import QUERY_QUEUE
+from app.celery_tasks.search.tasks import process_query_task
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 
 
 async def submit_query(user_query: BaseUserQuery) -> UUID:
     await user_query.create_doc()
-    QUERY_QUEUE.put((user_query.id, type(user_query)))
+    # Submit query to Celery task queue
+    query_type_name = user_query.__class__.__name__
+    process_query_task.delay(str(user_query.id), query_type_name)
     return user_query.id
 
 
