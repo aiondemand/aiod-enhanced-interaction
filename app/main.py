@@ -1,17 +1,17 @@
-from beanie import init_beanie
 import logfire
-from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.celery_tasks.maintenance.tasks import compute_embeddings_task, extract_metadata_task, scraping_task
+from app.celery_tasks.maintenance.tasks import (
+    compute_embeddings_task,
+    extract_metadata_task,
+    scraping_task,
+)
 from app.config import settings
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app.services.database import init_mongo_client
 from app.services.logging import setup_logger
-from app.models.asset_collection import AssetCollection
-from app.models.query import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.routers import filtered_sem_search as filtered_query_router
 from app.routers import recommender_search as recommender_router
 from app.routers import simple_sem_search as query_router
@@ -88,25 +88,6 @@ async def app_init() -> None:
         scraping_task.delay()
     if settings.PERFORM_METADATA_EXTRACTION:
         extract_metadata_task.delay()
-
-
-async def init_mongo_client() -> AsyncIOMotorClient:
-    db = AsyncIOMotorClient(settings.MONGO.CONNECTION_STRING, uuidRepresentation="standard")[
-        settings.MONGO.DBNAME
-    ]
-    await init_beanie(
-        database=db,
-        document_models=[
-            AssetCollection,
-            AssetForMetadataExtraction,
-            SimpleUserQuery,
-            FilteredUserQuery,
-            RecommenderUserQuery,
-        ],
-        multiprocessing_mode=True,
-    )
-    
-    return db
 
 
 async def app_shutdown() -> None:

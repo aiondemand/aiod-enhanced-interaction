@@ -1,5 +1,5 @@
 from celery import Celery
-from celery.beat import crontab
+from celery.schedules import crontab
 
 from app.config import settings
 
@@ -30,22 +30,15 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     # Task routing - route tasks to appropriate queues
-    task_routes={"search.*": {"queue": "search"}, "maintenance.*": {"queue": "maintenance"}},
-    # Task execution settings
-    
-    # TODO should differ based on the type of Queue (both settings)
-    task_acks_late=True,  # Acknowledge after task completion (better reliability)
-    task_reject_on_worker_lost=True,  # Reject task if worker dies
-
+    task_routes={
+        "search.*": {"queue": "search"},
+        "maintenance.*": {"queue": "maintenance"},
+    },
     worker_prefetch_multiplier=1,  # Prefetch one task at a time for better load balancing
-    # Result expiration (24 hours)
     result_expires=86400,
-    # Worker settings
     worker_max_tasks_per_child=50,  # Restart worker after 50 tasks to prevent memory leaks
     worker_disable_rate_limits=False,
-    # Retry settings
     task_default_retry_delay=60,  # 1 minute between retries
-    task_max_retries=3,
 )
 
 celery_app.autodiscover_tasks(["app.celery_tasks.search", "app.celery_tasks.maintenance"])

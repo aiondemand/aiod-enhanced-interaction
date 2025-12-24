@@ -294,6 +294,8 @@ class CeleryConfig(BaseModel):
     )
 
     # TODO add other Celery settings here
+    SEARCH_WORKER_NAME_PREFIX: str = Field("search_worker")
+    MAINTENANCE_WORKER_NAME_PREFIX: str = Field("maintenance_worker")
 
 
 class Settings(BaseSettings):

@@ -1,18 +1,24 @@
 """Celery tasks for search query processing."""
 
-from __future__ import annotations
-
 import asyncio
-import logging
 from typing import Type
 from uuid import UUID
+import asyncio
+from typing import Type, cast
+from uuid import UUID
+from celery.signals import worker_init
 
-from app.celery_app import celery_app
-from app.celery_tasks.search.helpers import (
-    _ensure_worker_initialized,
-    get_worker_instances,
-    process_query_async,
+from app.config import settings
+from app.models.query import (
+    BaseUserQuery,
 )
+from app.services.database import init_mongo_client
+from app.services.embedding_store import MilvusEmbeddingStore
+from app.services.inference.model import AiModel
+from app.celery_tasks.search.sem_search import (
+    semantic_search_wrapper,
+)
+from app.celery_app import celery_app
 from app.models.query import (
     BaseUserQuery,
     FilteredUserQuery,
@@ -20,39 +26,34 @@ from app.models.query import (
     SimpleUserQuery,
 )
 
+# Worker-level resources initialization, shared between all threads
+_worker_model: AiModel | None = None
+_worker_embedding_store: MilvusEmbeddingStore | None = None
 
-@celery_app.task(bind=True)
-def process_query_task(self, query_id: str, query_type_name: str) -> dict:
-    """
-    Process a search query task.
 
-    Args:
-        query_id: UUID string of the query
-        query_type_name: Name of the query type class (e.g., 'SimpleUserQuery')
+# Hook executed when a worker (its main process) is initialized
+@worker_init.connect
+def ensure_worker_initialized(sender=None, conf=None, **kwargs) -> None:
+    global _worker_model, _worker_embedding_store
 
-    Returns:
-        dict with task result information
-    """
-    # Ensure worker is initialized
-    _ensure_worker_initialized()
+    if str(sender).startswith(settings.CELERY.SEARCH_WORKER_NAME_PREFIX):
+        asyncio.run(init_mongo_client())
+        _worker_model = AiModel("cpu")
+        _worker_embedding_store = MilvusEmbeddingStore()
 
-    # Get worker-level instances
-    _worker_model, _worker_embedding_store = get_worker_instances()
 
-    # Map query type name to class
+@celery_app.task(bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True)
+def search_query_task(self, query_id: str, query_type_name: str) -> dict:
     query_type_map: dict[str, Type[BaseUserQuery]] = {
         "SimpleUserQuery": SimpleUserQuery,
         "FilteredUserQuery": FilteredUserQuery,
         "RecommenderUserQuery": RecommenderUserQuery,
     }
-    query_type = query_type_map.get(query_type_name)
+    query_type = query_type_map.get(query_type_name, None)
+    if query_type is None:
+        raise ValueError(f"Invalid query type: {query_type_name}")
 
-    # Run async function in sync context
-    try:
-        result = asyncio.run(
-            process_query_async(UUID(query_id), query_type, _worker_model, _worker_embedding_store)
-        )
-        return result
-    except Exception as e:
-        logging.error(f"Error processing query {query_id}: {e}")
-        return {"status": "failed", "error": str(e)}
+    model = cast(AiModel, _worker_model)
+    embedding_store = cast(MilvusEmbeddingStore, _worker_embedding_store)
+
+    return asyncio.run(semantic_search_wrapper(UUID(query_id), query_type, model, embedding_store))

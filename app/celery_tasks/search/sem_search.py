@@ -19,13 +19,55 @@ from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
-from app.services.embedding_store import EmbeddingStore
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
+from app.services.resilience import LocalServiceUnavailableException
 
-# Note: QUERY_QUEUE and search_thread() have been removed and replaced with Celery tasks
-# See app/celery_tasks/search_tasks.py for the Celery task implementation
+
+async def semantic_search_wrapper(
+    query_id: UUID,
+    query_type: Type[BaseUserQuery],
+    model: AiModel,
+    embedding_store: MilvusEmbeddingStore,
+) -> dict:
+    user_query = await fetch_user_query(query_id, query_type)
+    if user_query is None:
+        return {"status": "skipped", "reason": "Query not found or invalid"}
+
+    logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
+
+    try:
+        results = await search_across_assets_wrapper(model, embedding_store, user_query)
+        user_query.result_set = results
+        user_query.update_status(QueryStatus.COMPLETED)
+        await user_query.replace_doc()
+
+        return {
+            "status": "completed",
+            "query_id": str(query_id),
+            "results_count": len(results.asset_ids) if results else 0,
+        }
+    except LocalServiceUnavailableException as e:
+        logging.error(e)
+        logging.error(
+            "The above error has been encountered in the query processing task. "
+            + "Task will be retried."
+        )
+        # Update query status to failed
+        user_query.update_status(QueryStatus.FAILED)
+        await user_query.replace_doc()
+        # Re-raise to trigger Celery retry mechanism
+        raise
+    except Exception as e:
+        user_query.update_status(QueryStatus.FAILED)
+        await user_query.replace_doc()
+        logging.error(e)
+        logging.error(
+            f"The above error has been encountered in the query processing task while processing query ID: {str(query_id)}"
+        )
+        return {"status": "failed", "error": str(e)}
 
 
 async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:

@@ -15,46 +15,11 @@ services:
     command: /bin/sh -c "python scripts/milvus_credentials_setup.py && uvicorn app.main:app --host 0.0.0.0 --port 80"
     {% endif %}
     env_file:
-      - .env.app
-    environment:
-      - USE_GPU={{ USE_GPU }}
-      - MILVUS__USE_LITE={{ USE_MILVUS_LITE }}
-      {% if USE_MILVUS_LITE == "true" %}
-      - MILVUS__FILEPATH=/data/milvus.db
-      - METADATA_FILTERING__ENABLED=false
-      {% else %}
-      - MILVUS__URI=http://milvus-standalone:19530
-      - MILVUS__USER=${MILVUS_AIOD_USER}
-      - MILVUS__PASS=${MILVUS_AIOD_PASS}
-      - MILVUS_NEW_ROOT_PASS=${MILVUS_NEW_ROOT_PASS}
-      - METADATA_FILTERING__ENABLED={{ USE_LLM }}
-      {% endif %}
-      - MONGO__HOST=mongo
-      - MONGO__PORT=27017
-      - MONGO__USER=${MONGO_USER}
-      - MONGO__PASSWORD=${MONGO_PASSWORD}
-      - MONGO__DBNAME=aiod
-      - CHATBOT__USE_CHATBOT={{ USE_CHATBOT }}
-      - AIOD__JSON_SAVEPATH=/cold_data
-      {% if USE_LLM == "true" %}
-      - OLLAMA__URI=http://ollama:11434
-      {% endif %}
+      - .env.final
     ports:
       - "${APP_HOST_PORT:-8000}:80"
     depends_on:
-      {% if USE_MILVUS_LITE == "false" %}
-      milvus-standalone:
-        condition: service_healthy
-        restart: false
-      {% endif %}
-      mongo:
-        condition: service_healthy
-        restart: false
-      {% if USE_LLM == "true" %}
-      ollama:
-        condition: service_healthy
-        restart: false
-      {% endif %}
+      - celery_beat
     volumes:
       - ${DATA_DIRPATH}/model:/model
       - ${DATA_DIRPATH}/cold_data:/cold_data
@@ -83,9 +48,111 @@ services:
               count: 1
               capabilities: [gpu]
     {% endif %}
+
+  # Celery workers
+  celery_search_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.final
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    command: >
+      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q search -c 8 -P threads -n search_worker@%h"
+    labels:
+      autoheal-label: true
+    env_file:
+      - .env.final
+    depends_on:
+      {% if USE_MILVUS_LITE == "false" %}
+      milvus-standalone:
+        condition: service_healthy
+        restart: false
+      {% endif %}
+      mongo:
+        condition: service_healthy
+        restart: false
+      {% if USE_LLM == "true" %}
+      ollama:
+        condition: service_healthy
+        restart: false
+      {% endif %}
+      rabbitmq:
+        condition: service_healthy
+        restart: false
+      redis:
+        condition: service_healthy
+        restart: false
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  celery_maintenance_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.final
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    command: >
+      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q maintenance -c 4 -P prefork -n maintenance_worker@%h"
+    labels:
+      autoheal-label: true
+    env_file:
+      - .env.final
+    depends_on:
+      {% if USE_MILVUS_LITE == "false" %}
+      milvus-standalone:
+        condition: service_healthy
+        restart: false
+      {% endif %}
+      mongo:
+        condition: service_healthy
+        restart: false
+      {% if USE_LLM == "true" %}
+      ollama:
+        condition: service_healthy
+        restart: false
+      {% endif %}
+      rabbitmq:
+        condition: service_healthy
+        restart: false
+      redis:
+        condition: service_healthy
+        restart: false
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.final
+      args:
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    command: >
+      /bin/sh -c "celery -A app.celery_app beat --loglevel=info"
+    labels:
+      autoheal-label: true
+    env_file:
+      - .env.final
+    depends_on:
+      celery_search_worker:
+        condition: service_healthy
+        restart: false
+      celery_maintenance_worker:
+        condition: service_healthy
+        restart: false
   {% if USE_LLM == "true" %}
 
-  #Ollama service
+  # Ollama service
   ollama:
     image: ollama/ollama:0.11.0
     labels:

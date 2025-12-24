@@ -80,3 +80,56 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  # MongoDB service
+  mongo:
+    image: mongo:8.0.9
+    labels:
+      autoheal-label: true
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    healthcheck:
+      test: ["CMD","mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - ${DATA_DIRPATH}/volumes/mongo:/data/db
+    restart: always
+
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    ports:
+      - "${RABBITMQ_HOST_PORT_5672:-5672}:5672"
+      - "${RABBITMQ_HOST_PORT_15672:-15672}:15672"
+    labels:
+      autoheal-label: true
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - ${DATA_DIRPATH}/volumes/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Redis service
+  redis:
+    image: redis:8.4.0
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    labels:
+      autoheal-label: true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

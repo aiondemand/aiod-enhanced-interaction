@@ -45,7 +45,8 @@ dev = [
     "jupyter_core==5.8.1",
     "tornado>=6.2",
     "pyzmq>=23.0",
-    "ipykernel==7.1.0"
+    "ipykernel==7.1.0",
+    "flower=2.0.1"
 ]
 
 [tool.setuptools]
