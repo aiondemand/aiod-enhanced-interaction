@@ -13,7 +13,7 @@ from nltk import edit_distance
 
 from app.schemas.enums import SupportedAssetType
 from app.services.aiod import get_aiod_asset
-from app.services.chatbot.prompt_library import *
+from app.services.chatbot.chatbot_system_prompt import CHATBOT_SYSTEM_PROMPT
 from app.services.inference.model import AiModel
 from app.config import settings
 
@@ -130,7 +130,7 @@ talk2aiod = MISTRAL_CLIENT.beta.agents.create(
     description="AI assistant for AI-on-Demand platform",
     name="AI assistant",
     tools=TOOL_DEFINITIONS,
-    instructions=master_prompt,
+    instructions=CHATBOT_SYSTEM_PROMPT,
     completion_args={
         "temperature": 0.3,
         "top_p": 0.95,

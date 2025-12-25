@@ -13,7 +13,7 @@ from app.models.query import (
     BaseUserQuery,
 )
 from app.services.database import init_mongo_client
-from app.services.embedding_store import MilvusEmbeddingStore
+from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.model import AiModel
 from app.celery_tasks.search.sem_search import (
     semantic_search_wrapper,
@@ -28,12 +28,12 @@ from app.models.query import (
 
 # Worker-level resources initialization, shared between all threads
 _worker_model: AiModel | None = None
-_worker_embedding_store: MilvusEmbeddingStore | None = None
+_worker_embedding_store: EmbeddingStore | None = None
 
 
 # Hook executed when a worker (its main process) is initialized
 @worker_init.connect
-def ensure_worker_initialized(sender=None, conf=None, **kwargs) -> None:
+def initialize_main_search_worker_process(sender=None, conf=None, **kwargs) -> None:
     global _worker_model, _worker_embedding_store
 
     if str(sender).startswith(settings.CELERY.SEARCH_WORKER_NAME_PREFIX):
@@ -54,6 +54,6 @@ def search_query_task(self, query_id: str, query_type_name: str) -> dict:
         raise ValueError(f"Invalid query type: {query_type_name}")
 
     model = cast(AiModel, _worker_model)
-    embedding_store = cast(MilvusEmbeddingStore, _worker_embedding_store)
+    embedding_store = cast(EmbeddingStore, _worker_embedding_store)
 
     return asyncio.run(semantic_search_wrapper(UUID(query_id), query_type, model, embedding_store))

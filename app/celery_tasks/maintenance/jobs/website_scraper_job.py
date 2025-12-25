@@ -1,5 +1,4 @@
 import logging
-import threading
 
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
@@ -16,28 +15,9 @@ from app.config import settings
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/128
 # TODO general code refactoring would be nice
 
-job_lock = threading.Lock()
 
 # TODO Create MongoDB collection pertaining to the scraped websites and APIs
 # analogous to AssetCollection
-
-
-async def scraping_wrapper() -> None:
-    if job_lock.acquire(blocking=False):
-        try:
-            logging.info(
-                "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
-            )
-            await populate_collections_wrapper()
-            logging.info(
-                "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has ended."
-            )
-        finally:
-            job_lock.release()
-    else:
-        logging.info(
-            "Scheduled task for scraping AIoD websites and APIs skipped (previous task is still running)"
-        )
 
 
 async def populate_collections_wrapper() -> None:

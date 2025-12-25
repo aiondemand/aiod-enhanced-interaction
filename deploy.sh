@@ -42,7 +42,7 @@ fi
 
 # What operation we wish to perform
 if [ "$#" -eq 0 ]; then
-  COMPOSE_COMMAND="app up -d --build"
+  COMPOSE_COMMAND="up app -d --build"
 
   # Build docker-compose first (stored as docker-compose.final.yml)
   docker compose -f docker-compose.build.yml up --build

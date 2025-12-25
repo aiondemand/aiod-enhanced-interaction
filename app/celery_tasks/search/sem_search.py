@@ -19,7 +19,7 @@ from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
-from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.embedding_store import EmbeddingStore
 from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
@@ -30,7 +30,7 @@ async def semantic_search_wrapper(
     query_id: UUID,
     query_type: Type[BaseUserQuery],
     model: AiModel,
-    embedding_store: MilvusEmbeddingStore,
+    embedding_store: EmbeddingStore,
 ) -> dict:
     user_query = await fetch_user_query(query_id, query_type)
     if user_query is None:

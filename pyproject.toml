@@ -46,7 +46,7 @@ dev = [
     "tornado>=6.2",
     "pyzmq>=23.0",
     "ipykernel==7.1.0",
-    "flower=2.0.1"
+    "flower==2.0.1"
 ]
 
 [tool.setuptools]

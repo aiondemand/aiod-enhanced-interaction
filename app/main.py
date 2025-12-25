@@ -12,11 +12,7 @@ from app.celery_tasks.maintenance.tasks import (
 from app.config import settings
 from app.services.database import init_mongo_client
 from app.services.logging import setup_logger
-from app.routers import filtered_sem_search as filtered_query_router
-from app.routers import recommender_search as recommender_router
-from app.routers import simple_sem_search as query_router
-from app.routers import chatbot_endpoint as chatbot_router
-from app.routers import healthcheck as healthcheck_router
+from app.routers import *
 
 
 @asynccontextmanager
@@ -29,33 +25,27 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="[AIoD] Enhanced Interaction", lifespan=lifespan)
 
 
-app.include_router(healthcheck_router.router, prefix="", tags=["healthcheck"])
-app.include_router(
-    healthcheck_router.router, prefix=f"{settings.API_VERSION}", tags=["healthcheck"]
-)
+app.include_router(healthcheck_router, prefix="", tags=["healthcheck"])
+app.include_router(healthcheck_router, prefix=f"{settings.API_VERSION}", tags=["healthcheck"])
 
-app.include_router(query_router.router, prefix="/query", tags=["query"])
-app.include_router(query_router.router, prefix=f"{settings.API_VERSION}/query", tags=["query"])
+app.include_router(query_router, prefix="/query", tags=["query"])
+app.include_router(query_router, prefix=f"{settings.API_VERSION}/query", tags=["query"])
 
 if settings.CHATBOT.USE_CHATBOT:
-    app.include_router(chatbot_router.router, prefix="/chatbot", tags=["chatbot"])
-    app.include_router(
-        chatbot_router.router, prefix=f"{settings.API_VERSION}/chatbot", tags=["chatbot"]
-    )
+    app.include_router(chatbot_router, prefix="/chatbot", tags=["chatbot"])
+    app.include_router(chatbot_router, prefix=f"{settings.API_VERSION}/chatbot", tags=["chatbot"])
 
-app.include_router(recommender_router.router, prefix="/recommender", tags=["recommender_query"])
+app.include_router(recommender_router, prefix="/recommender", tags=["recommender_query"])
 app.include_router(
-    recommender_router.router,
+    recommender_router,
     prefix=f"{settings.API_VERSION}/recommender",
     tags=["recommender_query"],
 )
 
 if settings.PERFORM_LLM_QUERY_PARSING:
+    app.include_router(filtered_query_router, prefix=f"/filtered_query", tags=["filtered_query"])
     app.include_router(
-        filtered_query_router.router, prefix=f"/filtered_query", tags=["filtered_query"]
-    )
-    app.include_router(
-        filtered_query_router.router,
+        filtered_query_router,
         prefix=f"{settings.API_VERSION}/filtered_query",
         tags=["filtered_query"],
     )

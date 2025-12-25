@@ -102,6 +102,3 @@ def get_normalization_agent() -> NormalizationAgent | None:
         return NormalizationAgent()
     else:
         return None
-
-
-normalization_agent = get_normalization_agent()

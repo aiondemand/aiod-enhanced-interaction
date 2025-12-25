@@ -1,5 +1,4 @@
 import logging
-import threading
 from datetime import datetime
 from typing import Type
 
@@ -8,33 +7,15 @@ from app.models.asset_collection import AssetCollection
 from app.models.query import BaseUserQuery, FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.services.helper import utc_now
 
-job_lock = threading.Lock()
 
+async def clean_mongo_database() -> None:
+    current_time = utc_now()
 
-# Cleanup expired queries and empty asset collections from MongoDB database
-async def mongo_cleanup() -> None:
-    if job_lock.acquire(blocking=False):
-        try:
-            current_time = utc_now()
-            logging.info(
-                "[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB has started."
-            )
+    # delete expired queries
+    await delete_expired_queries(current_time)
 
-            # delete expired queries
-            await delete_expired_queries(current_time)
-
-            # delete empty asset collections
-            await delete_empty_asset_collections()
-
-            logging.info(
-                "[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB has ended."
-            )
-        finally:
-            job_lock.release()
-    else:
-        logging.info(
-            "[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB skipped (previous task is still running)"
-        )
+    # delete empty asset collections
+    await delete_empty_asset_collections()
 
 
 async def delete_expired_queries(current_time: datetime) -> None:

@@ -1,211 +1,116 @@
-"""Celery tasks for maintenance operations."""
-
-from __future__ import annotations
-
 import asyncio
 import gc
 import logging
+from celery.signals import worker_process_init
 import torch
 
 from app.celery_app import celery_app
-from app.celery_tasks.maintenance.helpers import ensure_worker_db_initialized
+from app.celery_tasks.maintenance.task_decorators import maintenance_task
 from app.config import settings
-from app.services.chatbot.website_scraper import scraping_wrapper
-from app.services.threads.db_gc_thread import mongo_cleanup
-from app.services.threads.embedding_thread import compute_embeddings_for_aiod_assets_wrapper
-from app.services.threads.metadata_extraction_thread import extract_metadata_for_assets_wrapper
-from app.services.threads.milvus_gc_thread import delete_embeddings_of_aiod_assets_wrapper
-from app.services.resilience import LocalServiceUnavailableException, MilvusUnavailableException
+from app.services.database import init_mongo_client
+from app.services.embedding_store import MilvusEmbeddingStore
+from app.services.helper import utc_now
+from app.services.inference.model import AiModel
+from app.services.resilience import LocalServiceUnavailableException
+from app.celery_tasks.maintenance.jobs.clean_mongo_job import clean_mongo_database
+from app.celery_tasks.maintenance.jobs.clean_miluvs_job import delete_asset_embeddings
+from app.celery_tasks.maintenance.jobs.metadata_extraction_job import extract_metadata_for_assets
+from app.celery_tasks.maintenance.jobs.website_scraper_job import populate_collections_wrapper
+from app.celery_tasks.maintenance.jobs.new_embeddings_job import compute_embeddings_for_aiod_assets
+
+
+@worker_process_init.connect
+def initialize_each_maintenance_worker_child_process(*args, **kwargs) -> None:
+    asyncio.run(init_mongo_client())
+
+
+def _gpu_cleanup(context: dict) -> None:
+    """Cleanup GPU memory after embedding computation."""
+    if "model" in context:
+        context["model"].to_device("cpu")
+        del context["model"]
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
+
+
+def _embedding_start_message(kwargs: dict) -> str:
+    """Generate custom start message for embedding task."""
+    first_invocation = kwargs.get("first_invocation", False)
+    if first_invocation:
+        return "Initial task for computing asset embeddings has started"
+    return "Scheduled task for computing asset embeddings has started"
 
 
 @celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
-def compute_embeddings_task(self, first_invocation: bool = False) -> dict:
-    """
-    Task to compute embeddings for AIoD assets.
+@maintenance_task(
+    log_prefix="[RECURRING AIOD UPDATE]",
+    task_description="embedding task",
+    non_retryable_exceptions=(LocalServiceUnavailableException,),
+    cleanup_func=_gpu_cleanup,
+    start_message_func=_embedding_start_message,
+)
+def compute_embeddings_task(self, context: dict, first_invocation: bool = False) -> dict:
+    model = AiModel(device=AiModel.get_device())
+    context["model"] = model  # Store for cleanup
 
-    Args:
-        first_invocation: Whether this is the first invocation (initial setup)
+    asyncio.run(compute_embeddings_for_aiod_assets(model, first_invocation))
 
-    Returns:
-        dict with task result information
-    """
-    ensure_worker_db_initialized()
-
-    try:
-        log_msg = (
-            "[RECURRING AIOD UPDATE] Initial task for computing asset embeddings has started"
-            if first_invocation
-            else "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has started"
-        )
-        logging.info(log_msg)
-
-        # Run async function
-        asyncio.run(compute_embeddings_for_aiod_assets_wrapper(first_invocation))
-
-        logging.info(
-            "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has ended."
-        )
-
-        return {"status": "completed", "first_invocation": first_invocation}
-    except LocalServiceUnavailableException as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING AIOD UPDATE] The above error has been encountered in the embedding task. "
-            + "Task will be retried."
-        )
-        # Re-raise to trigger retry
-        raise
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING AIOD UPDATE] The above error has been encountered in the embedding task."
-        )
-        return {"status": "failed", "error": str(e)}
-    finally:
-        # GPU memory cleanup
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
+    return {"first_invocation": first_invocation}
 
 
 @celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
-def delete_embeddings_task(self) -> dict:
-    """
-    Task to delete embeddings of removed AIoD assets (garbage collection).
+@maintenance_task(
+    log_prefix="[RECURRING MILVUS DELETE]",
+    task_description="Milvus garbage collection task",
+    non_retryable_exceptions=(LocalServiceUnavailableException,),
+)
+def delete_embeddings_task(self, context: dict) -> dict:
+    embedding_store = MilvusEmbeddingStore()
+    to_time = utc_now()
 
-    Returns:
-        dict with task result information
-    """
-    ensure_worker_db_initialized()
-
-    try:
+    for asset_type in settings.AIOD.ASSET_TYPES:
         logging.info(
-            "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has started."
+            f"\t[RECURRING MILVUS DELETE] Deleting embeddings of asset type: {asset_type.value}"
         )
+        asyncio.run(delete_asset_embeddings(embedding_store, asset_type, to_time=to_time))
 
-        # Run async function
-        asyncio.run(delete_embeddings_of_aiod_assets_wrapper())
-
-        logging.info(
-            "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has ended."
-        )
-
-        return {"status": "completed"}
-    except MilvusUnavailableException as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection task. "
-            + "Task will be retried."
-        )
-        # Re-raise to trigger retry
-        raise
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection task."
-        )
-        return {"status": "failed", "error": str(e)}
+    return {}
 
 
 @celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
-def mongo_cleanup_task(self) -> dict:
-    """
-    Task to clean up expired queries and empty asset collections from MongoDB.
-
-    Returns:
-        dict with task result information
-    """
-    ensure_worker_db_initialized()
-
-    try:
-        logging.info(
-            "[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB has started."
-        )
-
-        # Run async function
-        asyncio.run(mongo_cleanup())
-
-        logging.info("[RECURRING MONGODB DELETE] Scheduled task for cleaning up MongoDB has ended.")
-
-        return {"status": "completed"}
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING MONGODB DELETE] The above error has been encountered in the MongoDB cleanup task."
-        )
-        return {"status": "failed", "error": str(e)}
+@maintenance_task(
+    log_prefix="[RECURRING MONGODB DELETE]",
+    task_description="MongoDB cleanup task",
+    non_retryable_exceptions=(LocalServiceUnavailableException,),
+)
+def mongo_cleanup_task(self, context: dict) -> dict:
+    asyncio.run(clean_mongo_database())
+    return {}
 
 
 @celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
-def extract_metadata_task(self) -> dict:
-    """
-    Task to extract metadata from AIoD assets using LLM.
-
-    Returns:
-        dict with task result information
-    """
-    if not settings.PERFORM_METADATA_EXTRACTION:
-        return {"status": "skipped", "reason": "Metadata extraction disabled"}
-
-    ensure_worker_db_initialized()
-
-    try:
-        logging.info(
-            "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has started"
-        )
-
-        # Run async function
-        asyncio.run(extract_metadata_for_assets_wrapper())
-
-        logging.info(
-            "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has ended."
-        )
-
-        return {"status": "completed"}
-    except LocalServiceUnavailableException as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING METADATA EXTRACTION] The above error has been encountered in the metadata extraction task. "
-            + "Task will be retried."
-        )
-        raise
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING METADATA EXTRACTION] The above error has been encountered in the metadata extraction task."
-        )
-        return {"status": "failed", "error": str(e)}
+@maintenance_task(
+    log_prefix="[RECURRING METADATA EXTRACTION]",
+    task_description="metadata extraction task",
+    non_retryable_exceptions=(LocalServiceUnavailableException,),
+    skip_condition=lambda: (
+        not settings.PERFORM_METADATA_EXTRACTION,
+        "Metadata extraction disabled",
+    ),
+)
+def extract_metadata_task(self, context: dict) -> dict:
+    asyncio.run(extract_metadata_for_assets())
+    return {}
 
 
 @celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
-def scraping_task(self) -> dict:
-    """
-    Task to scrape AIoD websites and APIs.
-
-    Returns:
-        dict with task result information
-    """
-    if not settings.CHATBOT.USE_CHATBOT:
-        return {"status": "skipped", "reason": "Chatbot disabled"}
-
-    ensure_worker_db_initialized()
-
-    try:
-        logging.info(
-            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has started."
-        )
-
-        # Run async function
-        asyncio.run(scraping_wrapper())
-
-        logging.info(
-            "[RECURRING SCRAPING] Scheduled task for scraping AIoD websites and APIs has ended."
-        )
-
-        return {"status": "completed"}
-    except Exception as e:
-        logging.error(e)
-        logging.error(
-            "[RECURRING SCRAPING] The above error has been encountered in the scraping task."
-        )
-        return {"status": "failed", "error": str(e)}
+@maintenance_task(
+    log_prefix="[RECURRING SCRAPING]",
+    task_description="scraping task",
+    non_retryable_exceptions=(LocalServiceUnavailableException,),
+    skip_condition=lambda: (not settings.CHATBOT.USE_CHATBOT, "Chatbot disabled"),
+)
+def scraping_task(self, context: dict) -> dict:
+    asyncio.run(populate_collections_wrapper())
+    return {}

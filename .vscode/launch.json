@@ -26,6 +26,32 @@
             "justMyCode": true
         },
         {
+            "name": "Debug Celery Search Worker",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "celery",
+            "args": ["-A", "app.celery_app", "worker", "--loglevel=info", "-Q", "search", "-c", "1", "-P", "solo", "-n", "search_worker@%h"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${cwd}"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Debug Celery Maintenance Worker",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "celery",
+            "args": ["-A", "app.celery_app", "worker", "--loglevel=info", "-Q", "maintenance", "-c", "1", "-P", "solo", "-n", "maintenance_worker@%h"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${cwd}"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "Debug arbitrary Python file",
             "type": "debugpy",
             "request": "launch",
