@@ -85,6 +85,15 @@ In this file you find the following ENV variables:
 - `QUERY_EXPIRATION_TIME_IN_MINUTES`: Time in minutes after which query results expire and are removed
 - `LOGFIRE_TOKEN`: API Token for Logfire service that monitors LLM traces
 - Milvus config (`MILVUS__*`):
+    - `MILVUS__USE_LITE`: Whether we wish to use Milvus Lite version of the Milvus Database
+        - A very simple file-based DB recommended to use only for toy examples with little data you wish to vectorize
+        - You don't need to set up any images for Milvus when using Milvus Lite
+        - This version doesn't support Metadata Filtering
+        - You need to specify the path to the file representing the data (`MILVUSS_FILEPATH`)
+        - The following env variables are ignored once you use Milvus Lite: `MILVUS__URI`, `MILVUS__USER`, `MILVUS__PASS`
+    - `MILVUS__FILEPATH`: A path to the a local file representing the contents of the database. If you wish not to deploy a fully-fledged Milvus database, but rather want something light-weight but limited in functionality, you can opt for Milvus Lite.
+        - **Important:** If you specify this variable, you automatically opt for using Milvus Lite and you can't perform the Metadata Filtering functionality
+        - *We suggest using Milvus Lite only when the data you wish to vectorize is small enough (less than 1m vectors)*
     - `MILVUS__URI`: URI of the Milvus database server. *(Is overwritten in docker-compose.yml)*
     - `MILVUS__USER`: Username of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
     - `MILVUS__PASS`: Password of the user to log into the Milvus database *(Is overwritten in docker-compose.yml)*
@@ -101,6 +110,7 @@ In this file you find the following ENV variables:
 
 - Metadata filtering config (`METADATA_FILTERING__*`):
     - `METADATA_FILTERING__ENABLED`: Boolean value that enables/disables metadata filtering functionality
+        - Metadata Filtering doesn't work if you use Milvus Lite vector database
     - `METADATA_FILTERING__ENFORCE_ENUMS`: Boolean value that enforces enum validation for metadata field values (this leads to performing additional checks and multiple LLM passes over the same assets)
 - Ollama environment variables (You can omit these if you don't plan on using LLM for metadata filtering (`METADATA_FILTERING__ENABLED` is set to False))
     - `OLLAMA__URI`: URI of the Ollama server.
@@ -167,19 +177,23 @@ The `.env` file and all its environment variables are described in great detail 
         - Replace the placeholder with the value in `MONGO_PASSWORD` env var
 
 **Milvus**
-- We recommend deploying the database using `docker-compose.milvus.yml` file
-- Required env vars to define in `.env`:
-    - Where to store data: `DATA_DIRPATH`
-- Optional env vars to define in `.env`:
-    - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
-    - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
-    - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
-- Command to run: `docker compose -f docker-compose.milvus.yml up -d`
-- Set the following env vars defined in `.env.app`:
-    - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
-        - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var)
-    - `MILVUS__USER=root`
-    - `MILVUS__PASS=Milvus`
+<!-- TODO describe Milvus Lite vs Milvus Standalone version -->
+- We recommend deploying the database using `docker-compose.milvus.yml` file that uses Milvus Standalone (fully-fledged vector DB)
+    - Required env vars to define in `.env`:
+        - Where to store data: `DATA_DIRPATH`
+    - Optional env vars to define in `.env`:
+        - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+        - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
+        - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
+    - Command to run: `docker compose -f docker-compose.milvus.yml up -d`
+    - Set the following env vars defined in `.env.app`:
+        - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
+            - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var)
+        - `MILVUS__USER=root`
+        - `MILVUS__PASS=Milvus`
+- If you wish to use Milvus Lite for whatever reason, set the following env vars in `.env` file:
+    - Set `USE_MILVUS_LITE` env var to true
+    - Set `USE_LLM` to false (as Metadata Filtering is not allowed when using Milvus Lite)
 
 **Ollama**
 - We recommend installing Ollama directly from their website: https://ollama.com/ *(So that you don't need to bother with granting Docker an access to your GPU)*
@@ -206,6 +220,7 @@ Perform the following steps to deploy the service:
     - `USE_GPU`: Boolean value that denotes whether you wish to use a GPU for the initial population of Milvus database or not.  *(Overrides value set by `USE_GPU` in `env.app`)
     - `USE_LLM`: Whether we wish to locally deploy an Ollama service for serving an LLM that can be utilized for metadata extraction and processing. If set to False, we won't support these more advanced asset search processes.
     - `USE_CHATBOT`: Whether we wish to expose endpoints that allow users to communicate with AIoD chatbot. By enabling this variable, we also automatically crawl AIoD platform on daily basis to retrieve the most up-to-date information the chatbot can subsequently have an access to.
+    - `USE_MILVUS_LITE`: Whether we wish to use Milvus Lite (file-based vector DB with little functionality; no need for Docker images) instead of Milvus Standalone (fully-fledged vector DB, requires at least 3 images -> Milvus, MinIO, etcd)
     - `INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH`: An optional variable representing a dirpath to a specific directory containing a list of JSONs representing precomputed embeddings for various assets. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
     - `MONGO_DUMP_DIRPATH`: An optional variable representing a dirpath to a directory containing JSON files representing a list of documents used for populating MongoDB database, more specifically the `assetCollections` and `assetsForMetadataExtraction` collections. This variable is useful for migrating embeddings on machines that do not possess a GPU unit to increase the computational speed associated with the embedding computations. This variable is specifically tailored for original developers of this repo to expedite the deployment process on AIoD platform.
 

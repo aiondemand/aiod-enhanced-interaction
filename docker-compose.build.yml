@@ -11,6 +11,7 @@ services:
       - USE_LLM=${USE_LLM}
       - USE_GPU=${USE_GPU}
       - USE_CHATBOT=${USE_CHATBOT}
+      - USE_MILVUS_LITE=${USE_MILVUS_LITE}
     env_file:
       - .env
     command: /bin/sh -c "python scripts/build_compose.py"

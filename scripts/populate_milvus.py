@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pymilvus import DataType, MilvusClient, CollectionSchema
+
 
 # Configure logging
 logging.basicConfig(
@@ -36,12 +37,31 @@ VARCHAR_BUFFER_CHARS = 10
 
 class InputArgs(BaseModel):
     input_dirpath: str
+    lite: bool
     uri: str
     username: str
     password: str
     metadata_fields_path: str
     old_collection_prefix: str = "AIoD_STS_GTE"  # Prefix used in existing data/collections
     new_collection_prefix: str = "aiod"  # Prefix to use for creating new collections
+
+    @field_validator("lite", mode="before")
+    @classmethod
+    def str_to_bool(cls, value: str | bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, str) and value.lower() in ["true", "false"]:
+            return value.lower() == "true"
+        else:
+            raise ValueError("Invalid value for a boolean attribute")
+
+    @property
+    def milvus_host(self) -> str:
+        return self.uri
+
+    @property
+    def milvus_token(self) -> str:
+        return "" if self.lite else f"{self.username}:{self.password}"
 
 
 def load_metadata_field_config(config_path: str) -> dict:
@@ -184,7 +204,7 @@ def populate_database(args: InputArgs) -> None:
     if os.path.exists(args.input_dirpath) is False:
         exit(1)
 
-    client = MilvusClient(uri=args.uri, user=args.username, password=args.password)
+    client = MilvusClient(uri=args.milvus_host, token=args.milvus_token)
 
     # Load metadata configuration
     metadata_config = load_metadata_field_config(args.metadata_fields_path)
@@ -214,6 +234,7 @@ def populate_database(args: InputArgs) -> None:
             path,
             metadata_config,
             args.new_collection_prefix,
+            is_lite=args.lite,
         )
 
 
@@ -224,8 +245,9 @@ def populate_collection(
     data_dirpath: str,
     metadata_config: dict,
     collection_prefix: str | None = None,
+    is_lite: bool = False,
 ) -> None:
-    create_new_collection(client, new_collection_name, metadata_config, collection_prefix)
+    create_new_collection(client, new_collection_name, metadata_config, collection_prefix, is_lite)
 
     logger.info(f"Populating collection: {new_collection_name} (from data: {old_collection_name})")
 
@@ -316,6 +338,7 @@ def create_new_collection(
     collection_name: str,
     metadata_config: dict,
     collection_prefix: str | None = None,
+    is_lite: bool = False,
 ) -> None:
     """Create a new Milvus collection with appropriate schema. Drops existing collection if it exists."""
     if client.has_collection(collection_name):
@@ -330,9 +353,9 @@ def create_new_collection(
         asset_type = None
 
     vector_index_kwargs = {
-        "index_type": "HNSW_SQ",
+        "index_type": "FLAT" if is_lite else "HNSW_SQ",
         "metric_type": "COSINE",
-        "params": {"sq_type": "SQ8"},
+        "params": {} if is_lite else {"sq_type": "SQ8"},
     }
     scalar_index_kwargs = {"index_type": "INVERTED"}
 
@@ -343,7 +366,12 @@ def create_new_collection(
     schema.add_field("asset_id", DataType.VARCHAR, max_length=50)
     schema.add_field("asset_version", DataType.INT64)
 
-    if asset_type in ["datasets", "ml_models", "publications", "educational_resources"]:
+    if is_lite is False and asset_type in [
+        "datasets",
+        "ml_models",
+        "publications",
+        "educational_resources",
+    ]:
         try:
             add_metadata_fields(schema, asset_type, metadata_config)
             logger.info(f"Added metadata fields for asset type '{asset_type}'")
@@ -375,6 +403,13 @@ if __name__ == "__main__":
         required=False,
         default="/data_to_populate",  # Docker compose default value
         help="Path to the directory containing collection folders with .npz (vectors) and .json (asset_ids) files",
+    )
+    parser.add_argument(
+        "--lite",
+        type=str,
+        required=False,
+        help="Whether we use Milvus Lite or not",
+        default="false",
     )
     parser.add_argument(
         "--uri",

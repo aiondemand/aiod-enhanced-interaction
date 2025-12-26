@@ -9,14 +9,10 @@ services:
         USER_GID: ${USER_GID}
     environment:
       - INPUT_DIRPATH=/data_to_populate
-      - MILVUS_USE_LITE=false
-      - MILVUS_HOST=http://milvus-standalone:${MILVUS_HOST_PORT_19530}
-      - MILVUS_USER=root
-      - MILVUS_PASS=Milvus
+      - MILVUS_USE_LITE=true
+      - MILVUS_HOST=/data/milvus.db
       - OLD_MILVUS_COLLECTION_PREFIX=AIoD_STS_GTE
       - NEW_MILVUS_COLLECTION_PREFIX=aiod           # should equal to MILVUS__COLLECTION_PREFIX in env.app
-    depends_on:
-      milvus-standalone:
-        condition: service_healthy
     volumes:
       - ${INITIAL_EMBEDDINGS_TO_POPULATE_DB_WITH_DIRPATH}:/data_to_populate
+      - ${DATA_DIRPATH}/volumes:/data

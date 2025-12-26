@@ -18,4 +18,4 @@ COPY ./scripts/populate_milvus.py ./
 
 USER $USERNAME
 
-CMD ["/bin/sh", "-c", "python populate_milvus.py -i $INPUT_DIRPATH --uri $MILVUS_URI -u $MILVUS_USER -p $MILVUS_PASS --old-collection-prefix $OLD_MILVUS_COLLECTION_PREFIX --new-collection-prefix $NEW_MILVUS_COLLECTION_PREFIX"]
+CMD ["/bin/sh", "-c", "python populate_milvus.py -i $INPUT_DIRPATH --lite $MILVUS_USE_LITE --uri $MILVUS_HOST -u ${MILVUS_USER:-root} -p ${MILVUS_PASS:-Milvus} --old-collection-prefix $OLD_MILVUS_COLLECTION_PREFIX --new-collection-prefix $NEW_MILVUS_COLLECTION_PREFIX"]
