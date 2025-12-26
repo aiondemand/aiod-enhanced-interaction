@@ -19,8 +19,6 @@ class RedisTaskLock:
     during long-running tasks.
     """
 
-    LOCK_TTL_SECONDS = 6 * 60 * 60  # 6 hours
-    RENEWAL_INTERVAL_SECONDS = 3 * 60 * 60  # 3 hours
     LOCK_KEY_PREFIX = "celery:maintenance:lock:"
 
     def __init__(self, task_name: str):
@@ -60,14 +58,14 @@ class RedisTaskLock:
                 self.lock_key,
                 "locked",
                 nx=True,  # Only set if key doesn't exist
-                ex=self.LOCK_TTL_SECONDS,
+                ex=settings.CELERY.REDIS_LOCK_TTL_SECONDS,
             )
 
             if acquired:
                 self._lock_acquired = True
                 logging.info(
                     f"[REDIS LOCK] Acquired lock for task '{self.task_name}' "
-                    f"with {self.LOCK_TTL_SECONDS}s TTL"
+                    f"with {settings.CELERY.REDIS_LOCK_TTL_SECONDS}s TTL"
                 )
                 # Start automatic renewal thread
                 self._start_renewal_thread()
@@ -126,7 +124,7 @@ class RedisTaskLock:
         self._renewal_thread.start()
         logging.info(
             f"[REDIS LOCK] Started renewal thread for task '{self.task_name}' "
-            f"(renews every {self.RENEWAL_INTERVAL_SECONDS}s)"
+            f"(renews every {settings.CELERY.RENEWAL_INTERVAL_SECONDS}s)"
         )
 
     def _stop_renewal_thread(self) -> None:
@@ -138,7 +136,7 @@ class RedisTaskLock:
 
     def _renewal_loop(self) -> None:
         """Background loop that renews the lock every RENEWAL_INTERVAL."""
-        while not self._stop_renewal.wait(timeout=self.RENEWAL_INTERVAL_SECONDS):
+        while not self._stop_renewal.wait(timeout=settings.CELERY.RENEWAL_INTERVAL_SECONDS):
             try:
                 # Check if lock still exists
                 exists = self.redis_client.exists(self.lock_key)
@@ -150,10 +148,10 @@ class RedisTaskLock:
                     break
 
                 # Extend the TTL by setting expiration again
-                self.redis_client.expire(self.lock_key, self.LOCK_TTL_SECONDS)
+                self.redis_client.expire(self.lock_key, settings.CELERY.REDIS_LOCK_TTL_SECONDS)
                 logging.info(
                     f"[REDIS LOCK] Renewed lock for task '{self.task_name}' "
-                    f"(extended TTL by {self.LOCK_TTL_SECONDS}s)"
+                    f"(extended TTL by {settings.CELERY.REDIS_LOCK_TTL_SECONDS}s)"
                 )
 
             except RedisError as e:

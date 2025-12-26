@@ -129,6 +129,9 @@ In this file you find the following ENV variables:
 - Celery config (`CELERY__*`):
     - `CELERY__BROKER_URL`: URL connection string for the message broker (RabbitMQ). Format: `amqp://user:password@host:port//`
     - `CELERY__RESULT_BACKEND_URL`: URL connection string for the result backend (Redis). Format: `redis://host:port/db_number`
+    - `CELERY__SEARCH_WORKER_NAME_PREFIX`: Prefix for search worker names (default: `search_worker`)
+    - `CELERY__MAINTENANCE_WORKER_NAME_PREFIX`: Prefix for maintenance worker names (default: `maintenance_worker`)
+    - `CELERY__REDIS_LOCK_TTL_SECONDS`: TTL in seconds for Redis distributed locks used by maintenance tasks (default: `21600` - 6 hours)
 - AIoD config (`AIOD__*`):
     - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
     - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process

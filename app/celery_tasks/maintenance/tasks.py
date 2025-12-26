@@ -1,6 +1,7 @@
 import asyncio
 import gc
 import logging
+
 from celery.signals import worker_process_init
 import torch
 
@@ -50,7 +51,8 @@ def _embedding_start_message(kwargs: dict) -> str:
     cleanup_func=_gpu_cleanup,
     start_message_func=_embedding_start_message,
 )
-def compute_embeddings_task(self, context: dict, first_invocation: bool = False) -> dict:
+def compute_embeddings_task(self, first_invocation: bool = False, **kwargs) -> dict:
+    context = kwargs["context"]
     model = AiModel(device=AiModel.get_device())
     context["model"] = model  # Store for cleanup
 
@@ -65,7 +67,7 @@ def compute_embeddings_task(self, context: dict, first_invocation: bool = False)
     task_description="Milvus garbage collection task",
     non_retryable_exceptions=(LocalServiceUnavailableException,),
 )
-def delete_embeddings_task(self, context: dict) -> dict:
+def delete_embeddings_task(self, **kwargs) -> dict:
     embedding_store = MilvusEmbeddingStore()
     to_time = utc_now()
 
@@ -84,7 +86,7 @@ def delete_embeddings_task(self, context: dict) -> dict:
     task_description="MongoDB cleanup task",
     non_retryable_exceptions=(LocalServiceUnavailableException,),
 )
-def mongo_cleanup_task(self, context: dict) -> dict:
+def mongo_cleanup_task(self, **kwargs) -> dict:
     asyncio.run(clean_mongo_database())
     return {}
 
@@ -99,7 +101,7 @@ def mongo_cleanup_task(self, context: dict) -> dict:
         "Metadata extraction disabled",
     ),
 )
-def extract_metadata_task(self, context: dict) -> dict:
+def extract_metadata_task(self, **kwargs) -> dict:
     asyncio.run(extract_metadata_for_assets())
     return {}
 
@@ -111,6 +113,6 @@ def extract_metadata_task(self, context: dict) -> dict:
     non_retryable_exceptions=(LocalServiceUnavailableException,),
     skip_condition=lambda: (not settings.CHATBOT.USE_CHATBOT, "Chatbot disabled"),
 )
-def scraping_task(self, context: dict) -> dict:
+def scraping_task(self, **kwargs) -> dict:
     asyncio.run(populate_collections_wrapper())
     return {}

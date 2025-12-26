@@ -53,8 +53,10 @@ def maintenance_task(
                         "reason": "Another instance of this task is already running",
                     }
 
-            # Prepare context for cleanup
-            context: dict[str, Any] = {}
+            # Ensure context exists in kwargs (create if not provided)
+            if "context" not in kwargs:
+                kwargs["context"] = {}
+            context = kwargs["context"]
 
             try:
                 # Generate start message
@@ -64,8 +66,8 @@ def maintenance_task(
                     start_msg = f"{log_prefix} Scheduled task for {task_description} has started."
                 logging.info(start_msg)
 
-                # Execute main function and capture any context for cleanup
-                result = func(*args, context=context, **kwargs)
+                # Execute main function - context is now in kwargs
+                result = func(*args, **kwargs)
 
                 # Log end message
                 end_msg = f"{log_prefix} Scheduled task for {task_description} has ended."
