@@ -72,15 +72,6 @@ services:
         condition: service_healthy
         restart: true
 
-  # Service for restarting unhealthy containers
-  autoheal:
-    image: willfarrell/autoheal:1.2.0
-    environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal-label
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
   # MongoDB service
   mongo:
     image: mongo:8.0.9
@@ -135,3 +126,12 @@ services:
       retries: 5
       start_period: 10s
     restart: always
+
+  # Service for restarting unhealthy containers
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal-label
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

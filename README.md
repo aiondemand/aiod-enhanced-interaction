@@ -188,7 +188,7 @@ The `.env` file and all its environment variables are described in great detail 
         - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
         - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
         - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
-    - Command to run: `docker compose -f docker-compose.deps.yml up milvus-etcd milvus-minio milvus-standalone -d`
+    - Command to run: `docker compose -f docker-compose.deps.yml up -d`
         - This starts the Milvus service along with its dependencies (etcd and MinIO) from the deps file
     - Set the following env vars defined in `.env.app`:
         - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
