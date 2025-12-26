@@ -36,3 +36,4 @@ repos:
           - types-pytz
           - types-requests
           - types-setuptools
+          - types-redis

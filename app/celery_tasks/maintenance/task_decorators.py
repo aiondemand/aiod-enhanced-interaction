@@ -2,6 +2,8 @@ import logging
 from functools import wraps
 from typing import Callable, Optional, Tuple, Type, Any
 
+from app.celery_tasks.maintenance.redis_lock import RedisTaskLock
+
 
 def maintenance_task(
     log_prefix: str,
@@ -10,9 +12,11 @@ def maintenance_task(
     cleanup_func: Optional[Callable[[Any], None]] = None,
     skip_condition: Optional[Callable[[], Tuple[bool, str]]] = None,
     start_message_func: Optional[Callable[[dict], str]] = None,
+    enable_redis_lock: bool = True,
 ):
     """
     Base decorator for maintenance tasks that handles common patterns:
+    - Redis distributed locking (prevents concurrent execution)
     - Logging start/end messages
     - Exception handling (with selective retry)
     - Cleanup operations
@@ -26,6 +30,7 @@ def maintenance_task(
         cleanup_func: Optional cleanup function to run in finally block
         skip_condition: Optional function that returns (should_skip, reason) tuple
         start_message_func: Optional function to generate custom start message based on kwargs
+        enable_redis_lock: Whether to use Redis distributed lock (default: True)
     """
 
     def decorator(func: Callable) -> Callable:
@@ -36,6 +41,17 @@ def maintenance_task(
                 should_skip, reason = skip_condition()
                 if should_skip:
                     return {"status": "skipped", "reason": reason}
+
+            # Initialize Redis lock
+            redis_lock: Optional[RedisTaskLock] = None
+            if enable_redis_lock:
+                redis_lock = RedisTaskLock(func.__name__)
+                # Try to acquire the lock
+                if not redis_lock.acquire():
+                    return {
+                        "status": "skipped",
+                        "reason": "Another instance of this task is already running",
+                    }
 
             # Prepare context for cleanup
             context: dict[str, Any] = {}
@@ -82,6 +98,10 @@ def maintenance_task(
                 # Run cleanup if provided
                 if cleanup_func:
                     cleanup_func(context)
+
+                # Release Redis lock
+                if redis_lock:
+                    redis_lock.release()
 
         return wrapper
 
