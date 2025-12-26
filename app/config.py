@@ -283,10 +283,32 @@ class ChatbotConfig(BaseModel):
         )
 
 
+class CeleryConfig(BaseModel):
+    """Celery configuration for distributed task processing."""
+
+    BROKER_URL: str = Field(
+        ..., description="RabbitMQ broker URL (e.g., amqp://user:pass@host:port//)"
+    )
+    RESULT_BACKEND_URL: str = Field(
+        ..., description="Redis result backend URL (e.g., redis://host:port/0)"
+    )
+
+    SEARCH_WORKER_NAME_PREFIX: str = Field("search_worker")
+    MAINTENANCE_WORKER_NAME_PREFIX: str = Field("maintenance_worker")
+    REDIS_LOCK_TTL_SECONDS: int = Field(21_600, gt=0)
+
+    @property
+    def RENEWAL_INTERVAL_SECONDS(self) -> int:
+        return self.REDIS_LOCK_TTL_SECONDS // 2  # Renew the lock every half of the TTL
+
+
 class Settings(BaseSettings):
+    AIOD: AIoDConfig = Field(...)
+
     MILVUS: MilvusConfig = Field(...)
     MONGO: MongoConfig = Field(...)
-    AIOD: AIoDConfig = Field(...)
+    CELERY: CeleryConfig = Field(...)
+
     METADATA_FILTERING: MetadataFilteringConfig = Field(default=MetadataFilteringConfig())
     OLLAMA: OllamaConfig = Field(default=OllamaConfig())
     CHATBOT: ChatbotConfig = Field(...)

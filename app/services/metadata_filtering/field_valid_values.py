@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 from pathlib import Path
 
@@ -59,4 +60,6 @@ class FieldValidValues:
         return self.valid_values.get(asset_type.value, {}).get(field, None) is not None
 
 
-field_valid_value_service = FieldValidValues()
+@lru_cache()
+def get_field_valid_values() -> FieldValidValues:
+    return FieldValidValues()

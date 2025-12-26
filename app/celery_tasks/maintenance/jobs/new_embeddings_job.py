@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import gc
 import logging
-import os
-import threading
 from datetime import datetime
 from functools import partial
 from typing import Callable, Literal
 
 from beanie.operators import In
 import numpy as np
-import torch
-from app.config import settings
-from app.models.asset_collection import AssetCollection
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetCollection, AssetForMetadataExtraction
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
@@ -27,10 +22,7 @@ from app.services.embedding_store import (
 from app.services.helper import utc_now
 from app.services.inference.model import AiModel
 from app.services.inference.text_operations import ConvertJsonToString
-from app.services.resilience import LocalServiceUnavailableException
 from torch.utils.data import DataLoader
-
-job_lock = threading.Lock()
 
 
 @dataclass
@@ -55,37 +47,6 @@ class AssetIdsAccum:
         ].tolist()
 
 
-async def compute_embeddings_for_aiod_assets_wrapper(
-    first_invocation: bool = False,
-) -> None:
-    if job_lock.acquire(blocking=False):
-        try:
-            log_msg = (
-                "[RECURRING AIOD UPDATE] Initial task for computing asset embeddings has started"
-                if first_invocation
-                else "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has started"
-            )
-            logging.info(log_msg)
-
-            model = AiModel(device=AiModel.get_device())
-            await compute_embeddings_for_aiod_assets(model, first_invocation)
-            logging.info(
-                "[RECURRING AIOD UPDATE] Scheduled task for computing asset embeddings has ended."
-            )
-        finally:
-            # GPU memory cleanup
-            model.to_device("cpu")
-            del model
-            torch.cuda.empty_cache()
-            gc.collect()
-
-            job_lock.release()
-    else:
-        logging.info(
-            "[RECURRING AIOD UPDATE] Scheduled task for updating skipped (previous task is still running)"
-        )
-
-
 async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: bool) -> None:
     embedding_store = MilvusEmbeddingStore()
 
@@ -96,30 +57,15 @@ async def compute_embeddings_for_aiod_assets(model: AiModel, first_invocation: b
         logging.info(
             f"\t[RECURRING AIOD UPDATE] Computing embeddings for asset type: {asset_type.value}"
         )
-        try:
-            await process_aiod_assets_wrapper(
-                model=model,
-                stringify_asset_function=partial(
-                    ConvertJsonToString.extract_relevant_info, stringify=False
-                ),
-                embedding_store=embedding_store,
-                asset_collection=asset_collection,
-                asset_type=asset_type,
-            )
-        except LocalServiceUnavailableException as e:
-            logging.error(e)
-            logging.error(
-                "\t[RECURRING AIOD UPDATE] The above error has been encountered in the embedding thread. "
-                + "Entire Application is being terminated now"
-            )
-            os._exit(1)
-        except Exception as e:
-            # We don't wish to shutdown the application unless Milvus or Ollama is down
-            # If we cannot reach AIoD, we can just skip the embedding process for that day
-            logging.error(e)
-            logging.error(
-                "\t[RECURRING AIOD UPDATE] The above error has been encountered in the embedding thread."
-            )
+        await process_aiod_assets_wrapper(
+            model=model,
+            stringify_asset_function=partial(
+                ConvertJsonToString.extract_relevant_info, stringify=False
+            ),
+            embedding_store=embedding_store,
+            asset_collection=asset_collection,
+            asset_type=asset_type,
+        )
 
 
 async def fetch_asset_collection(

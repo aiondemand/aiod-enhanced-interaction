@@ -4,10 +4,10 @@ from urllib.parse import urljoin
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from app.config import settings
+from app import settings
 from ollama import Client
 
-from app.config import settings
+from app import settings
 
 
 def prepare_ollama_model() -> OpenAIChatModel:

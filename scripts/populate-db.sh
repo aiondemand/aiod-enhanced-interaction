@@ -37,14 +37,19 @@ fi
 # Create path under the current user so that it won't be created automatically by Milvus under root
 mkdir -p ${DATA_DIRPATH}/volumes
 
-# Run Milvus and Mongo databases
-docker compose -f docker-compose.mongo.yml up -d
+# Start MongoDB service
+docker compose -f docker-compose.deps.yml up mongo -d
 
+# Choose main docker-compose file to use
 if [ "$USE_MILVUS_LITE" = "true" ]; then
-  docker compose -f docker-compose.populate_lite.yml up populate-db --build
+  DOCKER_COMPOSE_FILE="docker-compose.populate_lite.yml"
 else
-  docker compose -f docker-compose.milvus.yml -f docker-compose.populate.yml up populate-db --build
+  DOCKER_COMPOSE_FILE="docker-compose.populate.yml"
 fi
+
+# Start populate-db service
+docker compose -f docker-compose.deps.yml -f $DOCKER_COMPOSE_FILE up populate-db --build
+
 
 CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-populate-db-1"
 EXIT_CODE=$(docker inspect $CONTAINER_NAME --format='{{.State.ExitCode}}')
@@ -75,9 +80,5 @@ else
   echo "Population of vector DB has encountered some ERRORS."
 fi
 
-# Shutdown databases
-if [ "$USE_MILVUS_LITE" = "true" ]; then
-  docker compose -f docker-compose.mongo.yml -f docker-compose.populate_lite.yml down
-else
-  docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.populate.yml down
-fi
+# Shutdown databases and services
+docker compose -f docker-compose.deps.yml -f $DOCKER_COMPOSE_FILE down

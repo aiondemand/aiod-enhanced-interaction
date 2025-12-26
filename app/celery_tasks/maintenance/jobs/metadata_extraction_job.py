@@ -1,39 +1,15 @@
 import logging
-import os
-import threading
 
 from beanie.odm.queries.find import FindMany
 from beanie.operators import In
-from app.config import settings
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetForMetadataExtraction
 from app.schemas.enums import SupportedAssetType
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.metadata_filtering.metadata_extraction_agent import MetadataExtractionWrapper
-from app.services.resilience import LocalServiceUnavailableException
-
-job_lock = threading.Lock()
 
 
 BATCH_SIZE = 100
-
-
-# Job for extracting metadata from AIoD assets using an LLM and updating corresponding documents within Milvus database
-async def extract_metadata_for_assets_wrapper() -> None:
-    if job_lock.acquire(blocking=False):
-        try:
-            logging.info(
-                "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has started"
-            )
-            await extract_metadata_for_assets()
-            logging.info(
-                "[RECURRING METADATA EXTRACTION] Scheduled task for extracting asset metadata has ended."
-            )
-        finally:
-            job_lock.release()
-    else:
-        logging.info(
-            "[RECURRING METADATA EXTRACTION] Scheduled task for metadata extraction skipped (previous task is still running)"
-        )
 
 
 async def extract_metadata_for_assets() -> None:
@@ -41,29 +17,14 @@ async def extract_metadata_for_assets() -> None:
 
     for asset_type in settings.AIOD.ASSET_TYPES_FOR_METADATA_EXTRACTION:
         logging.info(f"\tExtracting metadata for asset type: {asset_type.value}")
-        try:
-            await process_assets_for_metadata_extraction(
-                embedding_store=embedding_store,
-                asset_type=asset_type,
-            )
-        except LocalServiceUnavailableException as e:
-            logging.error(e)
-            logging.error(
-                "[RECURRING METADATA EXTRACTION] The above error has been encountered in the metadata extraction thread. "
-                + "Entire Application is being terminated now"
-            )
-            os._exit(1)
-        except Exception as e:
-            # Non-critical errors - log and continue with other asset types
-            logging.error(e)
-            logging.error(
-                f"[RECURRING METADATA EXTRACTION] The above error has been encountered while processing {asset_type.value} "
-                + "in the metadata extraction thread. Continuing with other asset types."
-            )
+        await process_assets_for_metadata_extraction(
+            embedding_store=embedding_store,
+            asset_type=asset_type,
+        )
 
 
 async def process_assets_for_metadata_extraction(
-    embedding_store: MilvusEmbeddingStore,
+    embedding_store: EmbeddingStore,
     asset_type: SupportedAssetType,
 ) -> None:
     total_updated_emb = 0

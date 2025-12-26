@@ -4,7 +4,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent
 
 from app.services.metadata_filtering.base import prepare_ollama_model
-from app.services.metadata_filtering.field_valid_values import field_valid_value_service
+from app.services.metadata_filtering.field_valid_values import get_field_valid_values
 from app.schemas.asset_metadata.base_schemas import AssetSpecific_AiExtractedMetadata
 from app.schemas.asset_metadata.dataset_schema import Dataset_AiExtractedMetadata
 from app.schemas.asset_metadata.educational_resource_schema import (
@@ -16,8 +16,8 @@ from app.schemas.asset_metadata.publication_schema import (
 )
 from app.services.metadata_filtering.schema_mapping import ASSET_EXTRACTION_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
-from app.config import settings
-from app.services.metadata_filtering.normalization_agent import normalization_agent
+from app import settings
+from app.services.metadata_filtering.normalization_agent import get_normalization_agent
 from app.services.metadata_filtering.prompts.metadata_extraction_agent import (
     METADATA_EXTRACTION_SYSTEM_PROMPT,
 )
@@ -40,7 +40,8 @@ class MetadataExtractionWrapper:
 
     @classmethod
     async def extract_metadata(cls, obj: dict, asset_type: SupportedAssetType) -> dict:
-        if metadata_extractor_agent is None:
+        metadata_extraction_agent = get_metadata_extraction_agent()
+        if metadata_extraction_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
         # Deterministic extraction
@@ -54,7 +55,7 @@ class MetadataExtractionWrapper:
 
         # Non-deterministic extraction (LLM-driven)
         obj_string = ConvertJsonToString.extract_relevant_info(obj, asset_type)
-        non_deterministic_model = await metadata_extractor_agent.extract_metadata(
+        non_deterministic_model = await metadata_extraction_agent.extract_metadata(
             obj_string, asset_type
         )
 
@@ -157,21 +158,24 @@ class MetadataExtractionAgent:
     async def __validate_enums(
         self, metadata: AssetSpecific_AiExtractedMetadata, asset_type: SupportedAssetType
     ) -> AssetSpecific_AiExtractedMetadata:
+        normalization_agent = get_normalization_agent()
         if normalization_agent is None:
             raise ValueError("Metadata Filtering is disabled")
+
+        field_valid_values = get_field_valid_values()
 
         pydantic_model: type[AssetSpecific_AiExtractedMetadata] = metadata.__class__
         all_model_fields = metadata.model_dump()
         fields_to_check = {
             field_name: field_value
             for field_name, field_value in all_model_fields.items()
-            if field_value and field_valid_value_service.exists_values(asset_type, field_name)
+            if field_value and field_valid_values.exists_values(asset_type, field_name)
         }
 
         # Go over fields that we need to check against a list of valid values
         for field_name, field_values in fields_to_check.items():
             valid_values = cast(
-                list[str], field_valid_value_service.get_values(asset_type, field=field_name)
+                list[str], field_valid_values.get_values(asset_type, field=field_name)
             )
             # Preprocessing (wrap into a list, apply lowercase)
             is_field_a_list = isinstance(field_values, list)
@@ -206,6 +210,3 @@ def get_metadata_extraction_agent() -> MetadataExtractionAgent | None:
         return MetadataExtractionAgent()
     else:
         return None
-
-
-metadata_extractor_agent = get_metadata_extraction_agent()

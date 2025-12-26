@@ -2,17 +2,17 @@ from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.config import settings
+from app import settings
 from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
-from app.services.metadata_filtering.field_valid_values import field_valid_value_service
+from app.services.metadata_filtering.field_valid_values import get_field_valid_values
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.models.dependencies import NLConditionParsingDeps
 from app.services.metadata_filtering.models.outputs import (
     LLM_NaturalLanguageCondition,
     LLMStructedCondition,
 )
-from app.services.metadata_filtering.normalization_agent import normalization_agent
+from app.services.metadata_filtering.normalization_agent import get_normalization_agent
 from app.services.metadata_filtering.prompts.nl_condition_parsing_agent import (
     NL_CONDITION_PARSING_SYSTEM_PROMPT,
 )
@@ -21,7 +21,7 @@ from functools import lru_cache
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, RunContext
 
-from app.config import settings
+from app import settings
 
 
 class NLConditionParsingAgent:
@@ -83,6 +83,7 @@ class NLConditionParsingAgent:
     async def _build_and_validate_condition(
         self, ctx: RunContext[NLConditionParsingDeps], condition: LLMStructedCondition
     ) -> LLMStructedCondition | None:
+        normalization_agent = get_normalization_agent()
         if normalization_agent is None:
             raise ValueError("Metadata Filtering is disabled")
         if condition.field != ctx.deps.nl_condition.field:
@@ -92,7 +93,7 @@ class NLConditionParsingAgent:
 
         pydantic_model = QUERY_PARSING_SCHEMA_MAPPING[ctx.deps.asset_type]
         valid_enum_values: list[str] | None = (
-            field_valid_value_service.get_values(ctx.deps.asset_type, field=condition.field)
+            get_field_valid_values().get_values(ctx.deps.asset_type, field=condition.field)
             if self.enforce_enums
             else None
         )
@@ -157,6 +158,3 @@ def get_nl_condition_parsing_agent() -> NLConditionParsingAgent | None:
         return NLConditionParsingAgent()
     else:
         return None
-
-
-nl_condition_parsing_agent = get_nl_condition_parsing_agent()

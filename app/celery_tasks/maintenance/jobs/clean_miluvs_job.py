@@ -1,70 +1,28 @@
 import logging
-import os
-import threading
 from datetime import datetime
 
 from beanie.operators import In
 import numpy as np
-from app.config import settings
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetForMetadataExtraction
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
 from app.services.aiod import check_aiod_asset
-from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
-from app.services.helper import utc_now
-from app.services.resilience import MilvusUnavailableException
-from app.services.threads.embedding_thread import AssetIdsAccum, get_assets_to_add_and_update
-
-job_lock = threading.Lock()
-
-
-async def delete_embeddings_of_aiod_assets_wrapper() -> None:
-    # Achieving sufficient robustness of the embedding deletion process
-    # is not that important in contrast to the process of updating the assets
-    # Thus, there is no need to store metadata information in MongoDB regarding this
-    # process. You should rather view this process as some sort of garbage collector
-    # that is run once a month
-    # the immediate incorrect embeddings retrieved for a specific user query are dealt
-    # with using the lazy deletion approach instead
-    if job_lock.acquire(blocking=False):
-        try:
-            logging.info(
-                "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has started."
-            )
-            embedding_store = MilvusEmbeddingStore()
-            to_time = utc_now()
-
-            for asset_type in settings.AIOD.ASSET_TYPES:
-                logging.info(
-                    f"\t[RECURRING MILVUS DELETE] Deleting embeddings of asset type: {asset_type.value}"
-                )
-                await delete_asset_embeddings(embedding_store, asset_type, to_time=to_time)
-
-            logging.info(
-                "[RECURRING MILVUS DELETE] Scheduled task for deleting asset embeddings has ended."
-            )
-        except MilvusUnavailableException as e:
-            logging.error(e)
-            logging.error(
-                "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection thread. "
-                + "Entire Application is being terminated now"
-            )
-            os._exit(1)
-        except Exception as e:
-            # No need to shutdown the application unless Milvus is down
-            logging.error(e)
-            logging.error(
-                "[RECURRING MILVUS DELETE] The above error has been encountered in the Milvus garbage collection thread."
-            )
-        finally:
-            job_lock.release()
-    else:
-        logging.info(
-            "[RECURRING MILVUS DELETE] Scheduled task for deleting skipped (previous task is still running)"
-        )
+from app.services.embedding_store import EmbeddingStore
+from app.celery_tasks.maintenance.jobs.new_embeddings_job import (
+    AssetIdsAccum,
+    get_assets_to_add_and_update,
+)
 
 
+# Achieving sufficient robustness of the embedding deletion process
+# is not that important in contrast to the process of updating the assets
+# Thus, there is no need to store metadata information in MongoDB regarding this
+# process. You should rather view this process as some sort of garbage collector
+# that is run once a month
+# the immediate incorrect embeddings retrieved for a specific user query are dealt
+# with using the lazy deletion approach instead
 async def delete_asset_embeddings(
     embedding_store: EmbeddingStore, asset_type: SupportedAssetType, to_time: datetime
 ) -> None:

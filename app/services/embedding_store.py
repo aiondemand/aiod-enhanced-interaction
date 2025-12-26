@@ -17,7 +17,7 @@ from pymilvus import DataType, MilvusClient, MilvusUnavailableException, Collect
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import MilvusSearchParams, VectorSearchParams

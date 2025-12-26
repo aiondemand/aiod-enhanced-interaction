@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from typing import Generic, TypeVar
 
-from app.config import settings
+from app import settings
 from app.models.filter import Filter
 from app.models.mongo import BaseDatabaseEntity, MongoDocument
 from app.schemas.asset_id import AssetId
