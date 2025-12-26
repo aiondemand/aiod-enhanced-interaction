@@ -3,8 +3,8 @@ from datetime import datetime
 
 from beanie.operators import In
 import numpy as np
-from app.config import settings
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetForMetadataExtraction
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams

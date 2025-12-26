@@ -3,7 +3,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, RunContext
 
 from app.models.filter import Filter
-from app.config import settings
+from app import settings
 from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
@@ -15,7 +15,7 @@ from app.services.metadata_filtering.nl_condition_parsing_agent import (
     get_nl_condition_parsing_agent,
 )
 from app.services.metadata_filtering.prompts.query_parsing_agent import QUERY_PARSING_SYSTEM_PROMPT
-from app.config import settings
+from app import settings
 
 
 class QueryParsingWrapper:

@@ -5,9 +5,9 @@ from fastapi import APIRouter, Body, HTTPException, Path, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app import settings
+from app.models import FilteredUserQuery
 from app.models.filter import Filter
-from app.models.query import FilteredUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,

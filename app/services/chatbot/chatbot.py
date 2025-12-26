@@ -15,7 +15,7 @@ from app.schemas.enums import SupportedAssetType
 from app.services.aiod import get_aiod_asset
 from app.services.chatbot.chatbot_system_prompt import CHATBOT_SYSTEM_PROMPT
 from app.services.inference.model import AiModel
-from app.config import settings
+from app import settings
 
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/127
 # TODO Wrap the whole chatbot into its own service

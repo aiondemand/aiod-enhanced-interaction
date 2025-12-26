@@ -2,7 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
-from app.models.query import RecommenderUserQuery
+from app.models import RecommenderUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,

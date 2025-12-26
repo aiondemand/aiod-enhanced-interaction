@@ -2,7 +2,7 @@ from fastapi import APIRouter, Path, Query
 from fastapi.responses import RedirectResponse
 from uuid import UUID
 
-from app.models.query import SimpleUserQuery
+from app.models import SimpleUserQuery
 from app.routers.sem_search import (
     get_query_results,
     submit_query,

@@ -7,7 +7,7 @@ from typing import Optional
 import redis
 from redis.exceptions import RedisError
 
-from app.config import settings
+from app import settings
 
 
 class RedisTaskLock:

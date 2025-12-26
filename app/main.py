@@ -4,12 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.celery_tasks.maintenance.tasks import (
+from app.celery_tasks import (
     compute_embeddings_task,
     extract_metadata_task,
     scraping_task,
 )
-from app.config import settings
+from app import settings
 from app.services.database import init_mongo_client
 from app.services.logging import setup_logger
 from app.routers import *

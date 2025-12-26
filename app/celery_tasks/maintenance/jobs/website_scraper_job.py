@@ -10,7 +10,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from app.services.inference.model import AiModel
-from app.config import settings
+from app import settings
 
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/128
 # TODO general code refactoring would be nice

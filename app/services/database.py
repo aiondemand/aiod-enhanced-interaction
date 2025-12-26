@@ -1,10 +1,8 @@
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from app.config import settings
-from app.models.asset_collection import AssetCollection
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
-from app.models.query import SimpleUserQuery, FilteredUserQuery, RecommenderUserQuery
+from app import settings
+import app.models as app_models
 
 
 async def init_mongo_client() -> AsyncIOMotorClient:
@@ -12,15 +10,11 @@ async def init_mongo_client() -> AsyncIOMotorClient:
         settings.MONGO.DBNAME
     ]
 
+    db_models = [getattr(app_models, name) for name in app_models.__all__]
+
     await init_beanie(
         database=db,
-        document_models=[
-            AssetCollection,
-            AssetForMetadataExtraction,
-            SimpleUserQuery,
-            FilteredUserQuery,
-            RecommenderUserQuery,
-        ],
+        document_models=db_models,
         multiprocessing_mode=True,
     )
 

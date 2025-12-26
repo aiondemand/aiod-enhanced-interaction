@@ -7,13 +7,9 @@ from typing import Type
 
 from uuid import UUID
 import numpy as np
-from app.config import settings
-from app.models.query import (
-    BaseUserQuery,
-    FilteredUserQuery,
-    RecommenderUserQuery,
-    SimpleUserQuery,
-)
+from app import settings
+from app.models.query import BaseUserQuery
+from app.models import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams

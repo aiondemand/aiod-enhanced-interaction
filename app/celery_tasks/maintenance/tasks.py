@@ -7,7 +7,7 @@ import torch
 
 from app.celery_app import celery_app
 from app.celery_tasks.maintenance.task_decorators import maintenance_task
-from app.config import settings
+from app import settings
 from app.services.database import init_mongo_client
 from app.services.embedding_store import MilvusEmbeddingStore
 from app.services.helper import utc_now

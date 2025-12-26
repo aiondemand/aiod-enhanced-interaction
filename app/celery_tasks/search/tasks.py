@@ -8,10 +8,9 @@ from typing import Type, cast
 from uuid import UUID
 from celery.signals import worker_init
 
-from app.config import settings
-from app.models.query import (
-    BaseUserQuery,
-)
+from app import settings
+from app.models import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
+from app.models.query import BaseUserQuery
 from app.services.database import init_mongo_client
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.inference.model import AiModel
@@ -19,12 +18,6 @@ from app.celery_tasks.search.sem_search import (
     semantic_search_wrapper,
 )
 from app.celery_app import celery_app
-from app.models.query import (
-    BaseUserQuery,
-    FilteredUserQuery,
-    RecommenderUserQuery,
-    SimpleUserQuery,
-)
 
 # Worker-level resources initialization, shared between all threads
 _worker_model: AiModel | None = None

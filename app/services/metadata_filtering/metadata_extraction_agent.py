@@ -16,7 +16,7 @@ from app.schemas.asset_metadata.publication_schema import (
 )
 from app.services.metadata_filtering.schema_mapping import ASSET_EXTRACTION_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
-from app.config import settings
+from app import settings
 from app.services.metadata_filtering.normalization_agent import get_normalization_agent
 from app.services.metadata_filtering.prompts.metadata_extraction_agent import (
     METADATA_EXTRACTION_SYSTEM_PROMPT,

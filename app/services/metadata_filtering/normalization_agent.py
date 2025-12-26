@@ -2,7 +2,7 @@ from functools import lru_cache
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, ModelRetry, RunContext
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_metadata.base_schemas import (
     AssetSpecific_AiExtractedMetadata,
     AssetSpecific_UserQueryParsedMetadata,

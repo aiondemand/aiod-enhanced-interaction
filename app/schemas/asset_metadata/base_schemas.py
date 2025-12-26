@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import List, Optional, cast
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_metadata.types import *
 from app.schemas.enums import SupportedAssetType
 from app.services.metadata_filtering.field_valid_values import get_field_valid_values

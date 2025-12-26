@@ -2,7 +2,7 @@ from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.config import settings
+from app import settings
 from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.services.metadata_filtering.field_valid_values import get_field_valid_values
@@ -21,7 +21,7 @@ from functools import lru_cache
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, RunContext
 
-from app.config import settings
+from app import settings
 
 
 class NLConditionParsingAgent:

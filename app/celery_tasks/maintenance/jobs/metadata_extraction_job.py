@@ -2,8 +2,8 @@ import logging
 
 from beanie.odm.queries.find import FindMany
 from beanie.operators import In
-from app.config import settings
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetForMetadataExtraction
 from app.schemas.enums import SupportedAssetType
 from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
 from app.services.metadata_filtering.metadata_extraction_agent import MetadataExtractionWrapper

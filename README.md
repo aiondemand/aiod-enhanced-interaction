@@ -161,7 +161,7 @@ Create a Python v11 environment preferably using conda:
 ### Dependencies
 
 For the application to work you need to set up its dependencies, namely MongoDB, Milvus database, RabbitMQ, Redis, and Ollama. Unless you have an access to already existing services to these technologies, you need to run them locally on your machine for development purposes.
-If you decide to run these dependencies using our docker-compose files (further described below), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
+If you decide to run these dependencies using our docker-compose file (`docker-compose.deps.yml`), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
 The `.env` file and all its environment variables are described in great detail in the *Deployment* section below.
 
 **MongoDB**
@@ -172,7 +172,6 @@ The `.env` file and all its environment variables are described in great detail 
     - Admin password: `MONGO_PASSWORD`
 - Optional env vars to define in `.env`:
     - Localhost port: `MONGO_HOST_PORT`
-- Command to run: `docker compose -f docker-compose.deps.yml up mongo -d`
     - This starts only the MongoDB service from the deps file
 - Set the following env vars defined in `.env.app`:
     - `MONGO__HOST=localhost`
@@ -191,8 +190,6 @@ The `.env` file and all its environment variables are described in great detail 
         - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
         - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
         - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
-    - Command to run: `docker compose -f docker-compose.deps.yml up -d`
-        - This starts the Milvus service along with its dependencies (etcd and MinIO) from the deps file
     - Set the following env vars defined in `.env.app`:
         - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
             - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var, default: 19530)
@@ -211,8 +208,6 @@ The `.env` file and all its environment variables are described in great detail 
 - Optional env vars to define in `.env`:
     - RabbitMQ ports: `RABBITMQ_HOST_PORT_5672` (AMQP protocol), `RABBITMQ_HOST_PORT_15672` (management interface)
     - Redis port: `REDIS_HOST_PORT`
-- Command to run: `docker compose -f docker-compose.deps.yml up rabbitmq redis -d`
-    - This starts only RabbitMQ and Redis services from the deps file
 - Set the following env vars defined in `.env.app`:
     - `CELERY__BROKER_URL=amqp://<PLACEHOLDER_USER>:<PLACEHOLDER_PASS>@localhost:<PLACEHOLDER_PORT>//`
         - Replace `<PLACEHOLDER_USER>` with the value in `RABBITMQ_USER` env var
@@ -322,8 +317,8 @@ When you run `./deploy.sh`, the following services are deployed:
 - **Milvus Lite** (when `USE_MILVUS_LITE=true`): Lightweight file-based vector database
 
 **Celery Services:**
-- **Celery Worker (General)**: Handles general asynchronous tasks
-- **Celery Worker (Embedding)**: Dedicated worker for embedding computation tasks
+- **Celery Worker (Maintenance)**: Runs recurring and scheduled background jobs for tasks such as database maintenance, cleaning up old data, vector store garbage collection, and populating new asset metadata and embeddings.
+- **Celery Worker (Search)**: Handles search and inference tasks related to semantic search queries and chat operations, serving requests in parallel to the FastAPI application.
 - **Celery Beat**: Scheduler for periodic tasks (e.g., daily AIoD platform updates, monthly database cleanups)
 
 **Optional Services:**

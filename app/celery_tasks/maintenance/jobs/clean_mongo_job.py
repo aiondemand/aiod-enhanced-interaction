@@ -2,9 +2,14 @@ import logging
 from datetime import datetime
 from typing import Type
 
-from app.config import settings
-from app.models.asset_collection import AssetCollection
-from app.models.query import BaseUserQuery, FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
+from app import settings
+from app.models import (
+    AssetCollection,
+    FilteredUserQuery,
+    RecommenderUserQuery,
+    SimpleUserQuery,
+)
+from app.models.query import BaseUserQuery
 from app.services.helper import utc_now
 
 

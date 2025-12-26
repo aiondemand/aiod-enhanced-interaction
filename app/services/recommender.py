@@ -1,7 +1,7 @@
 import logging
 from time import sleep
 
-from app.models.query import RecommenderUserQuery
+from app.models import RecommenderUserQuery
 from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore
 from app.services.inference.model import AiModel

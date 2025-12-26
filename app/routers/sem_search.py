@@ -3,12 +3,12 @@ from typing import Type, TypeVar
 from uuid import UUID
 from fastapi import HTTPException
 
-from app.config import settings
-from app.models.asset_collection import AssetCollection
+from app import settings
+from app.models import AssetCollection
 from app.models.query import BaseUserQuery
 from app.schemas.enums import BaseAssetType
 from app.schemas.query import BaseUserQueryResponse
-from app.celery_tasks.search.tasks import search_query_task
+from app.celery_tasks import search_query_task
 
 Response = TypeVar("Response", bound=BaseUserQueryResponse)
 

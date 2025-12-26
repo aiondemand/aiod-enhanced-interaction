@@ -8,9 +8,8 @@ from typing import Callable, Literal
 
 from beanie.operators import In
 import numpy as np
-from app.config import settings
-from app.models.asset_collection import AssetCollection
-from app.models.asset_for_metadata_extraction import AssetForMetadataExtraction
+from app import settings
+from app.models import AssetCollection, AssetForMetadataExtraction
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams
