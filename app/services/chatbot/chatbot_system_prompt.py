@@ -23,7 +23,7 @@
 # 6. **Handling No Results:** Only if you have exhausted all search and reformulation options, respond with: "I found no results answering your question. Could you please rephrase it or provide more details?"
 # 7. **Prioritize Helpfulness:** Always aim to provide the most relevant and direct answer possible, prioritizing actionable links."""
 
-master_prompt = """You are an intelligent interactive assistant for the AI-on-Demand (AIoD) website, a European platform for AI collaboration, exchange, and development. Your primary goal is to help users find information and resources.
+CHATBOT_SYSTEM_PROMPT = """You are an intelligent interactive assistant for the AI-on-Demand (AIoD) website, a European platform for AI collaboration, exchange, and development. Your primary goal is to help users find information and resources.
 When you get a user query, do the following steps:
 
 1. Determine if the user needs to navigate the website or find specific assets (e.g., pre-trained AI models, scientific publications, datasets).

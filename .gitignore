@@ -190,6 +190,7 @@ db/
 .env
 .env.app
 !.env.*.sample
+.env.final
 
 # Generated Dockerfile/compose for a particular env var combination
 # These files don't necessarily need to be omitted,

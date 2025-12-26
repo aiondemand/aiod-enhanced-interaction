@@ -25,6 +25,31 @@ if __name__ == "__main__":
     with open("./Dockerfile.final", "w") as f:
         f.write(output)
 
+    # build .env.final by concatenating .env.app and rendered .env.template.j2
+    env_content = ""
+
+    # Read .env.app if it exists
+    if os.path.exists(".env.app"):
+        with open(".env.app", "r") as f:
+            env_content = f.read()
+            # Ensure there's a newline at the end
+            if env_content and not env_content.endswith("\n"):
+                env_content += "\n"
+
+    # Render .env.template.j2 and append
+    template = env.get_template(".env.template.j2")
+    env_template_output = template.render(
+        USE_GPU=USE_GPU,
+        USE_LLM=USE_LLM,
+        USE_CHATBOT=USE_CHATBOT,
+        USE_MILVUS_LITE=USE_MILVUS_LITE,
+    )
+    env_content += env_template_output
+
+    # Write the final .env file
+    with open("./.env.final", "w") as f:
+        f.write(env_content)
+
     # build docker-compose
     template = env.get_template("docker-compose.template.j2")
 

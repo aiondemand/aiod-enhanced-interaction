@@ -126,6 +126,12 @@ In this file you find the following ENV variables:
     - `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
     - `CHATBOT__TOP_K_ASSETS_TO_SEARCH`: Number of top assets to retrieve when searching for assets in chatbot responses
     - `CHATBOT__MYLIBRARY_URL`: Base URL for the MyLibrary service used to generate links to AIoD assets
+- Celery config (`CELERY__*`):
+    - `CELERY__BROKER_URL`: URL connection string for the message broker (RabbitMQ). Format: `amqp://user:password@host:port//`
+    - `CELERY__RESULT_BACKEND_URL`: URL connection string for the result backend (Redis). Format: `redis://host:port/db_number`
+    - `CELERY__SEARCH_WORKER_NAME_PREFIX`: Prefix for search worker names (default: `search_worker`)
+    - `CELERY__MAINTENANCE_WORKER_NAME_PREFIX`: Prefix for maintenance worker names (default: `maintenance_worker`)
+    - `CELERY__REDIS_LOCK_TTL_SECONDS`: TTL in seconds for Redis distributed locks used by maintenance tasks (default: `21600` - 6 hours)
 - AIoD config (`AIOD__*`):
     - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
     - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
@@ -154,46 +160,62 @@ Create a Python v11 environment preferably using conda:
 
 ### Dependencies
 
-For the application to work you need to set up its dependencies, namely Milvus database and Ollama. Unless you have an access to already existing services to these technologies, you need to run them locally on your machine for development purposes.
-If you decide to run these dependencies using our docker-compose files (further described below), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
+For the application to work you need to set up its dependencies, namely MongoDB, Milvus database, RabbitMQ, Redis, and Ollama. Unless you have an access to already existing services to these technologies, you need to run them locally on your machine for development purposes.
+If you decide to run these dependencies using our docker-compose file (`docker-compose.deps.yml`), you are also required to create `.env` file with a subset of environment variables that are necessary for these deployments to be executed.
 The `.env` file and all its environment variables are described in great detail in the *Deployment* section below.
 
 **MongoDB**
-- We recommend deploying the database using `docker-compose.mongo.yml` file
+- We recommend deploying the database using `docker-compose.deps.yml` file by starting the MongoDB service
 - Required env vars to define in `.env`:
     - Where to store data: `DATA_DIRPATH`
     - Admin username: `MONGO_USER`
     - Admin password: `MONGO_PASSWORD`
 - Optional env vars to define in `.env`:
     - Localhost port: `MONGO_HOST_PORT`
-- Command to run: `docker compose -f docker-compose.mongo.yml up -d`
+    - This starts only the MongoDB service from the deps file
 - Set the following env vars defined in `.env.app`:
     - `MONGO__HOST=localhost`
     - `MONGO__PORT=<PLACEHOLDER>`
-        - Replace the placeholder with the localhost port you have assigned to the Mongo container's 27017 port (specified in the `MONGO_HOST_PORT` env var)
+        - Replace the placeholder with the localhost port you have assigned to the Mongo container's 27017 port (specified in the `MONGO_HOST_PORT` env var, default: 27017)
     - `MONGO__USER=<PLACEHOLDER>`
         - Replace the placeholder with the value in `MONGO_USER` env var
     - `MONGO__PASSWORD=<PLACEHOLDER>`
         - Replace the placeholder with the value in `MONGO_PASSWORD` env var
 
 **Milvus**
-<!-- TODO describe Milvus Lite vs Milvus Standalone version -->
-- We recommend deploying the database using `docker-compose.milvus.yml` file that uses Milvus Standalone (fully-fledged vector DB)
+- We recommend deploying the database using `docker-compose.deps.yml` file that uses Milvus Standalone (fully-fledged vector DB)
     - Required env vars to define in `.env`:
         - Where to store data: `DATA_DIRPATH`
     - Optional env vars to define in `.env`:
         - Minio credentials: `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
         - Minio ports: `MINIO_HOST_PORT_9001`, `MINIO_HOST_PORT_9000`
         - Milvus ports: `MILVUS_HOST_PORT_19530`, `MILVUS_HOST_PORT_9091`
-    - Command to run: `docker compose -f docker-compose.milvus.yml up -d`
     - Set the following env vars defined in `.env.app`:
         - `MILVUS__URI=http://localhost:<PLACEHOLDER>`
-            - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var)
+            - Replace the placeholder with the localhost port you have assigned to the Milvus container's 19530 port (specified in the `MILVUS_HOST_PORT_19530` env var, default: 19530)
         - `MILVUS__USER=root`
         - `MILVUS__PASS=Milvus`
 - If you wish to use Milvus Lite for whatever reason, set the following env vars in `.env` file:
     - Set `USE_MILVUS_LITE` env var to true
     - Set `USE_LLM` to false (as Metadata Filtering is not allowed when using Milvus Lite)
+
+**Celery (RabbitMQ and Redis)**
+- For asynchronous task processing, the application uses Celery with RabbitMQ as the message broker and Redis as the result backend
+- We recommend deploying both services using `docker-compose.deps.yml` file by starting specific services:
+- Required env vars to define in `.env`:
+    - Where to store data: `DATA_DIRPATH`
+    - RabbitMQ credentials: `RABBITMQ_USER`, `RABBITMQ_PASS`
+- Optional env vars to define in `.env`:
+    - RabbitMQ ports: `RABBITMQ_HOST_PORT_5672` (AMQP protocol), `RABBITMQ_HOST_PORT_15672` (management interface)
+    - Redis port: `REDIS_HOST_PORT`
+- Set the following env vars defined in `.env.app`:
+    - `CELERY__BROKER_URL=amqp://<PLACEHOLDER_USER>:<PLACEHOLDER_PASS>@localhost:<PLACEHOLDER_PORT>//`
+        - Replace `<PLACEHOLDER_USER>` with the value in `RABBITMQ_USER` env var
+        - Replace `<PLACEHOLDER_PASS>` with the value in `RABBITMQ_PASS` env var
+        - Replace `<PLACEHOLDER_PORT>` with the localhost port you have assigned to the RabbitMQ container's 5672 port (specified in the `RABBITMQ_HOST_PORT_5672` env var, default: 5672)
+    - `CELERY__RESULT_BACKEND_URL=redis://localhost:<PLACEHOLDER>/0`
+        - Replace `<PLACEHOLDER>` with the localhost port you have assigned to the Redis container's 6379 port (specified in the `REDIS_HOST_PORT` env var, default: 6379)
+- **Note**: The RabbitMQ management interface will be accessible at `http://localhost:15672` (or your configured `RABBITMQ_HOST_PORT_15672`)
 
 **Ollama**
 - We recommend installing Ollama directly from their website: https://ollama.com/ *(So that you don't need to bother with granting Docker an access to your GPU)*
@@ -206,9 +228,21 @@ To start the application you can either:
 
 ## Deployment
 
-For deploying purposes, we use a Docker compose config enabling us to deploy not only FastAPI service, but also Milvus vector database, and Ollama service if need be.
+For deploying purposes, we use Docker Compose configurations enabling us to deploy the FastAPI service along with its dependencies: Milvus vector database, MongoDB, RabbitMQ, Redis, and optionally Ollama service. The deployment also includes Celery workers and a Celery Beat scheduler for handling asynchronous tasks.
 
 *When specifying a path to a file or a directory, either specify the fullpath or prepend the relative path with `./` so that it is clear it's an actual path and it will be resolved as such.*
+
+### Build Process
+
+The deployment uses a build process that dynamically generates Docker configuration files based on your environment settings:
+
+1. **Dockerfile.final**: Generated from `Dockerfile.template.j2` based on GPU and chatbot settings
+2. **docker-compose.final.yml**: Generated from `docker-compose.template.j2` with all service configurations
+3. **.env.final**: Generated by concatenating `.env.app` (application config) and rendered `.env.template.j2` (deployment-specific overrides)
+
+The `.env.final` file is used by the Docker containers at runtime and contains all necessary environment variables for the application and its services.
+
+### Deployment Steps
 
 Perform the following steps to deploy the service:
 1. Create additional `.env` file (from `.env.sample` template) containing additional ENV variables to further modify the deployment. To be specific, said file contains the following ENV variables:
@@ -238,6 +272,10 @@ Perform the following steps to deploy the service:
         - `MONGO_PASSWORD`: Password of the admin MongoDB user
         - `MONGO_AUTH_DBNAME`: Name of the auth DB (only used in `./scripts/populate-db.sh`)
 
+    - RabbitMQ credential setup:
+        - `RABBITMQ_USER`: Username for RabbitMQ broker (used by Celery)
+        - `RABBITMQ_PASS`: Password for RabbitMQ broker (used by Celery)
+
     - Mapping of host ports to Docker services:
         - `APP_HOST_PORT`: Host port we wish the FastAPI service to be mapped to
         - `MINIO_HOST_PORT_9001`: Host port we wish the Minio service to be mapped to (Minio container port: 9001)
@@ -246,6 +284,9 @@ Perform the following steps to deploy the service:
         - `MILVUS_HOST_PORT_9091`: Host port we wish the Milvus service to be mapped to (Milvus container port: 9091)
         - `MONGO_HOST_PORT`: Host port we wish the MongoDB service to be mapped to (MongoDB container port: 27017)
         - `OLLAMA_HOST_PORT`: Host port we wish the Ollama service to be mapped to (Ollama container port: 11434)
+        - `RABBITMQ_HOST_PORT_5672`: Host port for RabbitMQ AMQP protocol (RabbitMQ container port: 5672)
+        - `RABBITMQ_HOST_PORT_15672`: Host port for RabbitMQ management interface (RabbitMQ container port: 15672)
+        - `REDIS_HOST_PORT`: Host port for Redis service (Redis container port: 6379)
 
 1. [Optional] If you wish to download the model weights locally, perform the following steps. Otherwise, to download the model from HuggingFace during runtime, simply keep the `MODEL_LOADPATH` variable set to `Alibaba-NLP/gte-large-en-v1.5`.
     1. Download the model weights and place them into the following directory: `$DATA_DIRPATH/model`. This directory is a Docker mount-bind mapped into the FastAPI container, specifically onto the `/model` path in the container.
@@ -261,6 +302,30 @@ Perform the following steps to deploy the service:
     - *This script may take up to 15 minutes.*
 1. Execute the following bash script file that deploys all the necessary Docker containers based on the values of the `USE_GPU` and `USE_LLM` ENV variables: `./deploy.sh`
 
+### Deployed Services
+
+When you run `./deploy.sh`, the following services are deployed:
+
+**Core Services:**
+- **FastAPI Application**: Main API service for semantic search and chatbot functionality
+- **MongoDB**: NoSQL database for storing asset metadata and query results
+- **RabbitMQ**: Message broker for Celery task queue
+- **Redis**: Result backend for Celery tasks
+
+**Vector Database (conditional):**
+- **Milvus Standalone** (when `USE_MILVUS_LITE=false`): Full-featured vector database with etcd and MinIO
+- **Milvus Lite** (when `USE_MILVUS_LITE=true`): Lightweight file-based vector database
+
+**Celery Services:**
+- **Celery Worker (Maintenance)**: Runs recurring and scheduled background jobs for tasks such as database maintenance, cleaning up old data, vector store garbage collection, and populating new asset metadata and embeddings.
+- **Celery Worker (Search)**: Handles search and inference tasks related to semantic search queries and chat operations, serving requests in parallel to the FastAPI application.
+- **Celery Beat**: Scheduler for periodic tasks (e.g., daily AIoD platform updates, monthly database cleanups)
+
+**Optional Services:**
+- **Ollama** (when `USE_LLM=true`): LLM service for metadata filtering
+
+**Support Services:**
+- **Autoheal**: Automatically restarts unhealthy containers
 
 ### Stop/Delete the application
 If you wish to stop or remove the application, assuming all the previous ENV variables have not been further modified, simply execute the following command: `./deploy.sh --stop` or `./deploy.sh --remove` respectively.

@@ -42,7 +42,7 @@ fi
 
 # What operation we wish to perform
 if [ "$#" -eq 0 ]; then
-  COMPOSE_COMMAND="up -d --build"
+  COMPOSE_COMMAND="up app -d --build"
 
   # Build docker-compose first (stored as docker-compose.final.yml)
   docker compose -f docker-compose.build.yml up --build
@@ -74,8 +74,5 @@ else
   exit 1
 fi
 
-if [ "$USE_MILVUS_LITE" = "true" ]; then
-  docker compose -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
-else
-  docker compose -f docker-compose.milvus.yml -f docker-compose.mongo.yml -f docker-compose.final.yml $COMPOSE_COMMAND
-fi
+# Deploy using the merged dependencies compose file and the final app compose file
+docker compose -f docker-compose.deps.yml -f docker-compose.final.yml $COMPOSE_COMMAND

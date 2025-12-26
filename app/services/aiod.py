@@ -6,7 +6,7 @@ import requests
 from requests import Response
 from requests.exceptions import HTTPError, Timeout
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 from app.schemas.params import RequestParams

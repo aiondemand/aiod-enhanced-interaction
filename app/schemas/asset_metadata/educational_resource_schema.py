@@ -2,12 +2,7 @@ from typing import List, Optional
 
 from pydantic import Field
 
-from app.schemas.asset_metadata.base_schemas import (
-    AssetSpecific_AiExtractedMetadata,
-    AssetSpecific_UserQueryParsedMetadata,
-    AutomaticallyExtractedMetadata,
-    Base_AiExtractedMetadata,
-)
+from app.schemas.asset_metadata.base_schemas import *
 from app.schemas.asset_metadata.types import *
 from app.schemas.enums import SupportedAssetType
 

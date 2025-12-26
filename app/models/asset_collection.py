@@ -4,7 +4,7 @@ from abc import ABC
 from datetime import datetime
 
 
-from app.config import settings
+from app import settings
 
 from app.services.helper import utc_now
 from app.schemas.enums import SupportedAssetType

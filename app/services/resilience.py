@@ -12,7 +12,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from app.config import settings
+from app import settings
 
 
 class ServiceUnavailableException(Exception):

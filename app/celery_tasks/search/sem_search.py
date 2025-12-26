@@ -2,99 +2,68 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
-import os
-from queue import Queue
 from time import sleep
 from typing import Type
 
 from uuid import UUID
-from beanie.odm.operators.find.logical import Or
 import numpy as np
-from app.config import settings
-from app.models.query import (
-    BaseUserQuery,
-    FilteredUserQuery,
-    RecommenderUserQuery,
-    SimpleUserQuery,
-)
+from app import settings
+from app.models.query import BaseUserQuery
+from app.models import FilteredUserQuery, RecommenderUserQuery, SimpleUserQuery
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import QueryStatus, SupportedAssetType
 from app.schemas.params import VectorSearchParams
 from app.schemas.search_results import AssetResults, SearchResults
 from app.services.aiod import get_aiod_asset
-from app.services.embedding_store import EmbeddingStore, MilvusEmbeddingStore
+from app.services.embedding_store import EmbeddingStore
 from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
 from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
 
 
-QUERY_QUEUE: Queue[tuple[UUID | None, Type[BaseUserQuery] | None]] = Queue()
+async def semantic_search_wrapper(
+    query_id: UUID,
+    query_type: Type[BaseUserQuery],
+    model: AiModel,
+    embedding_store: EmbeddingStore,
+) -> dict:
+    user_query = await fetch_user_query(query_id, query_type)
+    if user_query is None:
+        return {"status": "skipped", "reason": "Query not found or invalid"}
 
+    logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
 
-async def fill_query_queue() -> None:
-    async def __retrieve_queries(typ: type[BaseUserQuery]) -> list[BaseUserQuery]:
-        return await typ.find_all_docs(
-            Or(typ.status == QueryStatus.QUEUED, typ.status == QueryStatus.IN_PROGRESS)
+    try:
+        results = await search_across_assets_wrapper(model, embedding_store, user_query)
+        user_query.result_set = results
+        user_query.update_status(QueryStatus.COMPLETED)
+        await user_query.replace_doc()
+
+        return {
+            "status": "completed",
+            "query_id": str(query_id),
+            "results_count": len(results.asset_ids) if results else 0,
+        }
+    except LocalServiceUnavailableException as e:
+        logging.error(e)
+        logging.error(
+            "The above error has been encountered in the query processing task. "
+            + "Task will be retried."
         )
-
-    simple_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(SimpleUserQuery)
-    filtered_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(FilteredUserQuery)
-    similar_queries_to_process: list[BaseUserQuery] = await __retrieve_queries(RecommenderUserQuery)
-
-    queries_to_process: list[BaseUserQuery] = sorted(
-        simple_queries_to_process + filtered_queries_to_process + similar_queries_to_process,
-        key=BaseUserQuery.sort_function_to_populate_queue,
-    )
-    if len(queries_to_process) == 0:
-        return
-    for query in queries_to_process:
-        QUERY_QUEUE.put((query.id, type(query)))
-
-    logging.info(
-        f"Query queue has been populated with {len(queries_to_process)} queries to process."
-    )
-
-
-async def search_thread() -> None:
-    await fill_query_queue()
-
-    model = AiModel("cpu")
-    embedding_store = MilvusEmbeddingStore()
-
-    while True:
-        query_id, query_type = QUERY_QUEUE.get()
-        if query_id is None or query_type is None:
-            break
-
-        user_query = await fetch_user_query(query_id, query_type)
-        if user_query is None:
-            continue
-        logging.info(f"Searching relevant assets for query ID: {str(query_id)}")
-
-        try:
-            results = await search_across_assets_wrapper(
-                model,
-                embedding_store,
-                user_query,
-            )
-            user_query.result_set = results
-            user_query.update_status(QueryStatus.COMPLETED)
-            await user_query.replace_doc()
-        except LocalServiceUnavailableException as e:
-            logging.error(e)
-            logging.error(
-                "The above error has been encountered in the embedding thread. "
-                + "Entire Application is being terminated now"
-            )
-            os._exit(1)
-        except Exception as e:
-            user_query.update_status(QueryStatus.FAILED)
-            await user_query.replace_doc()
-            logging.error(e)
-            logging.error(
-                f"The above error has been encountered in the query processing thread while processing query ID: {str(query_id)}"
-            )
+        # Update query status to failed
+        user_query.update_status(QueryStatus.FAILED)
+        await user_query.replace_doc()
+        # Re-raise to trigger Celery retry mechanism
+        raise
+    except Exception as e:
+        user_query.update_status(QueryStatus.FAILED)
+        await user_query.replace_doc()
+        logging.error(e)
+        logging.error(
+            f"The above error has been encountered in the query processing task while processing query ID: {str(query_id)}"
+        )
+        return {"status": "failed", "error": str(e)}
 
 
 async def fetch_user_query(query_id: UUID, query_type: Type[BaseUserQuery]) -> BaseUserQuery | None:

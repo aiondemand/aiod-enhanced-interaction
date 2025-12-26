@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_id import AssetId
 from app.schemas.enums import SupportedAssetType
 

@@ -3,7 +3,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai import Agent, ModelRetry, RunContext
 
 from app.models.filter import Filter
-from app.config import settings
+from app import settings
 from app.services.metadata_filtering.base import prepare_ollama_model
 from app.services.metadata_filtering.schema_mapping import QUERY_PARSING_SCHEMA_MAPPING
 from app.schemas.enums import SupportedAssetType
@@ -11,14 +11,17 @@ from app.services.metadata_filtering.models.outputs import (
     LLM_NaturalLanguageCondition,
     LLMStructedCondition,
 )
-from app.services.metadata_filtering.nl_condition_parsing_agent import nl_condition_parsing_agent
+from app.services.metadata_filtering.nl_condition_parsing_agent import (
+    get_nl_condition_parsing_agent,
+)
 from app.services.metadata_filtering.prompts.query_parsing_agent import QUERY_PARSING_SYSTEM_PROMPT
-from app.config import settings
+from app import settings
 
 
 class QueryParsingWrapper:
     @classmethod
     async def parse_query(cls, user_query: str, asset_type: SupportedAssetType) -> dict:
+        query_parsing_agent = get_query_parsing_agent()
         if query_parsing_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
@@ -134,6 +137,7 @@ class QueryParsingAgent:
     async def _parse_nl_conditions(
         self, ctx: RunContext[SupportedAssetType], nl_conditions: list[LLM_NaturalLanguageCondition]
     ) -> list[LLMStructedCondition]:
+        nl_condition_parsing_agent = get_nl_condition_parsing_agent()
         if nl_condition_parsing_agent is None:
             raise ValueError("Metadata Filtering is disabled")
 
@@ -162,6 +166,3 @@ def get_query_parsing_agent() -> QueryParsingAgent | None:
         return QueryParsingAgent()
     else:
         return None
-
-
-query_parsing_agent = get_query_parsing_agent()

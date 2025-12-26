@@ -2,10 +2,10 @@ from abc import abstractmethod
 from typing import List, Optional, cast
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app import settings
 from app.schemas.asset_metadata.types import *
 from app.schemas.enums import SupportedAssetType
-from app.services.metadata_filtering.field_valid_values import field_valid_value_service
+from app.services.metadata_filtering.field_valid_values import get_field_valid_values
 
 # README
 # Value constraints need to be specified within their own annotated types rather than in the Field arguments
@@ -183,7 +183,7 @@ class AssetSpecific_UserQueryParsedMetadata(AutomaticallyExtractedMetadata):
 
     @classmethod
     def get_inner_annotation(cls, field_name: str, with_valid_values_enum: bool) -> type:
-        all_valid_values = field_valid_value_service.get_values(cls.get_asset_type(), field_name)
+        all_valid_values = get_field_valid_values().get_values(cls.get_asset_type(), field_name)
 
         if (
             with_valid_values_enum

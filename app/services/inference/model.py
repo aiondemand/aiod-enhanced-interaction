@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from transformers.utils import logging
 
-from app.config import settings
+from app import settings
 
 from .architecture import (
     Basic_EmbeddingModel,
