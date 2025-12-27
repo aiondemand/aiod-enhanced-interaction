@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiod-enhanced-interaction.redis.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.redis.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.redis.service.type }}
+  ports:
+  - port: {{ .Values.redis.service.port }}
+    targetPort: 6379
+    name: redis
+  selector:
+    {{- include "aiod-enhanced-interaction.redis.selectorLabels" . | nindent 4 }}

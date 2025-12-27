@@ -19,13 +19,16 @@ services:
     ports:
       - "${APP_HOST_PORT:-8000}:80"
     depends_on:
-      - celery_beat
+      celery_search_worker:
+        condition: service_healthy
+        restart: false
+      celery_beat:
+        condition: service_healthy
+        restart: false
+    {% if USE_MILVUS_LITE == "true" %}
     volumes:
-      - ${DATA_DIRPATH}/model:/model
-      - ${DATA_DIRPATH}/cold_data:/cold_data
-      {% if USE_MILVUS_LITE == "true" %}
       - ${DATA_DIRPATH}/volumes:/data
-      {% endif %}
+    {% endif %}
     healthcheck:
       # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
       # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
@@ -83,6 +86,11 @@ services:
       redis:
         condition: service_healthy
         restart: false
+    volumes:
+      - ${DATA_DIRPATH}/model:/model
+      {% if USE_MILVUS_LITE == "true" %}
+      - ${DATA_DIRPATH}/volumes:/data
+      {% endif %}
     healthcheck:
       test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping"]
       interval: 30s
@@ -123,6 +131,12 @@ services:
       redis:
         condition: service_healthy
         restart: false
+    volumes:
+      - ${DATA_DIRPATH}/model:/model
+      - ${DATA_DIRPATH}/cold_data:/cold_data
+      {% if USE_MILVUS_LITE == "true" %}
+      - ${DATA_DIRPATH}/volumes:/data
+      {% endif %}
     healthcheck:
       test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping"]
       interval: 30s
@@ -144,12 +158,15 @@ services:
     env_file:
       - .env.final
     depends_on:
-      celery_search_worker:
-        condition: service_healthy
-        restart: false
       celery_maintenance_worker:
         condition: service_healthy
         restart: false
+    healthcheck:
+      exec: ["sh", "-c", "ps aux | grep '[c]elery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
   {% if USE_LLM == "true" %}
 
   # Ollama service

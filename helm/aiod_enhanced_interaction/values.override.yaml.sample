@@ -6,6 +6,10 @@ secrets:
   milvus:
     password: "your-milvus-root-password"
 
+  rabbitmq:
+    username: ""  # REQUIRED: RabbitMQ username
+    password: ""  # REQUIRED: RabbitMQ password
+
   chatbot:
     mistralKey: "your-mistral-api-key"
 

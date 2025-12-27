@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiod-enhanced-interaction.rabbitmq.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.rabbitmq.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.rabbitmq.service.type }}
+  ports:
+  - port: {{ .Values.rabbitmq.service.port5672 }}
+    targetPort: 5672
+    name: amqp
+  - port: {{ .Values.rabbitmq.service.port15672 }}
+    targetPort: 15672
+    name: management
+  selector:
+    {{- include "aiod-enhanced-interaction.rabbitmq.selectorLabels" . | nindent 4 }}

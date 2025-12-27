@@ -70,6 +70,7 @@ app:
     # MongoDB configuration
     mongo:
       dbName: "aiod"
+      authDbName: "admin"
 
     # Chatbot configuration
     chatbot:
@@ -87,6 +88,12 @@ app:
     ollama:
       modelName: "qwen3:4b-instruct"
       maxTokens: "1024"
+
+    # Celery configuration
+    celery:
+      searchWorkerNamePrefix: "search_worker"
+      maintenanceWorkerNamePrefix: "maintenance_worker"
+      redisLockTtlSeconds: "21600"
 
 # MongoDB configuration
 mongo:
@@ -140,6 +147,85 @@ ollama:
     size: 30Gi
     storageClass: ""  # Uses global storageClass.name if empty
 
+# RabbitMQ configuration
+rabbitmq:
+  image:
+    repository: rabbitmq
+    tag: "4.1-management-alpine"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port5672: 5672
+    port15672: 15672
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "512Mi"
+    limits:
+      memory: "2Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+
+# Redis configuration
+redis:
+  image:
+    repository: redis
+    tag: "8.4.0"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 6379
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "256Mi"
+    limits:
+      memory: "1Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+
+# Celery configuration
+celery:
+  searchWorker:
+    replicas: 1
+    concurrency: 8
+    resources:
+      requests:
+        memory: "2Gi"
+      limits:
+        memory: "4Gi"
+  maintenanceWorker:
+    replicas: 1
+    concurrency: 4
+    resources:
+      requests:
+        memory: "1Gi"
+      limits:
+        memory: "2Gi"
+  beat:
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+      limits:
+        memory: "1Gi"
+
 # Storage class
 storageClass:
   name: aiod-storage-class
@@ -183,6 +269,11 @@ secrets:
   milvus:
     user: "root"  # Default root user when authorization is enabled
     password: ""  # REQUIRED: Set this - will be used in Milvus extraConfigFiles (user.yaml)
+
+  # RabbitMQ credentials
+  rabbitmq:
+    username: ""  # REQUIRED: RabbitMQ username
+    password: ""  # REQUIRED: RabbitMQ password
 
   # Application secrets
   chatbot:

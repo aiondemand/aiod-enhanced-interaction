@@ -123,3 +123,118 @@ Milvus fullname (service name from dependency chart)
 {{- define "aiod-enhanced-interaction.milvus.fullname" -}}
 {{- printf "%s-milvus" .Release.Name }}
 {{- end }}
+
+{{/*
+RabbitMQ component labels
+*/}}
+{{- define "aiod-enhanced-interaction.rabbitmq.labels" -}}
+app: rabbitmq
+{{ include "aiod-enhanced-interaction.labels" . }}
+{{- end }}
+
+{{/*
+RabbitMQ component selector labels
+*/}}
+{{- define "aiod-enhanced-interaction.rabbitmq.selectorLabels" -}}
+app: rabbitmq
+{{ include "aiod-enhanced-interaction.selectorLabels" . }}
+{{- end }}
+
+{{/*
+RabbitMQ fullname
+*/}}
+{{- define "aiod-enhanced-interaction.rabbitmq.fullname" -}}
+{{- printf "%s-rabbitmq" (include "aiod-enhanced-interaction.fullname" .) }}
+{{- end }}
+
+{{/*
+Redis component labels
+*/}}
+{{- define "aiod-enhanced-interaction.redis.labels" -}}
+app: redis
+{{ include "aiod-enhanced-interaction.labels" . }}
+{{- end }}
+
+{{/*
+Redis component selector labels
+*/}}
+{{- define "aiod-enhanced-interaction.redis.selectorLabels" -}}
+app: redis
+{{ include "aiod-enhanced-interaction.selectorLabels" . }}
+{{- end }}
+
+{{/*
+Redis fullname
+*/}}
+{{- define "aiod-enhanced-interaction.redis.fullname" -}}
+{{- printf "%s-redis" (include "aiod-enhanced-interaction.fullname" .) }}
+{{- end }}
+
+{{/*
+Celery search worker component labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-search-worker.labels" -}}
+app: celery-search-worker
+{{ include "aiod-enhanced-interaction.labels" . }}
+{{- end }}
+
+{{/*
+Celery search worker component selector labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-search-worker.selectorLabels" -}}
+app: celery-search-worker
+{{ include "aiod-enhanced-interaction.selectorLabels" . }}
+{{- end }}
+
+{{/*
+Celery search worker fullname
+*/}}
+{{- define "aiod-enhanced-interaction.celery-search-worker.fullname" -}}
+{{- printf "%s-celery-search-worker" (include "aiod-enhanced-interaction.fullname" .) }}
+{{- end }}
+
+{{/*
+Celery maintenance worker component labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-maintenance-worker.labels" -}}
+app: celery-maintenance-worker
+{{ include "aiod-enhanced-interaction.labels" . }}
+{{- end }}
+
+{{/*
+Celery maintenance worker component selector labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-maintenance-worker.selectorLabels" -}}
+app: celery-maintenance-worker
+{{ include "aiod-enhanced-interaction.selectorLabels" . }}
+{{- end }}
+
+{{/*
+Celery maintenance worker fullname
+*/}}
+{{- define "aiod-enhanced-interaction.celery-maintenance-worker.fullname" -}}
+{{- printf "%s-celery-maintenance-worker" (include "aiod-enhanced-interaction.fullname" .) }}
+{{- end }}
+
+{{/*
+Celery beat component labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-beat.labels" -}}
+app: celery-beat
+{{ include "aiod-enhanced-interaction.labels" . }}
+{{- end }}
+
+{{/*
+Celery beat component selector labels
+*/}}
+{{- define "aiod-enhanced-interaction.celery-beat.selectorLabels" -}}
+app: celery-beat
+{{ include "aiod-enhanced-interaction.selectorLabels" . }}
+{{- end }}
+
+{{/*
+Celery beat fullname
+*/}}
+{{- define "aiod-enhanced-interaction.celery-beat.fullname" -}}
+{{- printf "%s-celery-beat" (include "aiod-enhanced-interaction.fullname" .) }}
+{{- end }}

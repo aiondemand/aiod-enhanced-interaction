@@ -35,9 +35,13 @@ data:
   MILVUS__FILEPATH: "/data/milvus.db"
   MILVUS__COLLECTION_PREFIX: {{ .Values.app.config.milvus.collectionPrefix | quote }}
   MILVUS__STORE_CHUNKS: {{ .Values.app.config.milvus.storeChunks | quote }}
+  MILVUS__URI: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:{{ .Values.milvus.service.port }}"
 
   # Mongo configuration
   MONGO__DBNAME: {{ .Values.app.config.mongo.dbName | quote }}
+  MONGO__AUTH_DBNAME: {{ .Values.app.config.mongo.authDbName | default "admin" | quote }}
+  MONGO__HOST: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
+  MONGO__PORT: {{ .Values.mongo.service.port | quote }}
 
   # Chatbot configuration
   CHATBOT__USE_CHATBOT: {{ .Values.use_chatbot | quote }}
@@ -53,4 +57,14 @@ data:
   # Ollama configuration
   OLLAMA__MODEL_NAME: {{ .Values.app.config.ollama.modelName | quote }}
   OLLAMA__MAX_TOKENS: {{ .Values.app.config.ollama.maxTokens | quote }}
+  {{- if .Values.use_llm }}
+  OLLAMA__URI: "http://{{ include "aiod-enhanced-interaction.ollama.fullname" . }}:{{ .Values.ollama.service.port }}"
+  {{- end }}
+
+  # Celery configuration
+  CELERY__SEARCH_WORKER_NAME_PREFIX: {{ .Values.app.config.celery.searchWorkerNamePrefix | quote }}
+  CELERY__MAINTENANCE_WORKER_NAME_PREFIX: {{ .Values.app.config.celery.maintenanceWorkerNamePrefix | quote }}
+  CELERY__REDIS_LOCK_TTL_SECONDS: {{ .Values.app.config.celery.redisLockTtlSeconds | quote }}
+  CELERY__BROKER_URL: "amqp://{{ .Values.secrets.rabbitmq.username }}:{{ .Values.secrets.rabbitmq.password }}@{{ include "aiod-enhanced-interaction.rabbitmq.fullname" . }}:{{ .Values.rabbitmq.service.port5672 }}//"
+  CELERY__RESULT_BACKEND_URL: "redis://{{ include "aiod-enhanced-interaction.redis.fullname" . }}:{{ .Values.redis.service.port }}/0"
 {{- end }}
