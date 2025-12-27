@@ -69,7 +69,7 @@ spec:
   - metadata:
       name: mongo-data
     spec:
-      accessModes: [ "ReadWriteOnce" ]
+      accessModes: [ {{ .Values.mongo.persistence.accessMode | default "ReadWriteOnce" | quote }} ]
       storageClassName: {{ .Values.mongo.persistence.storageClass | default .Values.storageClass.name }}
       resources:
         requests:

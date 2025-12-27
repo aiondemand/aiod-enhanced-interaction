@@ -10,7 +10,7 @@ app:
   image:
     repository: aiod-ei
     imagePullPolicy: IfNotPresent
-  replicas: 1
+  replicas: 2
 
   # Service configuration
   service:
@@ -19,10 +19,11 @@ app:
 
   # Resource requests and limits
   resources:
+    # TODO decrease the memory requirements once we move all the Model Embedding logic pertaining to the chatbot to a worker
     requests:
-      memory: "2Gi"
+      memory: "1Gi"
     limits:
-      memory: "4Gi"
+      memory: "3Gi"
 
   # Persistent Volume Claims configuration
   persistence:
@@ -30,14 +31,17 @@ app:
       enabled: true
       size: 5Gi
       storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (celery workers)
     coldData:
       enabled: true
       size: 20Gi
       storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (celery maintenance workers)
     milvusData:
       enabled: true
       size: 20Gi
       storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (app, celery workers)
 
   # Application configuration (ConfigMap values)
   config:
@@ -111,7 +115,7 @@ mongo:
   # Resource requests and limits
   resources:
     requests:
-      memory: "512Mi"
+      memory: "500Mi"
     limits:
       memory: "2Gi"
 
@@ -120,6 +124,7 @@ mongo:
     enabled: true
     size: 10Gi
     storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
 
 # Ollama configuration
 ollama:
@@ -137,15 +142,16 @@ ollama:
   # Resource requests and limits
   resources:
     requests:
-      memory: "4Gi"
+      memory: "2Gi"
     limits:
-      memory: "8Gi"
+      memory: "6Gi"
 
   # Persistent Volume Claims configuration
   persistence:
     enabled: true
-    size: 30Gi
+    size: 10Gi
     storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
 
 # RabbitMQ configuration
 rabbitmq:
@@ -164,15 +170,16 @@ rabbitmq:
   # Resource requests and limits
   resources:
     requests:
-      memory: "512Mi"
+      memory: "500Mi"
     limits:
       memory: "2Gi"
 
   # Persistent Volume Claims configuration
   persistence:
     enabled: true
-    size: 10Gi
+    size: 1Gi
     storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
 
 # Redis configuration
 redis:
@@ -190,39 +197,40 @@ redis:
   # Resource requests and limits
   resources:
     requests:
-      memory: "256Mi"
+      memory: "500Mi"
     limits:
-      memory: "1Gi"
+      memory: "2Gi"
 
   # Persistent Volume Claims configuration
   persistence:
     enabled: true
-    size: 5Gi
+    size: 200Mi
     storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
 
 # Celery configuration
 celery:
   searchWorker:
-    replicas: 1
+    replicas: 2
     concurrency: 8
+    resources:
+      requests:
+        memory: "500Mi"
+      limits:
+        memory: "3Gi"
+  maintenanceWorker:
+    replicas: 2
+    concurrency: 4
     resources:
       requests:
         memory: "2Gi"
       limits:
         memory: "4Gi"
-  maintenanceWorker:
-    replicas: 1
-    concurrency: 4
-    resources:
-      requests:
-        memory: "1Gi"
-      limits:
-        memory: "2Gi"
   beat:
     replicas: 1
     resources:
       requests:
-        memory: "512Mi"
+        memory: "500Mi"
       limits:
         memory: "1Gi"
 
@@ -241,12 +249,13 @@ dbPopulation:
   pvc:
     size: 20Gi
     storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single-use pod, ReadWriteOnce is sufficient
 
   resources:
     requests:
-      memory: 2Gi
+      memory: 300Mi
     limits:
-      memory: 4Gi
+      memory: 1Gi
 
 
 ################## SECRETS ##################
@@ -324,12 +333,12 @@ milvus:
       enabled: true
       persistentVolumeClaim:
         storageClass: aiod-storage-class
-        size: 10Gi
+        size: 5Gi
   standalone:
     replicas: 1
     resources:
       requests:
-        memory: 1Gi
+        memory: 500Mi
       limits:
         memory: 8Gi
     persistence:
@@ -346,9 +355,9 @@ milvus:
     secretKey: ""  # REQUIRED: MinIO secret key
     resources:
       requests:
-        memory: 1Gi
+        memory: 500Mi
       limits:
-        memory: 4Gi
+        memory: 2Gi
     persistence:
       enabled: true
       storageClass: aiod-storage-class
@@ -358,12 +367,12 @@ milvus:
     replicaCount: 1
     resources:
       requests:
-        memory: 1Gi
+        memory: 500Mi
       limits:
         memory: 2Gi
     persistence:
       enabled: true
       storageClass: aiod-storage-class
-      size: 5Gi
+      size: 1Gi
   pulsarv3:
     enabled: false

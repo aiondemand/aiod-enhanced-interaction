@@ -10,7 +10,7 @@ metadata:
     helm.sh/resource-policy: keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.dbPopulation.pvc.accessMode | default "ReadWriteOnce" }}
   storageClassName: {{ .Values.dbPopulation.pvc.storageClass | default .Values.storageClass.name }}
   resources:
     requests:

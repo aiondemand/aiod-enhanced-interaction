@@ -9,7 +9,7 @@ metadata:
     helm.sh/resource-policy: keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.ollama.persistence.accessMode | default "ReadWriteOnce" }}
   storageClassName: {{ .Values.ollama.persistence.storageClass | default .Values.storageClass.name }}
   resources:
     requests:

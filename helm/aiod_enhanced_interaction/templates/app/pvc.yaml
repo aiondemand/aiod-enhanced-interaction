@@ -9,7 +9,7 @@ metadata:
     helm.sh/resource-policy: keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.app.persistence.model.accessMode | default "ReadWriteMany" }}
   storageClassName: {{ .Values.app.persistence.model.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
@@ -29,7 +29,7 @@ metadata:
     helm.sh/resource-policy: keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.app.persistence.coldData.accessMode | default "ReadWriteMany" }}
   storageClassName: {{ .Values.app.persistence.coldData.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
@@ -49,7 +49,7 @@ metadata:
     helm.sh/resource-policy: keep
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.app.persistence.milvusData.accessMode | default "ReadWriteMany" }}
   storageClassName: {{ .Values.app.persistence.milvusData.storageClass | default .Values.storageClass.name }}
   resources:
     requests:
