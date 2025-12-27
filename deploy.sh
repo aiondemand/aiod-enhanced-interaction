@@ -50,6 +50,8 @@ if [ "$#" -eq 0 ]; then
   EXIT_CODE=$(docker inspect $CONTAINER_NAME --format='{{.State.ExitCode}}')
   docker compose -f docker-compose.build.yml down
 
+  exit
+
   # Create folders for holding Docker volumes if they don't exist
   # otherwise Milvus would create them under the root user...
   mkdir -p ${DATA_DIRPATH}/volumes
