@@ -5,7 +5,7 @@ from typing import Callable, Awaitable
 
 import numpy as np
 import json
-from mistralai import Mistral, FunctionResultEntry
+from mistralai import ConversationMessages, Mistral, FunctionResultEntry
 from mistralai.models.conversationresponse import ConversationResponse
 from pymilvus import MilvusClient
 from nltk import edit_distance
@@ -17,278 +17,312 @@ from app.services.chatbot.chatbot_system_prompt import CHATBOT_SYSTEM_PROMPT
 from app.services.inference.model import AiModel
 from app import settings
 
-# Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/127
-# TODO Wrap the whole chatbot into its own service
-# TODO replace this with the embedding store MilvusEmbeddingStore
 
 ASSET_TYPES = [typ.value for typ in settings.AIOD.ASSET_TYPES]
-MISTRAL_CLIENT = Mistral(api_key=settings.CHATBOT.MISTRAL_KEY)
-MILVUS_CLIENT = MilvusClient(uri=settings.MILVUS.HOST, token=settings.MILVUS.MILVUS_TOKEN)
-EMBEDDING_MODEL = AiModel(device="cpu")
 
 
-# TOOLS EXPOSED TO THE AGENT
-# TODO For the sake of simplicity and time, these tools are executed in a separate thread
-# as milvus and model embedding computation are blocking calls
-# TODO fix later once Milvus and other services are implemented in async way
-async def aiod_page_search(query: str) -> str:
-    """Used to explain the AIoD website."""
-    logging.info(f"Tool 'aiod_page_search' has been called with a query: '{query}'")
+class ChatbotTools:
+    def __init__(self, milvus_client: MilvusClient, embedding_model: AiModel):
+        self.milvus_client = milvus_client
+        self.embedding_model = embedding_model
 
-    return await asyncio.to_thread(
-        _get_relevant_crawled_content, query, settings.CHATBOT.WEBSITE_COLLECTION_NAME
-    )
-
-
-async def aiod_api_search(query: str) -> str:
-    """Used to explain the AIoD API."""
-    logging.info(f"Tool 'aiod_api_search' has been called with a query: '{query}'")
-    return await asyncio.to_thread(
-        _get_relevant_crawled_content, query, settings.CHATBOT.API_COLLECTION_NAME
-    )
-
-
-async def asset_search(query: str, asset: str) -> str:
-    """
-    Used to search for resources a user needs.
-    :param query: what to search for
-    :param asset: the type of asset searched for.
-    :return:
-    """
-    logging.info(
-        f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
-    )
-    return await asyncio.to_thread(_asset_search, query, asset)
-
-
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "asset_search",
-            "description": "Used to search for resources a user needs",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "What to search for",
-                    },
-                    "asset": {
-                        "type": "string",
-                        "description": f"The type of asset searched for. Available options are {ASSET_TYPES}.",
-                    },
-                },
-                "required": ["query", "asset"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "aiod_page_search",
-            "description": "Used to search for information on the AIoD website and to guide the user through it.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "What to search for",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "aiod_api_search",
-            "description": "Used to search for information on the api of AIoD and to guide the user through it.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "What to search for",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
-TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
-    "aiod_api_search": aiod_api_search,
-    "asset_search": asset_search,
-    "aiod_page_search": aiod_page_search,
-}
-
-
-talk2aiod = MISTRAL_CLIENT.beta.agents.create(
-    model=settings.CHATBOT.MISTRAL_MODEL,
-    description="AI assistant for AI-on-Demand platform",
-    name="AI assistant",
-    tools=TOOL_DEFINITIONS,
-    instructions=CHATBOT_SYSTEM_PROMPT,
-    completion_args={
-        "temperature": 0.3,
-        "top_p": 0.95,
-    },
-    # tool_choice = "any",
-    # parallel_tool_calls = True,
-)
-
-
-# TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
-async def start_conversation(user_query: str) -> tuple[str, str | None]:
-    if await moderate_input(user_query):
-        response = await MISTRAL_CLIENT.beta.conversations.start_async(
-            agent_id=talk2aiod.id, inputs=user_query
+    async def aiod_page_search(self, query: str) -> str:
+        """Used to explain the AIoD website."""
+        logging.info(f"Tool 'aiod_page_search' has been called with a query: '{query}'")
+        return await asyncio.to_thread(
+            self._get_relevant_crawled_content, query, settings.CHATBOT.WEBSITE_COLLECTION_NAME
         )
-        result = await handle_function_call(response)
-        return result, response.conversation_id
-    else:
-        return "I can not answer this question.", None
 
-
-async def continue_conversation(user_query: str, conversation_id: str) -> str:
-    if await moderate_input(user_query):
-        response = await MISTRAL_CLIENT.beta.conversations.append_async(
-            conversation_id=conversation_id, inputs=user_query
+    async def aiod_api_search(self, query: str) -> str:
+        """Used to explain the AIoD API."""
+        logging.info(f"Tool 'aiod_api_search' has been called with a query: '{query}'")
+        return await asyncio.to_thread(
+            self._get_relevant_crawled_content, query, settings.CHATBOT.API_COLLECTION_NAME
         )
-        result = await handle_function_call(response)
+
+    async def asset_search(self, query: str, asset: str) -> str:
+        """
+        Used to search for resources a user needs.
+        :param query: what to search for
+        :param asset: the type of asset searched for.
+        :return:
+        """
+        logging.info(
+            f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
+        )
+        return await asyncio.to_thread(self._asset_search, query, asset)
+
+    def _asset_search(self, query: str, asset: str) -> str:
+        """Internal method for asset search using the class's dependencies."""
+        embedding_vector = self.embedding_model.compute_query_embeddings(query)[0]
+        mapped_asset = self._map_asset_name(asset)
+        collection_to_search = settings.MILVUS.COLLECTION_PREFIX + "_" + mapped_asset
+
+        result: str = ""
+        satisfactory_docs = 0
+        num_docs_to_return = settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH
+        seen_asset_ids: list[str] = []
+
+        attempt = 0
+        max_attempts = 5
+
+        while satisfactory_docs < num_docs_to_return and attempt < max_attempts:
+            filter_expr = None if len(seen_asset_ids) == 0 else f"asset_id not in {seen_asset_ids}"
+
+            docs = list(
+                self.milvus_client.search(
+                    collection_name=collection_to_search,
+                    data=[embedding_vector],
+                    limit=num_docs_to_return,
+                    group_by_field="asset_id",
+                    output_fields=["asset_id"],
+                    search_params={"metric_type": "COSINE"},
+                    filter=filter_expr,
+                )
+            )[0]
+            if len(docs) == 0:
+                break
+
+            for doc in docs:
+                asset_id = doc["entity"]["asset_id"]
+                seen_asset_ids.append(asset_id)
+
+                content = get_aiod_asset(asset_id, SupportedAssetType(mapped_asset))
+
+                if content is None:
+                    continue
+
+                try:
+                    url = settings.CHATBOT.generate_mylibrary_asset_url(
+                        asset_id, SupportedAssetType(mapped_asset)
+                    )
+                    if url is None:
+                        url = content["same_as"]
+                    new_addition = (
+                        f"name: {content['name']}, publication date:{content['date_published']}, url: {url}"  # type: ignore[index]
+                        f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
+                    )
+                    result += new_addition
+                    satisfactory_docs += 1
+                    if satisfactory_docs == settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH:
+                        break
+                except KeyError:
+                    continue
+            attempt += 1
+
         return result
-    else:
-        return "I can not answer this question."
 
-
-async def get_past_conversation_messages(conversation_id: str):
-    return await MISTRAL_CLIENT.beta.conversations.get_messages_async(
-        conversation_id=conversation_id
-    )
-
-
-def _asset_search(query: str, asset: str) -> str:
-    embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
-    mapped_asset = map_asset_name(asset)
-    collection_to_search = settings.MILVUS.COLLECTION_PREFIX + "_" + mapped_asset
-
-    result: str = ""
-    satisfactory_docs = 0
-    num_docs_to_return = settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH
-    seen_asset_ids: list[str] = []
-
-    attempt = 0
-    max_attempts = 5
-
-    while satisfactory_docs < num_docs_to_return and attempt < max_attempts:
-        filter_expr = None if len(seen_asset_ids) == 0 else f"asset_id not in {seen_asset_ids}"
+    def _get_relevant_crawled_content(self, query: str, collection_name: str) -> str:
+        """Internal method for crawled content search using the class's dependencies."""
+        embedding_vector = self.embedding_model.compute_query_embeddings(query)[0]
 
         docs = list(
-            MILVUS_CLIENT.search(
-                collection_name=collection_to_search,
+            self.milvus_client.search(
+                collection_name=collection_name,
                 data=[embedding_vector],
-                limit=num_docs_to_return,
-                group_by_field="asset_id",
-                output_fields=["asset_id"],
+                limit=settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH,
+                output_fields=["url", "content"],
                 search_params={"metric_type": "COSINE"},
-                filter=filter_expr,
             )
         )[0]
-        if len(docs) == 0:
-            break
 
-        for doc in docs:
-            asset_id = doc["entity"]["asset_id"]
-            seen_asset_ids.append(asset_id)
-
-            content = get_aiod_asset(asset_id, SupportedAssetType(mapped_asset))
-
-            if content is None:
-                continue
-
-            try:
-                url = settings.CHATBOT.generate_mylibrary_asset_url(
-                    asset_id, SupportedAssetType(mapped_asset)
-                )
-                if url is None:
-                    url = content["same_as"]
-                new_addition = (
-                    f"name: {content['name']}, publication date:{content['date_published']}, url: {url}"  # type: ignore[index]
-                    f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
-                )
-                result += new_addition
-                satisfactory_docs += 1
-                if satisfactory_docs == settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH:
-                    break
-            except KeyError:
-                continue
-        attempt += 1
-
-    return result
-
-
-def _get_relevant_crawled_content(query: str, collection_name: str) -> str:
-    embedding_vector = EMBEDDING_MODEL.compute_query_embeddings(query)[0]
-
-    docs = list(
-        MILVUS_CLIENT.search(
-            collection_name=collection_name,
-            data=[embedding_vector],
-            limit=settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH,
-            output_fields=["url", "content"],
-            search_params={"metric_type": "COSINE"},
+        return "".join(
+            f"Result {index}:\n{doc['entity']['content']}\nlink:{doc['entity']['url']}\n"
+            for index, doc in enumerate(docs)
         )
-    )[0]
 
-    return "".join(
-        f"Result {index}:\n{doc['entity']['content']}\nlink:{doc['entity']['url']}\n"
-        for index, doc in enumerate(docs)
-    )
+    def _map_asset_name(self, asset: str) -> str:
+        """
+        Map the asset named by the LLM to the closest existing asset using the edit distance.
+        """
+        dist_list = np.array([edit_distance(asset.lower(), a) for a in ASSET_TYPES])
+        return ASSET_TYPES[int(np.argmin(dist_list))]
+
+    def get_tools_dict(self) -> dict[str, Callable[..., Awaitable[str]]]:
+        """Get a dictionary of tool functions bound to this instance."""
+        return {
+            "aiod_api_search": self.aiod_api_search,
+            "asset_search": self.asset_search,
+            "aiod_page_search": self.aiod_page_search,
+        }
+
+    @classmethod
+    def get_tool_definitions(cls) -> list[dict]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "asset_search",
+                    "description": "Used to search for resources a user needs",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "What to search for",
+                            },
+                            "asset": {
+                                "type": "string",
+                                "description": f"The type of asset searched for. Available options are {ASSET_TYPES}.",
+                            },
+                        },
+                        "required": ["query", "asset"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "aiod_page_search",
+                    "description": "Used to search for information on the AIoD website and to guide the user through it.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "What to search for",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "aiod_api_search",
+                    "description": "Used to search for information on the api of AIoD and to guide the user through it.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "What to search for",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+        ]
 
 
-def map_asset_name(asset: str) -> str:
+class ChatbotService:
     """
-    Map the asset named by the LLM to the closest existing asset using the edit distance.
+    Service class encapsulating all chatbot functionality.
+    Manages the Mistral agent, tools, and conversation logic.
     """
-    dist_list = np.array([edit_distance(asset.lower(), a) for a in ASSET_TYPES])
-    return ASSET_TYPES[int(np.argmin(dist_list))]
 
+    def __init__(
+        self,
+        mistral_client: Mistral,
+        milvus_client: MilvusClient,
+        embedding_model: AiModel,
+    ):
+        """
+        Initialize the chatbot service.
 
-async def handle_function_call(input_response: ConversationResponse) -> str:
-    if input_response.outputs[-1].type == "function.call":
-        function_args = json.loads(input_response.outputs[-1].arguments)
-        function_name = input_response.outputs[-1].name
+        Args:
+            mistral_client: Mistral API client
+            milvus_client: Milvus client for vector search
+            embedding_model: AI model for embeddings
+        """
+        self.mistral_client = mistral_client
+        self.tools_instance = ChatbotTools(milvus_client, embedding_model)
+        self.tools = self.tools_instance.get_tools_dict()
 
-        if function_name in TOOLS.keys():
-            function_result = json.dumps(await TOOLS[function_name](**function_args))
+        # Create the Mistral agent
+        self.agent = self.mistral_client.beta.agents.create(
+            model=settings.CHATBOT.MISTRAL_MODEL,
+            description="AI assistant for AI-on-Demand platform",
+            name="AI assistant",
+            tools=self.tools_instance.get_tool_definitions(),
+            instructions=CHATBOT_SYSTEM_PROMPT,
+            completion_args={
+                "temperature": 0.3,
+                "top_p": 0.95,
+            },
+        )
+
+    async def process_conversation(
+        self, user_query: str, conversation_id: str | None = None
+    ) -> dict:
+        """
+        Process a chatbot conversation request.
+
+        Args:
+            user_query: The user's message
+            conversation_id: Optional conversation ID to continue an existing conversation
+
+        Returns:
+            dict with 'content' (response text) and 'conversation_id' (string or None)
+        """
+        # Moderate input
+        if not await self._moderate_input(user_query):
+            return {
+                "content": "I can not answer this question.",
+                "conversation_id": conversation_id,
+            }
+
+        # Start or continue conversation
+        if conversation_id is None:
+            response = await self.mistral_client.beta.conversations.start_async(
+                agent_id=self.agent.id, inputs=user_query
+            )
+        else:
+            response = await self.mistral_client.beta.conversations.append_async(
+                conversation_id=conversation_id, inputs=user_query
+            )
+
+        # Handle function calls
+        result = await self._handle_function_call(response)
+
+        return {
+            "content": result,
+            "conversation_id": response.conversation_id,
+        }
+
+    async def _handle_function_call(self, input_response: ConversationResponse) -> str:
+        """Handle function calls recursively."""
+        if input_response.outputs[-1].type == "function.call":
+            function_args = json.loads(input_response.outputs[-1].arguments)
+            function_name = input_response.outputs[-1].name
+
+            if function_name in self.tools.keys():
+                function_result = json.dumps(await self.tools[function_name](**function_args))
+            else:
+                return input_response.outputs[-1].content
+
+            # Providing the result to our Agent
+            user_function_calling_entry = FunctionResultEntry(
+                tool_call_id=input_response.outputs[-1].tool_call_id,
+                result=function_result,
+            )
+            # Retrieving the final response
+            tool_response = await self.mistral_client.beta.conversations.append_async(
+                conversation_id=input_response.conversation_id,
+                inputs=[user_function_calling_entry],
+            )
+            return await self._handle_function_call(tool_response)
         else:
             return input_response.outputs[-1].content
 
-        # Providing the result to our Agent
-        user_function_calling_entry = FunctionResultEntry(
-            tool_call_id=input_response.outputs[-1].tool_call_id,
-            result=function_result,
+    async def _moderate_input(self, input_query: str) -> bool:
+        """Moderate user input for inappropriate content."""
+        response = await self.mistral_client.classifiers.moderate_chat_async(
+            model="mistral-moderation-latest",
+            inputs=[
+                {"role": "user", "content": input_query},
+                {"role": "assistant", "content": "...assistant response..."},
+            ],
         )
-        # Retrieving the final response
-        tool_response = await MISTRAL_CLIENT.beta.conversations.append_async(
-            conversation_id=input_response.conversation_id, inputs=[user_function_calling_entry]
+        for category in response.results[0].categories.keys():
+            if response.results[0].categories[category]:
+                return False
+        return True
+
+    async def get_past_conversation_messages(self, conversation_id: str) -> ConversationMessages:
+        """Get conversation history."""
+        return await self.mistral_client.beta.conversations.get_messages_async(
+            conversation_id=conversation_id
         )
-        return await handle_function_call(tool_response)
-    else:
-        return input_response.outputs[-1].content
-
-
-async def moderate_input(input_query: str) -> bool:
-    response = await MISTRAL_CLIENT.classifiers.moderate_chat_async(
-        model="mistral-moderation-latest",
-        inputs=[
-            {"role": "user", "content": input_query},
-            {"role": "assistant", "content": "...assistant response..."},
-        ],
-    )
-    for category in response.results[0].categories.keys():
-        if response.results[0].categories[category]:
-            return False
-    return True
