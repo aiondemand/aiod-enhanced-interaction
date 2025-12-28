@@ -1,7 +1,6 @@
 from __future__ import annotations
 import logging
-import asyncio
-from typing import Callable, Awaitable
+from typing import Callable
 
 import numpy as np
 import json
@@ -26,21 +25,17 @@ class ChatbotTools:
         self.milvus_client = milvus_client
         self.embedding_model = embedding_model
 
-    async def aiod_page_search(self, query: str) -> str:
+    def aiod_page_search(self, query: str) -> str:
         """Used to explain the AIoD website."""
         logging.info(f"Tool 'aiod_page_search' has been called with a query: '{query}'")
-        return await asyncio.to_thread(
-            self._get_relevant_crawled_content, query, settings.CHATBOT.WEBSITE_COLLECTION_NAME
-        )
+        return self._get_relevant_crawled_content(query, settings.CHATBOT.WEBSITE_COLLECTION_NAME)
 
-    async def aiod_api_search(self, query: str) -> str:
+    def aiod_api_search(self, query: str) -> str:
         """Used to explain the AIoD API."""
         logging.info(f"Tool 'aiod_api_search' has been called with a query: '{query}'")
-        return await asyncio.to_thread(
-            self._get_relevant_crawled_content, query, settings.CHATBOT.API_COLLECTION_NAME
-        )
+        return self._get_relevant_crawled_content(query, settings.CHATBOT.API_COLLECTION_NAME)
 
-    async def asset_search(self, query: str, asset: str) -> str:
+    def asset_search(self, query: str, asset: str) -> str:
         """
         Used to search for resources a user needs.
         :param query: what to search for
@@ -50,7 +45,7 @@ class ChatbotTools:
         logging.info(
             f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
         )
-        return await asyncio.to_thread(self._asset_search, query, asset)
+        return self._asset_search(query, asset)
 
     def _asset_search(self, query: str, asset: str) -> str:
         """Internal method for asset search using the class's dependencies."""
@@ -138,7 +133,7 @@ class ChatbotTools:
         dist_list = np.array([edit_distance(asset.lower(), a) for a in ASSET_TYPES])
         return ASSET_TYPES[int(np.argmin(dist_list))]
 
-    def get_tools_dict(self) -> dict[str, Callable[..., Awaitable[str]]]:
+    def get_tools_dict(self) -> dict[str, Callable[..., str]]:
         """Get a dictionary of tool functions bound to this instance."""
         return {
             "aiod_api_search": self.aiod_api_search,
@@ -244,9 +239,7 @@ class ChatbotService:
             },
         )
 
-    async def process_conversation(
-        self, user_query: str, conversation_id: str | None = None
-    ) -> dict:
+    def process_conversation(self, user_query: str, conversation_id: str | None = None) -> dict:
         """
         Process a chatbot conversation request.
 
@@ -258,7 +251,7 @@ class ChatbotService:
             dict with 'content' (response text) and 'conversation_id' (string or None)
         """
         # Moderate input
-        if not await self._moderate_input(user_query):
+        if not self._moderate_input(user_query):
             return {
                 "content": "I can not answer this question.",
                 "conversation_id": conversation_id,
@@ -266,30 +259,30 @@ class ChatbotService:
 
         # Start or continue conversation
         if conversation_id is None:
-            response = await self.mistral_client.beta.conversations.start_async(
+            response = self.mistral_client.beta.conversations.start(
                 agent_id=self.agent.id, inputs=user_query
             )
         else:
-            response = await self.mistral_client.beta.conversations.append_async(
+            response = self.mistral_client.beta.conversations.append(
                 conversation_id=conversation_id, inputs=user_query
             )
 
         # Handle function calls
-        result = await self._handle_function_call(response)
+        result = self._handle_function_call(response)
 
         return {
             "content": result,
             "conversation_id": response.conversation_id,
         }
 
-    async def _handle_function_call(self, input_response: ConversationResponse) -> str:
+    def _handle_function_call(self, input_response: ConversationResponse) -> str:
         """Handle function calls recursively."""
         if input_response.outputs[-1].type == "function.call":
             function_args = json.loads(input_response.outputs[-1].arguments)
             function_name = input_response.outputs[-1].name
 
             if function_name in self.tools.keys():
-                function_result = json.dumps(await self.tools[function_name](**function_args))
+                function_result = json.dumps(self.tools[function_name](**function_args))
             else:
                 return input_response.outputs[-1].content
 
@@ -299,17 +292,17 @@ class ChatbotService:
                 result=function_result,
             )
             # Retrieving the final response
-            tool_response = await self.mistral_client.beta.conversations.append_async(
+            tool_response = self.mistral_client.beta.conversations.append(
                 conversation_id=input_response.conversation_id,
                 inputs=[user_function_calling_entry],
             )
-            return await self._handle_function_call(tool_response)
+            return self._handle_function_call(tool_response)
         else:
             return input_response.outputs[-1].content
 
-    async def _moderate_input(self, input_query: str) -> bool:
+    def _moderate_input(self, input_query: str) -> bool:
         """Moderate user input for inappropriate content."""
-        response = await self.mistral_client.classifiers.moderate_chat_async(
+        response = self.mistral_client.classifiers.moderate_chat(
             model="mistral-moderation-latest",
             inputs=[
                 {"role": "user", "content": input_query},
@@ -321,8 +314,6 @@ class ChatbotService:
                 return False
         return True
 
-    async def get_past_conversation_messages(self, conversation_id: str) -> ConversationMessages:
+    def get_past_conversation_messages(self, conversation_id: str) -> ConversationMessages:
         """Get conversation history."""
-        return await self.mistral_client.beta.conversations.get_messages_async(
-            conversation_id=conversation_id
-        )
+        return self.mistral_client.beta.conversations.get_messages(conversation_id=conversation_id)

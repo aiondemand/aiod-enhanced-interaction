@@ -78,7 +78,7 @@ def chatbot_conversation_task(self, user_query: str, conversation_id: str | None
         dict with 'content' and 'conversation_id'
     """
     chatbot_service = cast(ChatbotService, _worker_chatbot_service)
-    return asyncio.run(chatbot_service.process_conversation(user_query, conversation_id))
+    return chatbot_service.process_conversation(user_query, conversation_id)
 
 
 @celery_app.task(bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True)
@@ -90,8 +90,6 @@ def chatbot_history_task(self, conversation_id: str) -> dict:
         dict representing the conversation history
     """
     chatbot_service = cast(ChatbotService, _worker_chatbot_service)
-    history = asyncio.run(chatbot_service.get_past_conversation_messages(conversation_id))
+    history = chatbot_service.get_past_conversation_messages(conversation_id)
 
-    # TODO check this
-    # Convert to dict for JSON serialization
-    return history.model_dump() if hasattr(history, "model_dump") else history
+    return history.model_dump()
