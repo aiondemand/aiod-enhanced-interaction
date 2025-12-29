@@ -82,7 +82,7 @@ spec:
           echo "RabbitMQ is ready!"
       containers:
       - name: celery-maintenance-worker
-        image: "{{ .Values.app.image.repository }}:{{ if .Values.use_gpu }}gpu{{ else }}cpu{{ end }}"
+        image: "{{ .Values.app.image.repository }}:{{ if .Values.use_gpu }}{{ .Values.app.image.gpuTag }}{{ else }}{{ .Values.app.image.cpuTag }}{{ end }}"
         imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
         # Import entire ConfigMap as environment variables
         envFrom:
@@ -123,7 +123,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - celery -A app.celery_app worker --loglevel=info -Q maintenance -c {{ .Values.celery.maintenanceWorker.concurrency }} -P prefork -n maintenance_worker@%h
+        - celery -A app.celery_app worker --loglevel=info -Q maintenance -c {{ .Values.celery.maintenanceWorker.concurrency }} -P prefork -n maintenance_worker@%h --prefetch-multiplier=1
         {{- with .Values.celery.maintenanceWorker.resources }}
         resources:
           {{- toYaml . | nindent 10 }}

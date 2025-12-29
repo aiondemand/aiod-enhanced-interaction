@@ -1,6 +1,7 @@
 """Celery tasks for search query processing."""
 
 import asyncio
+import logging
 from typing import Type
 from uuid import UUID
 import asyncio
@@ -22,6 +23,8 @@ from app.celery_tasks.search.sem_search import (
 )
 from app.celery_app import celery_app
 from app.services.chatbot.chatbot import ChatbotService
+from app.services.logging import setup_logger
+from app.services.metadata_filtering.base import setup_logfire
 
 # Worker-level resources initialization, shared between all threads
 _worker_model: AiModel | None = None
@@ -32,6 +35,9 @@ _worker_chatbot_service: ChatbotService | None = None
 # Hook executed when a worker (its main process) is initialized
 @worker_init.connect
 def initialize_main_search_worker_process(sender=None, conf=None, **kwargs) -> None:
+    setup_logfire()
+    setup_logger()
+
     global _worker_model, _worker_embedding_store, _worker_chatbot_service
 
     if str(sender).startswith(settings.CELERY.SEARCH_WORKER_NAME_PREFIX):
@@ -52,7 +58,9 @@ def initialize_main_search_worker_process(sender=None, conf=None, **kwargs) -> N
             )
 
 
-@celery_app.task(bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True)
+@celery_app.task(
+    bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True, ignore_result=True
+)
 def search_query_task(self, query_id: str, query_type_name: str) -> dict:
     query_type_map: dict[str, Type[BaseUserQuery]] = {
         "SimpleUserQuery": SimpleUserQuery,
@@ -66,7 +74,13 @@ def search_query_task(self, query_id: str, query_type_name: str) -> dict:
     model = cast(AiModel, _worker_model)
     embedding_store = cast(EmbeddingStore, _worker_embedding_store)
 
-    return asyncio.run(semantic_search_wrapper(UUID(query_id), query_type, model, embedding_store))
+    try:
+        return asyncio.run(
+            semantic_search_wrapper(UUID(query_id), query_type, model, embedding_store)
+        )
+    except Exception as e:
+        logging.error(f"Error searching query: {e}")
+        raise self.retry(exc=e)
 
 
 @celery_app.task(bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True)
@@ -78,7 +92,12 @@ def chatbot_conversation_task(self, user_query: str, conversation_id: str | None
         dict with 'content' and 'conversation_id'
     """
     chatbot_service = cast(ChatbotService, _worker_chatbot_service)
-    return chatbot_service.process_conversation(user_query, conversation_id)
+
+    try:
+        return chatbot_service.process_conversation(user_query, conversation_id)
+    except Exception as e:
+        logging.error(f"Error processing chatbot conversation: {e}")
+        raise self.retry(exc=e)
 
 
 @celery_app.task(bind=True, max_retries=3, acks_late=True, task_reject_on_worker_lost=True)
@@ -90,6 +109,10 @@ def chatbot_history_task(self, conversation_id: str) -> dict:
         dict representing the conversation history
     """
     chatbot_service = cast(ChatbotService, _worker_chatbot_service)
-    history = chatbot_service.get_past_conversation_messages(conversation_id)
 
-    return history.model_dump()
+    try:
+        history = chatbot_service.get_past_conversation_messages(conversation_id)
+        return history.model_dump()
+    except Exception as e:
+        logging.error(f"Error retrieving chatbot history: {e}")
+        raise self.retry(exc=e)

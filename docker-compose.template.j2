@@ -3,7 +3,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.final
+      dockerfile: Dockerfile.cpu.final
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
@@ -30,38 +30,23 @@ services:
       - ${DATA_DIRPATH}/volumes:/data
     {% endif %}
     healthcheck:
-      # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
-      # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
-      {% if USE_GPU == "true" %}
-      test: ["CMD-SHELL", "curl -f http://localhost:80/health && nvidia-smi || exit 1"]
-      {% else %}
       test: ["CMD-SHELL", "curl -f http://localhost:80/health"]
-      {% endif %}
       interval: 30s
       timeout: 20s
       retries: 3
       start_period: 120s
     restart: always
-    {% if USE_GPU == "true" %}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    {% endif %}
 
   # Celery workers
   celery_search_worker:
     build:
       context: .
-      dockerfile: Dockerfile.final
+      dockerfile: Dockerfile.cpu.final
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
     command: >
-      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q search -c 8 -P threads -n search_worker@%h"
+      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q search -c 8 -P threads -n search_worker@%h --prefetch-multiplier=4"
     labels:
       autoheal-label: true
     env_file:
@@ -101,12 +86,16 @@ services:
   celery_maintenance_worker:
     build:
       context: .
-      dockerfile: Dockerfile.final
+      {% if USE_GPU == "true" %}
+      dockerfile: Dockerfile.gpu.final
+      {% else %}
+      dockerfile: Dockerfile.cpu.final
+      {% endif %}
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
     command: >
-      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q maintenance -c 4 -P prefork -n maintenance_worker@%h"
+      /bin/sh -c "celery -A app.celery_app worker --loglevel=info -Q maintenance -c 8 -P prefork -n maintenance_worker@%h --prefetch-multiplier=1"
     labels:
       autoheal-label: true
     env_file:
@@ -138,16 +127,31 @@ services:
       - ${DATA_DIRPATH}/volumes:/data
       {% endif %}
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping"]
+      # TODO GPU specific healthcheck shouldn't be necessary once we resolve issue:
+      # https://github.com/aiondemand/aiod-enhanced-interaction/issues/76
+      {% if USE_GPU == "true" %}
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping && nvidia-smi || exit 1"]
+      {% else %}
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping"]
+      {% endif %}
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
+    {% if USE_GPU == "true" %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    {% endif %}
 
   celery_beat:
     build:
       context: .
-      dockerfile: Dockerfile.final
+      dockerfile: Dockerfile.cpu.final
       args:
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
@@ -162,7 +166,7 @@ services:
         condition: service_healthy
         restart: false
     healthcheck:
-      exec: ["sh", "-c", "ps aux | grep '[c]elery.*beat' || exit 1"]
+      test: ["CMD-SHELL", "ps aux | grep '[c]elery.*beat' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

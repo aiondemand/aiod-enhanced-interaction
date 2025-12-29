@@ -15,15 +15,17 @@ if __name__ == "__main__":
         autoescape=True,
     )
 
-    # build Dockerfile
-    template = env.get_template("Dockerfile.template.j2")
+    # build Dockerfiles
+    cpu_template = env.get_template("Dockerfile.cpu.template.j2")
+    gpu_template = env.get_template("Dockerfile.gpu.template.j2")
 
-    output = template.render(
-        USE_GPU=USE_GPU,
-        USE_CHATBOT=USE_CHATBOT,
-    )
-    with open("./Dockerfile.final", "w") as f:
-        f.write(output)
+    cpu_output = cpu_template.render(USE_CHATBOT=USE_CHATBOT)
+    gpu_output = gpu_template.render(USE_CHATBOT=USE_CHATBOT)
+
+    with open("./Dockerfile.cpu.final", "w") as f:
+        f.write(cpu_output)
+    with open("./Dockerfile.gpu.final", "w") as f:
+        f.write(gpu_output)
 
     # build .env.final by concatenating .env.app and rendered .env.template.j2
     env_content = ""

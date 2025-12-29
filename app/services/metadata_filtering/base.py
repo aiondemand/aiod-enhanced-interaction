@@ -1,6 +1,7 @@
 import logging
 import os
 from urllib.parse import urljoin
+import logfire
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -8,6 +9,13 @@ from app import settings
 from ollama import Client
 
 from app import settings
+
+
+def setup_logfire() -> None:
+    logfire.configure(
+        token=settings.LOGFIRE_TOKEN, send_to_logfire="if-token-present", console=False
+    )
+    logfire.instrument_pydantic_ai()
 
 
 def prepare_ollama_model() -> OpenAIChatModel:

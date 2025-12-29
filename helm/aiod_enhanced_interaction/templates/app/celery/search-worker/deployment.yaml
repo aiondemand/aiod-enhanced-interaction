@@ -82,7 +82,7 @@ spec:
           echo "RabbitMQ is ready!"
       containers:
       - name: celery-search-worker
-        image: "{{ .Values.app.image.repository }}:{{ if .Values.use_gpu }}gpu{{ else }}cpu{{ end }}"
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.cpuTag }}"
         imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
         # Import entire ConfigMap as environment variables
         envFrom:
@@ -119,7 +119,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - celery -A app.celery_app worker --loglevel=info -Q search -c {{ .Values.celery.searchWorker.concurrency }} -P threads -n search_worker@%h
+        - celery -A app.celery_app worker --loglevel=info -Q search -c {{ .Values.celery.searchWorker.concurrency }} -P threads -n search_worker@%h --prefetch-multiplier=4
         {{- with .Values.celery.searchWorker.resources }}
         resources:
           {{- toYaml . | nindent 10 }}

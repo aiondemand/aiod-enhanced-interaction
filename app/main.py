@@ -1,4 +1,3 @@
-import logfire
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -58,16 +57,8 @@ app.add_middleware(
 )
 
 
-def setup_logfire() -> None:
-    logfire.configure(
-        token=settings.LOGFIRE_TOKEN, send_to_logfire="if-token-present", console=False
-    )
-    logfire.instrument_pydantic_ai()
-
-
 async def app_init() -> None:
     setup_logger()
-    setup_logfire()
 
     # Initialize MongoDB database
     app.db = await init_mongo_client()

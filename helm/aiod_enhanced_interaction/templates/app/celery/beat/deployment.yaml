@@ -93,7 +93,7 @@ spec:
           echo "Celery maintenance worker should be ready!"
       containers:
       - name: celery-beat
-        image: "{{ .Values.app.image.repository }}:{{ if .Values.use_gpu }}gpu{{ else }}cpu{{ end }}"
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.cpuTag }}"
         imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
         # Import entire ConfigMap as environment variables
         envFrom:
