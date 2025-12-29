@@ -172,7 +172,7 @@ rabbitmq:
   # Resource requests and limits
   resources:
     requests:
-      memory: "500Mi"
+      memory: "1Gi"
     limits:
       memory: "2Gi"
 
