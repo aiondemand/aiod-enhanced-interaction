@@ -1,0 +1,16 @@
+{{- if .Values.app.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiod-enhanced-interaction.app.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.app.service.type }}
+  ports:
+  - port: {{ .Values.app.service.port }}
+    targetPort: 80
+    name: http
+  selector:
+    {{- include "aiod-enhanced-interaction.app.selectorLabels" . | nindent 4 }}
+{{- end }}

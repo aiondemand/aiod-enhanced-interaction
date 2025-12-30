@@ -1,0 +1,62 @@
+{{- if .Values.use_llm }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.ollama.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.ollama.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aiod-enhanced-interaction.ollama.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aiod-enhanced-interaction.ollama.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: ollama
+        image: "{{ .Values.ollama.image.repository }}:{{ .Values.ollama.image.tag }}"
+        imagePullPolicy: {{ .Values.ollama.image.imagePullPolicy }}
+        ports:
+        - containerPort: 11434
+          name: ollama
+        {{- if .Values.ollama.persistence.enabled }}
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama/
+        {{- end }}
+        {{- with .Values.ollama.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ollama list || exit 1"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "ollama list || exit 1"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+      {{- if .Values.ollama.persistence.enabled }}
+      volumes:
+      - name: ollama-data
+        persistentVolumeClaim:
+          claimName: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}-pvc
+      {{- end }}
+{{- end }}

@@ -18,8 +18,8 @@ from app.services.aiod import get_aiod_asset
 from app.services.embedding_store import EmbeddingStore
 from app.services.metadata_filtering.query_parsing_agent import QueryParsingWrapper
 from app.services.inference.model import AiModel
-from app.services.recommender import get_precomputed_embeddings_for_recommender
 from app.services.resilience import LocalServiceUnavailableException
+from app.services.inference.text_operations import ConvertJsonToString
 
 
 async def semantic_search_wrapper(
@@ -235,3 +235,33 @@ def validate_assets(
         asset_types=[results.asset_types[idx] for idx in idx_to_keep],
         assets=[assets[idx] for idx in idx_to_keep],
     )
+
+
+def get_precomputed_embeddings_for_recommender(
+    model: AiModel,
+    embedding_store: EmbeddingStore,
+    user_query: RecommenderUserQuery,
+) -> list[list[float]] | None:
+    precomputed_embeddings = embedding_store.get_asset_embeddings(
+        user_query.asset_id, user_query.asset_type
+    )
+
+    # artificial halt to decrease the load on Metadata Catalogue that caused some issues prior
+    sleep(1)
+
+    if precomputed_embeddings is None:
+        logging.warning(
+            f"No embedding found for asset_id='{user_query.asset_id}' ({user_query.asset_type.value}) in Milvus."
+        )
+        asset_obj = get_aiod_asset(user_query.asset_id, user_query.asset_type)
+        if asset_obj is None:
+            # TODO we should pass the information to the user that the asset_id they provided is invalid
+            # For now, current implementation returns an empty list of similar assets to a non-existing asset
+            logging.error(
+                f"Asset with id '{user_query.asset_id}' ({user_query.asset_type.value}) not found in AIoD platform."
+            )
+            return None
+        stringified_asset = ConvertJsonToString.stringify(asset_obj)
+        emb = model.compute_asset_embeddings(stringified_asset)[0]
+        precomputed_embeddings = emb.cpu().numpy().tolist()
+    return precomputed_embeddings

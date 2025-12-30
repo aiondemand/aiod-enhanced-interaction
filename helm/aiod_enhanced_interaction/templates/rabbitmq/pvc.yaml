@@ -1,0 +1,15 @@
+{{- if .Values.rabbitmq.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aiod-enhanced-interaction.rabbitmq.fullname" . }}-pvc
+  labels:
+    {{- include "aiod-enhanced-interaction.rabbitmq.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.rabbitmq.persistence.accessMode | default "ReadWriteOnce" }}
+  storageClassName: {{ .Values.rabbitmq.persistence.storageClass | default .Values.storageClass.name }}
+  resources:
+    requests:
+      storage: {{ .Values.rabbitmq.persistence.size }}
+{{- end }}

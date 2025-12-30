@@ -1,0 +1,70 @@
+{{- if .Values.app.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-config
+  labels:
+    {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+data:
+  # ConfigMap keys match FastAPI environment variable names exactly
+  # This allows using envFrom to import all values at once
+
+  # API configuration
+  API_VERSION: {{ .Values.app.config.api.version | quote }}
+  USE_GPU: {{ .Values.use_gpu | quote }}
+  MODEL_LOADPATH: {{ .Values.app.config.model.loadPath | quote }}
+  MODEL_BATCH_SIZE: {{ .Values.app.config.model.batchSize | quote }}
+
+  # Metadata filtering
+  {{- if and .Values.use_llm (not .Values.milvus.enabled) }}
+  {{- fail "Metadata filtering is not allowed when use_llm is enabled and Milvus dependency is disabled" }}
+  {{- end }}
+  METADATA_FILTERING__ENABLED: {{ .Values.use_llm | quote }}
+  METADATA_FILTERING__ENFORCE_ENUMS: {{ .Values.app.config.metadataFiltering.enforceEnums | quote }}
+
+  # AIoD configuration
+  AIOD__URL: {{ .Values.app.config.aiod.url | quote }}
+  AIOD__COMMA_SEPARATED_ASSET_TYPES: {{ .Values.app.config.aiod.commaSeparatedAssetTypes | quote }}
+  AIOD__COMMA_SEPARATED_ASSET_TYPES_FOR_METADATA_EXTRACTION: {{ .Values.app.config.aiod.commaSeparatedAssetTypesForMetadataExtraction | quote }}
+  AIOD__WINDOW_SIZE: {{ .Values.app.config.aiod.windowSize | quote }}
+  AIOD__TESTING: {{ .Values.app.config.aiod.testing | quote }}
+  AIOD__JSON_SAVEPATH: "/cold_data"
+
+  # Milvus configuration
+  MILVUS__USE_LITE: {{ not .Values.milvus.enabled | quote }}
+  MILVUS__FILEPATH: "/data/milvus.db"
+  MILVUS__COLLECTION_PREFIX: {{ .Values.app.config.milvus.collectionPrefix | quote }}
+  MILVUS__STORE_CHUNKS: {{ .Values.app.config.milvus.storeChunks | quote }}
+  MILVUS__URI: "http://{{ include "aiod-enhanced-interaction.milvus.fullname" . }}:{{ .Values.milvus.service.port }}"
+
+  # Mongo configuration
+  MONGO__DBNAME: {{ .Values.app.config.mongo.dbName | quote }}
+  MONGO__AUTH_DBNAME: {{ .Values.app.config.mongo.authDbName | default "admin" | quote }}
+  MONGO__HOST: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
+  MONGO__PORT: {{ .Values.mongo.service.port | quote }}
+
+  # Chatbot configuration
+  CHATBOT__USE_CHATBOT: {{ .Values.use_chatbot | quote }}
+  CHATBOT__MISTRAL_MODEL: {{ .Values.app.config.chatbot.mistralModel | quote }}
+  CHATBOT__TOP_K_ASSETS_TO_SEARCH: {{ .Values.app.config.chatbot.topKAssetsToSearch | quote }}
+  CHATBOT__MYLIBRARY_URL: {{ .Values.app.config.chatbot.mylibraryUrl | quote }}
+
+  # Crawler configuration
+  CRAWLER__COMMA_SEPARATED_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedWebsites | quote }}
+  CRAWLER__COMMA_SEPARATED_API_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedApiWebsites | quote }}
+  CRAWLER__COMMA_SEPARATED_BLOCKED_WEBSITES: {{ .Values.app.config.crawler.commaSeparatedBlockedWebsites | quote }}
+
+  # Ollama configuration
+  OLLAMA__MODEL_NAME: {{ .Values.app.config.ollama.modelName | quote }}
+  OLLAMA__MAX_TOKENS: {{ .Values.app.config.ollama.maxTokens | quote }}
+  {{- if .Values.use_llm }}
+  OLLAMA__URI: "http://{{ include "aiod-enhanced-interaction.ollama.fullname" . }}:{{ .Values.ollama.service.port }}"
+  {{- end }}
+
+  # Celery configuration
+  CELERY__SEARCH_WORKER_NAME_PREFIX: {{ .Values.app.config.celery.searchWorkerNamePrefix | quote }}
+  CELERY__MAINTENANCE_WORKER_NAME_PREFIX: {{ .Values.app.config.celery.maintenanceWorkerNamePrefix | quote }}
+  CELERY__REDIS_LOCK_TTL_SECONDS: {{ .Values.app.config.celery.redisLockTtlSeconds | quote }}
+  CELERY__BROKER_URL: "amqp://{{ .Values.secrets.rabbitmq.username }}:{{ .Values.secrets.rabbitmq.password }}@{{ include "aiod-enhanced-interaction.rabbitmq.fullname" . }}:{{ .Values.rabbitmq.service.port5672 }}//"
+  CELERY__RESULT_BACKEND_URL: "redis://{{ include "aiod-enhanced-interaction.redis.fullname" . }}:{{ .Values.redis.service.port }}/0"
+{{- end }}

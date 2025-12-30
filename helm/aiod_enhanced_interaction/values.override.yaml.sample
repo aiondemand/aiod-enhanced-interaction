@@ -1,0 +1,43 @@
+secrets:
+  mongo:
+    username: "your-mongo-username"
+    password: "your-mongo-password"
+
+  milvus:
+    password: "your-milvus-root-password"
+
+  rabbitmq:
+    username: ""  # REQUIRED: RabbitMQ username
+    password: ""  # REQUIRED: RabbitMQ password
+
+  chatbot:
+    mistralKey: "your-mistral-api-key"
+
+  logfireToken: ""
+
+milvus:
+  minio:
+    accessKey: "your-minio-access-key"
+    secretKey: "your-minio-secret-key"
+
+  # Extra config files for Milvus - this will be merged into milvus.yaml
+  # Warning: The accessKeyID and secretAccessKey values specified in this YAML file needs to be the same
+  # as the 2 minio secrets specified just above
+  extraConfigFiles:
+    user.yaml: |+
+      etcd:
+        log:
+          level: warn
+      minio:
+        logLevel: warn
+        accessKeyID: "your-minio-access-key"
+        secretAccessKey: "your-minio-secret-key"
+      log:
+        level: warn
+      queryNode:
+        cache:
+          warmup: async
+      common:
+        security:
+          authorizationEnabled: true
+          defaultRootPassword: "your-milvus-root-password"

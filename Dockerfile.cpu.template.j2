@@ -1,11 +1,7 @@
 # TODO optimize ordering of Dockerfile commands
 # Especially pertaining to playwright
 
-{% if USE_GPU == "true" %}
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
-{% else %}
 FROM python:3.11
-{% endif %}
 
 ARG USERNAME=ubuntu
 ARG USER_UID=1000
@@ -13,12 +9,7 @@ ARG USER_GID=1000
 
 WORKDIR /code
 
-{% if USE_GPU == "false" %}
 RUN pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-{% else %}
-# install curl for health-checking in Pytorch image
-RUN apt-get update && apt-get install -y curl
-{% endif %}
 
 COPY ./pyproject.toml .
 RUN pip install --no-cache-dir --upgrade .

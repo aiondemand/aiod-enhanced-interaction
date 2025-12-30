@@ -5,7 +5,7 @@ from .maintenance.tasks import (
     extract_metadata_task,
     scraping_task,
 )
-from .search.tasks import search_query_task
+from .search.tasks import search_query_task, chatbot_conversation_task, chatbot_history_task
 
 
 __all__ = [
@@ -15,4 +15,6 @@ __all__ = [
     "extract_metadata_task",
     "scraping_task",
     "search_query_task",
+    "chatbot_conversation_task",
+    "chatbot_history_task",
 ]

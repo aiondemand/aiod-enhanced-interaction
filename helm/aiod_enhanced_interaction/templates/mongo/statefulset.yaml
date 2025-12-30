@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.mongo.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-headless
+  replicas: {{ .Values.mongo.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aiod-enhanced-interaction.mongo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aiod-enhanced-interaction.mongo.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: mongo
+        image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
+        imagePullPolicy: {{ .Values.mongo.image.imagePullPolicy }}
+        ports:
+        - containerPort: 27017
+          name: mongo
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: username
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: password
+        {{- if .Values.mongo.persistence.enabled }}
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+        {{- end }}
+        {{- with .Values.mongo.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+  {{- if .Values.mongo.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: mongo-data
+    spec:
+      accessModes: [ {{ .Values.mongo.persistence.accessMode | default "ReadWriteOnce" | quote }} ]
+      storageClassName: {{ .Values.mongo.persistence.storageClass | default .Values.storageClass.name }}
+      resources:
+        requests:
+          storage: {{ .Values.mongo.persistence.size }}
+  {{- end }}

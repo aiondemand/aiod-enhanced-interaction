@@ -1,0 +1,380 @@
+# Main config
+use_gpu: true
+use_llm: true
+use_chatbot: true
+
+# Application configuration
+app:
+  enabled: true # You only wish to set this to False for debugging purposes
+
+  image:
+    repository: aiod-ei
+    cpuTag: "cpu"
+    gpuTag: "gpu"
+    imagePullPolicy: IfNotPresent
+  replicas: 2
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Resource requests and limits
+  resources:
+    # TODO decrease the memory requirements once we move all the Model Embedding logic pertaining to the chatbot to a worker
+    requests:
+      memory: "1Gi"
+    limits:
+      memory: "3Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    model:
+      enabled: true
+      size: 5Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (celery workers)
+    coldData:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (celery maintenance workers)
+    milvusData:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Uses global storageClass.name if empty
+      accessMode: ReadWriteMany  # Required for multiple replicas (app, celery workers)
+
+  # Application configuration (ConfigMap values)
+  config:
+    # API configuration
+    api:
+      version: "/v2"
+
+    # Model configuration
+    model:
+      loadPath: "Alibaba-NLP/gte-large-en-v1.5"
+      batchSize: "1"
+
+    # Metadata filtering
+    metadataFiltering:
+      enforceEnums: "false"
+
+    # AIoD configuration
+    aiod:
+      url: "https://aiod-rest-api-ncsr.dev.deployai.eu/v2"
+      commaSeparatedAssetTypes: "datasets,ml_models,publications,educational_resources"
+      commaSeparatedAssetTypesForMetadataExtraction: "datasets,ml_models,publications,educational_resources"
+      windowSize: "1000"
+      testing: "true"
+
+    # Milvus configuration
+    milvus:
+      collectionPrefix: "aiod"
+      storeChunks: "true"
+
+    # MongoDB configuration
+    mongo:
+      dbName: "aiod"
+      authDbName: "admin"
+
+    # Chatbot configuration
+    chatbot:
+      mistralModel: "mistral-medium-latest"
+      topKAssetsToSearch: "10"
+      mylibraryUrl: "https://mylibrary.aiod.eu"
+
+    # Crawler configuration
+    crawler:
+      commaSeparatedWebsites: "https://aiod.eu"
+      commaSeparatedApiWebsites: "https://aiondemand.github.io/AIOD-rest-api,https://api.aiod.eu"
+      commaSeparatedBlockedWebsites: "https://auth.aiod.eu"
+
+    # Ollama configuration
+    ollama:
+      modelName: "qwen3:4b-instruct"
+      maxTokens: "1024"
+
+    # Celery configuration
+    celery:
+      searchWorkerNamePrefix: "search_worker"
+      maintenanceWorkerNamePrefix: "maintenance_worker"
+      redisLockTtlSeconds: "21600"
+
+# MongoDB configuration
+mongo:
+  image:
+    repository: mongo
+    tag: "8.0.9"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 27017
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "500Mi"
+    limits:
+      memory: "2Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
+
+# Ollama configuration
+ollama:
+  image:
+    repository: ollama/ollama
+    tag: "0.11.0"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 11434
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "2Gi"
+    limits:
+      memory: "6Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
+
+# RabbitMQ configuration
+rabbitmq:
+  image:
+    repository: rabbitmq
+    tag: "4.1-management-alpine"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port5672: 5672
+    port15672: 15672
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "1Gi"
+    limits:
+      memory: "2Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
+
+# Redis configuration
+redis:
+  image:
+    repository: redis
+    tag: "8.4.0"
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 6379
+
+  # Resource requests and limits
+  resources:
+    requests:
+      memory: "500Mi"
+    limits:
+      memory: "2Gi"
+
+  # Persistent Volume Claims configuration
+  persistence:
+    enabled: true
+    size: 200Mi
+    storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single replica, ReadWriteOnce is sufficient
+
+# Celery configuration
+celery:
+  searchWorker:
+    replicas: 2
+    concurrency: 8
+    resources:
+      requests:
+        memory: "500Mi"
+      limits:
+        memory: "3Gi"
+  maintenanceWorker:
+    replicas: 2
+    concurrency: 8
+    resources:
+      requests:
+        memory: "2Gi"
+      limits:
+        memory: "4Gi"
+  beat:
+    replicas: 1
+    resources:
+      requests:
+        memory: "500Mi"
+      limits:
+        memory: "1Gi"
+
+# Storage class
+storageClass:
+  name: aiod-storage-class
+
+################## DATABASE POPULATION ##################
+# Database population configuration for initial data setup
+# This allows you to populate Milvus and MongoDB with initial data before deploying the app
+dbPopulation:
+  image: aiod-ei:populate-db
+
+  enabled: false  # Set to true to enable database population resources
+  # PVC for storing database dumps
+  pvc:
+    size: 20Gi
+    storageClass: ""  # Uses global storageClass.name if empty
+    accessMode: ReadWriteOnce  # Single-use pod, ReadWriteOnce is sufficient
+
+  resources:
+    requests:
+      memory: 300Mi
+    limits:
+      memory: 300Mi
+
+
+################## SECRETS ##################
+# All secrets should be provided by the end user via a values file (e.g., my-values.yaml)
+# DO NOT commit actual secrets to version control
+#
+# Example usage:
+#   Create a my-values.yaml file with your secrets and configuration (see my-values.yaml.example)
+#   helm install my-release . -f my-values.yaml
+#
+# Note: Only logfireToken is optional and can be omitted.
+# All other secrets must be provided in your values file.
+secrets:
+  # MongoDB credentials
+  mongo:
+    username: ""  # REQUIRED: MongoDB root username
+    password: ""  # REQUIRED: MongoDB root password
+
+  # Milvus credentials
+  milvus:
+    user: "root"  # Default root user when authorization is enabled
+    password: ""  # REQUIRED: Set this - will be used in Milvus extraConfigFiles (user.yaml)
+
+  # RabbitMQ credentials
+  rabbitmq:
+    username: ""  # REQUIRED: RabbitMQ username
+    password: ""  # REQUIRED: RabbitMQ password
+
+  # Application secrets
+  chatbot:
+    mistralKey: "mistral_api_key"  # REQUIRED: Mistral API key for chatbot functionality
+
+  # Optional: Logfire token for logging
+  logfireToken: "logfire_token"  # Optional: Logfire token for observability
+
+################## DEPENDENCIES ##################
+
+# Milvus dependency
+milvus:
+  enabled: true  # Set to false to disable Milvus dependency
+  cluster:
+    enabled: false
+  image:
+    all:
+      tag: v2.5.5
+  # Extra config files for Milvus
+  # Use extraConfigFiles to specify additional Milvus configuration
+  # This will be merged into milvus.yaml with highest priority
+  # REQUIRED: Override this in your values file (e.g., my-values.yaml) with actual credentials
+  # See my-values.yaml for an example of the complete configuration
+  extraConfigFiles:
+    user.yaml: |+
+      etcd:
+        log:
+          level: warn
+      minio:
+        logLevel: warn
+        accessKeyID: ""  # REQUIRED: Override in your values file
+        secretAccessKey: ""  # REQUIRED: Override in your values file
+      log:
+        level: warn
+      queryNode:
+        cache:
+          warmup: async
+      common:
+        security:
+          authorizationEnabled: true
+          defaultRootPassword: ""  # REQUIRED: Override in your values file
+  service:
+    type: ClusterIP
+    port: 19530
+  log:
+    level: warn
+    persistence:
+      enabled: true
+      persistentVolumeClaim:
+        storageClass: aiod-storage-class
+        size: 5Gi
+  standalone:
+    replicas: 1
+    resources:
+      requests:
+        memory: 500Mi
+      limits:
+        memory: 8Gi
+    persistence:
+      enabled: true
+      persistentVolumeClaim:
+        storageClass: aiod-storage-class
+        size: 20Gi
+  minio:
+    enabled: true
+    mode: standalone
+    # MinIO credentials - REQUIRED: Set these values
+    # These are used in the Milvus ConfigMap for MinIO authentication
+    accessKey: ""  # REQUIRED: MinIO access key
+    secretKey: ""  # REQUIRED: MinIO secret key
+    resources:
+      requests:
+        memory: 500Mi
+      limits:
+        memory: 2Gi
+    persistence:
+      enabled: true
+      storageClass: aiod-storage-class
+      size: 50Gi
+  etcd:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        memory: 500Mi
+      limits:
+        memory: 2Gi
+    persistence:
+      enabled: true
+      storageClass: aiod-storage-class
+      size: 1Gi
+  pulsarv3:
+    enabled: false

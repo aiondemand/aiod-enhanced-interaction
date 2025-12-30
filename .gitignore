@@ -195,5 +195,12 @@ db/
 # Generated Dockerfile/compose for a particular env var combination
 # These files don't necessarily need to be omitted,
 # but for the sake of keeping the reposiroty clean we may as well ignore them
-Dockerfile.final
+Dockerfile.cpu.final
+Dockerfile.gpu.final
 docker-compose.final.yml
+
+
+# Helm Chart dependencies
+/helm/aiod_enhanced_interaction/charts/*
+!/helm/aiod_enhanced_interaction/charts/*.tgz
+/helm/aiod_enhanced_interaction/values.override.yaml

@@ -32,9 +32,8 @@ celery_app.conf.update(
     # Task routing - route tasks to appropriate queues
     task_routes={
         "search.*": {"queue": "search"},
-        "maintenance.*": {"queue": "maintenance"},
+        "maintenance.*": {"queue": "maintenance", "delivery_mode": "transient"},
     },
-    worker_prefetch_multiplier=1,  # Prefetch one task at a time for better load balancing
     result_expires=86400,
     worker_max_tasks_per_child=50,  # Restart worker after 50 tasks to prevent memory leaks
     worker_disable_rate_limits=False,

@@ -12,6 +12,8 @@ from app.services.database import init_mongo_client
 from app.services.embedding_store import MilvusEmbeddingStore
 from app.services.helper import utc_now
 from app.services.inference.model import AiModel
+from app.services.logging import setup_logger
+from app.services.metadata_filtering.base import setup_logfire
 from app.services.resilience import LocalServiceUnavailableException
 from app.celery_tasks.maintenance.jobs.clean_mongo_job import clean_mongo_database
 from app.celery_tasks.maintenance.jobs.clean_miluvs_job import delete_asset_embeddings
@@ -22,6 +24,8 @@ from app.celery_tasks.maintenance.jobs.new_embeddings_job import compute_embeddi
 
 @worker_process_init.connect
 def initialize_each_maintenance_worker_child_process(*args, **kwargs) -> None:
+    setup_logfire()
+    setup_logger()
     asyncio.run(init_mongo_client())
 
 
@@ -43,7 +47,7 @@ def _embedding_start_message(kwargs: dict) -> str:
     return "Scheduled task for computing asset embeddings has started"
 
 
-@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
+@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False, ignore_result=True)
 @maintenance_task(
     log_prefix="[RECURRING AIOD UPDATE]",
     task_description="embedding task",
@@ -61,7 +65,7 @@ def compute_embeddings_task(self, first_invocation: bool = False, **kwargs) -> d
     return {"first_invocation": first_invocation}
 
 
-@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
+@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False, ignore_result=True)
 @maintenance_task(
     log_prefix="[RECURRING MILVUS DELETE]",
     task_description="Milvus garbage collection task",
@@ -80,7 +84,7 @@ def delete_embeddings_task(self, **kwargs) -> dict:
     return {}
 
 
-@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
+@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False, ignore_result=True)
 @maintenance_task(
     log_prefix="[RECURRING MONGODB DELETE]",
     task_description="MongoDB cleanup task",
@@ -91,7 +95,7 @@ def mongo_cleanup_task(self, **kwargs) -> dict:
     return {}
 
 
-@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
+@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False, ignore_result=True)
 @maintenance_task(
     log_prefix="[RECURRING METADATA EXTRACTION]",
     task_description="metadata extraction task",
@@ -106,7 +110,7 @@ def extract_metadata_task(self, **kwargs) -> dict:
     return {}
 
 
-@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False)
+@celery_app.task(bind=True, acks_late=False, task_reject_on_worker_lost=False, ignore_result=True)
 @maintenance_task(
     log_prefix="[RECURRING SCRAPING]",
     task_description="scraping task",

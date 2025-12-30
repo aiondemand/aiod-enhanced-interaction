@@ -1,0 +1,16 @@
+{{- if .Values.use_llm }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiod-enhanced-interaction.ollama.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.ollama.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.ollama.service.type }}
+  ports:
+  - port: {{ .Values.ollama.service.port }}
+    targetPort: 11434
+    name: ollama
+  selector:
+    {{- include "aiod-enhanced-interaction.ollama.selectorLabels" . | nindent 4 }}
+{{- end }}

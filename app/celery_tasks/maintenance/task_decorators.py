@@ -95,7 +95,8 @@ def maintenance_task(
                         f"{log_prefix} The above error has been encountered in the {task_description}. "
                         "Task will be retried."
                     )
-                    raise  # Re-raise to trigger Celery retry
+                    task_self = args[0]
+                    raise task_self.retry(exc=e)  # Re-raise to trigger Celery retry
             finally:
                 # Run cleanup if provided
                 if cleanup_func:

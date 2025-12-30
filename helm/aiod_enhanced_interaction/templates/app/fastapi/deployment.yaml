@@ -1,0 +1,158 @@
+{{- if .Values.app.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aiod-enhanced-interaction.app.fullname" . }}
+  labels:
+    {{- include "aiod-enhanced-interaction.app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aiod-enhanced-interaction.app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aiod-enhanced-interaction.app.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+      # Wait for all dependencies that Celery search worker needs
+      # Wait for MongoDB to be ready
+      - name: wait-for-mongo
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z {{ include "aiod-enhanced-interaction.mongo.fullname" . }} {{ .Values.mongo.service.port }}; do
+            echo "Waiting for MongoDB..."
+            sleep 2
+          done
+          echo "MongoDB is ready!"
+      # Wait for Redis to be ready
+      - name: wait-for-redis
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z {{ include "aiod-enhanced-interaction.redis.fullname" . }} {{ .Values.redis.service.port }}; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          echo "Redis is ready!"
+      # Wait for Ollama to be ready (if enabled)
+      {{- if .Values.use_llm }}
+      - name: wait-for-ollama
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z {{ include "aiod-enhanced-interaction.ollama.fullname" . }} {{ .Values.ollama.service.port }}; do
+            echo "Waiting for Ollama..."
+            sleep 2
+          done
+          echo "Ollama is ready!"
+      {{- end }}
+      # Wait for Milvus to be ready (if enabled)
+      {{- if .Values.milvus.enabled }}
+      - name: wait-for-milvus
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z {{ include "aiod-enhanced-interaction.milvus.fullname" . }} {{ .Values.milvus.service.port }}; do
+            echo "Waiting for Milvus..."
+            sleep 2
+          done
+          echo "Milvus is ready!"
+      {{- end }}
+      # Wait for RabbitMQ to be ready (checked last)
+      - name: wait-for-rabbitmq
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z {{ include "aiod-enhanced-interaction.rabbitmq.fullname" . }} {{ .Values.rabbitmq.service.port5672 }}; do
+            echo "Waiting for RabbitMQ..."
+            sleep 2
+          done
+          echo "RabbitMQ is ready!"
+      # Wait for Celery search worker and beat to start after all dependencies are ready
+      - name: wait-for-celery-workers
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          echo "All dependencies are ready. Waiting for Celery search worker and beat to start..."
+          sleep 10
+          echo "Celery search worker and beat should be ready!"
+      containers:
+      - name: app
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.cpuTag }}"
+        imagePullPolicy: {{ .Values.app.image.imagePullPolicy }}
+        ports:
+        - containerPort: 80
+          name: http
+        # Import entire ConfigMap as environment variables
+        envFrom:
+        - configMapRef:
+            name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-config
+        # Import entire app Secret as environment variables
+        - secretRef:
+            name: {{ include "aiod-enhanced-interaction.app.fullname" . }}-secret
+            optional: false
+        env:
+        # MongoDB credentials (kept as secrets)
+        - name: MONGO__USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: username
+        - name: MONGO__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "aiod-enhanced-interaction.mongo.fullname" . }}-secret
+              key: password
+        {{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /data
+        {{- end }}
+        command:
+        - /bin/sh
+        - -c
+        - uvicorn app.main:app --host 0.0.0.0 --port 80
+        {{- with .Values.app.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+      {{- if and (not .Values.milvus.enabled) .Values.app.persistence.milvusData.enabled }}
+      volumes:
+      - name: milvus-data
+        persistentVolumeClaim:
+          claimName: {{ include "aiod-enhanced-interaction.app.fullname" . }}-milvus-data-pvc
+      {{- end }}
+{{- end }}
