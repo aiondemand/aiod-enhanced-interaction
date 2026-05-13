@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import asyncio
 from typing import Callable, Awaitable
+from urllib.parse import urljoin
 
 import numpy as np
 import json
@@ -140,6 +141,39 @@ talk2aiod = MISTRAL_CLIENT.beta.agents.create(
 )
 
 
+def generate_asset_url(asset_id: str, asset_type: SupportedAssetType) -> str:
+    if asset_type == SupportedAssetType.PROJECTS:
+        return urljoin(str(settings.CHATBOT.AIOD_WEBSITE_URL), f"project/{asset_id}")
+    elif asset_type in (SupportedAssetType.EVENTS, SupportedAssetType.NEWS):
+        return urljoin(str(settings.CHATBOT.AIOD_WEBSITE_URL), f"media-hub/{asset_id}")
+    elif asset_type == SupportedAssetType.ORGANISATIONS:
+        org = get_aiod_asset(asset_id, asset_type)
+
+        if org is not None:
+            websites = [link for link in org.get("relevant_link", []) if len(link) > 0]
+            if len(websites) > 0:
+                return websites[0]
+
+        return str(settings.CHATBOT.AI_ECOSYSTEM_URL)
+    else:
+        _asset_mapping = {
+            SupportedAssetType.DATASETS: "Dataset",
+            SupportedAssetType.ML_MODELS: "AIModel",
+            SupportedAssetType.PUBLICATIONS: "Publication",
+            SupportedAssetType.CASE_STUDIES: r"Success%20stories",
+            SupportedAssetType.EDUCATIONAL_RESOURCES: r"Educational%20resource",
+            SupportedAssetType.EXPERIMENTS: "Experiment",
+            SupportedAssetType.SERVICES: "Service",
+            SupportedAssetType.COMPUTATIONAL_ASSETS: r"Computational%20asset",
+            SupportedAssetType.RESOURCE_BUNDLES: r"Resource%20Bundle",
+        }
+
+        return urljoin(
+            str(settings.CHATBOT.MYLIBRARY_URL),
+            f"resources/{asset_id}?category={_asset_mapping[asset_type]}",
+        )
+
+
 # TODO decide if we can use the mistral cloud to store conversations or have to build our own solution
 async def start_conversation(user_query: str) -> tuple[str, str | None]:
     if await moderate_input(user_query):
@@ -209,9 +243,7 @@ def _asset_search(query: str, asset: str) -> str:
                 continue
 
             try:
-                url = settings.CHATBOT.generate_mylibrary_asset_url(
-                    asset_id, SupportedAssetType(mapped_asset)
-                )
+                url = generate_asset_url(asset_id, SupportedAssetType(mapped_asset))
                 if url is None:
                     url = content["same_as"]
                 new_addition = (

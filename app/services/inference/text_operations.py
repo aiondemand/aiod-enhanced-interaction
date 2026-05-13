@@ -30,12 +30,30 @@ class ConvertJsonToString:
         "prerequisite",
         "target_audience",
     ]
+
     experiment_flat_fields = [
         "experimental_workflow",
         "execution_settings",
         "reproducibility_explanation",
     ]
+
     service_flat_fields = ["slogan", "terms_of_service"]
+
+    project_flat_fields = ["total_cost_euros"]
+
+    event_flat_fields = ["schedule", "status", "mode"]
+
+    news_flat_fields = ["headline", "string"]
+    news_array_fields = ["category"]
+
+    organization_flat_fields = [
+        "date_founded",
+        "legal_name",
+        "ai_relevance",
+        "number_of_employees",
+        "turnover",
+        "type",
+    ]
 
     @classmethod
     def stringify(cls, data: dict) -> str:
@@ -125,22 +143,33 @@ class ConvertJsonToString:
     def _extract_relevant_fields(cls, data: dict, asset_type: SupportedAssetType) -> dict:
         new_object = {}
 
-        flat_fields = cls.orig_flat_fields
+        flat_fields = cls.orig_flat_fields.copy()
         if asset_type == SupportedAssetType.EDUCATIONAL_RESOURCES:
             flat_fields.extend(cls.educational_flat_fields)
         elif asset_type == SupportedAssetType.EXPERIMENTS:
             flat_fields.extend(cls.experiment_flat_fields)
         elif asset_type == SupportedAssetType.SERVICES:
             flat_fields.extend(cls.service_flat_fields)
+        elif asset_type == SupportedAssetType.PROJECTS:
+            flat_fields.extend(cls.project_flat_fields)
+        elif asset_type == SupportedAssetType.EVENTS:
+            flat_fields.extend(cls.event_flat_fields)
+        elif asset_type == SupportedAssetType.NEWS:
+            flat_fields.extend(cls.news_flat_fields)
+        elif asset_type == SupportedAssetType.ORGANISATIONS:
+            flat_fields.extend(cls.organization_flat_fields)
 
         for field_name in flat_fields:
             x = data.get(field_name, None)
             if x is not None:
                 new_object[field_name] = x
 
-        array_fields = cls.orig_array_fields
+        array_fields = cls.orig_array_fields.copy()
         if asset_type == SupportedAssetType.EDUCATIONAL_RESOURCES:
             array_fields.extend(cls.educational_array_fields)
+        elif asset_type == SupportedAssetType.NEWS:
+            array_fields.extend(cls.news_array_fields)
+
         for field_name in array_fields:
             x = data.get(field_name, None)
             if x is not None and len(x) > 0:
@@ -196,6 +225,13 @@ class ConvertJsonToString:
             size = data.get("size", None)
             if size is not None and "unit" in size and "value" in size:
                 new_object["size"] = f"{size['value']} {size['unit']}"
+
+        # Location
+        location = data.get("location", None)
+        if location is not None and len(location) > 0 and type(location[0]) == dict:
+            address = location[0].get("address", None)
+            if address is not None and len(address) > 0 and type(address) == dict:
+                new_object["address"] = ", ".join(list(address.values()))
 
         return new_object
 

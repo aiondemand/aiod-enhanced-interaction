@@ -237,6 +237,8 @@ class ChatbotConfig(BaseModel):
     MISTRAL_MODEL: str = Field("mistral-medium-latest")
     TOP_K_ASSETS_TO_SEARCH: int = Field(10, gt=0)
     MYLIBRARY_URL: AnyUrl = Field(...)
+    AIOD_WEBSITE_URL: AnyUrl = Field(...)
+    AI_ECOSYSTEM_URL: AnyUrl = Field(...)
 
     @property
     def WEBSITE_COLLECTION_NAME(self) -> str:
@@ -250,24 +252,6 @@ class ChatbotConfig(BaseModel):
     @classmethod
     def str_to_bool(cls, value: str | bool) -> bool:
         return Validators.validate_bool(value)
-
-    def generate_mylibrary_asset_url(self, asset_id: str, asset_type: SupportedAssetType) -> str:
-        _mapping = {
-            SupportedAssetType.DATASETS: "Dataset",
-            SupportedAssetType.ML_MODELS: "AIModel",
-            SupportedAssetType.PUBLICATIONS: "Publication",
-            SupportedAssetType.CASE_STUDIES: r"Success%stories",
-            SupportedAssetType.EDUCATIONAL_RESOURCES: r"Educational%20resource",
-            SupportedAssetType.EXPERIMENTS: "Experiment",
-            SupportedAssetType.SERVICES: "Service",
-            SupportedAssetType.COMPUTATIONAL_ASSETS: r"Computational%20asset",
-            SupportedAssetType.RESOURCE_BUNDLES: r"Resource%20Bundle",
-        }
-
-        return urljoin(
-            str(settings.CHATBOT.MYLIBRARY_URL),
-            f"resources/{asset_id}?category={_mapping[asset_type]}",
-        )
 
 
 class Settings(BaseSettings):

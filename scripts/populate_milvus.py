@@ -28,6 +28,14 @@ VALID_ASSET_TYPES = [
     "educational_resources",
     "experiments",
     "services",
+    "computational_assets",
+    "resource_bundles",
+    "projects",
+    "contacts",
+    "events",
+    "news",
+    "organisations",
+    "persons",
 ]
 
 # Buffer to add to VARCHAR max_length as a precaution
