@@ -59,6 +59,9 @@ async def asset_search(query: str, asset: str) -> str:
     logging.info(
         f"Tool 'asset_search' has been called with a query: '{query}' and an asset: '{asset}'"
     )
+    if len(query) == 0:
+        query = asset
+
     return await asyncio.to_thread(_asset_search, query, asset)
 
 
@@ -147,13 +150,14 @@ def generate_asset_url(asset_id: str, asset_type: SupportedAssetType) -> str:
     elif asset_type in (SupportedAssetType.EVENTS, SupportedAssetType.NEWS):
         return urljoin(str(settings.CHATBOT.AIOD_WEBSITE_URL), f"media-hub/{asset_id}")
     elif asset_type == SupportedAssetType.ORGANISATIONS:
-        org = get_aiod_asset(asset_id, asset_type)
+        # org = get_aiod_asset(asset_id, asset_type)
 
-        if org is not None:
-            websites = [link for link in org.get("relevant_link", []) if len(link) > 0]
-            if len(websites) > 0:
-                return websites[0]
+        # if org is not None:
+        #     websites = [link for link in org.get("relevant_link", []) if len(link) > 0]
+        #     if len(websites) > 0:
+        #         return websites[0]
 
+        # It was decided to always return AI Ecosystem URL when talking about any Organization
         return str(settings.CHATBOT.AI_ECOSYSTEM_URL)
     else:
         _asset_mapping = {

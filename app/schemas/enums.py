@@ -30,7 +30,6 @@ class SupportedAssetType(BaseAssetType, Enum):
     SERVICES = "services"
     COMPUTATIONAL_ASSETS = "computational_assets"
     RESOURCE_BUNDLES = "resource_bundles"
-
     PROJECTS = "projects"
     EVENTS = "events"
     NEWS = "news"
@@ -49,7 +48,6 @@ class AssetTypeQueryParam(BaseAssetType, Enum):
     SERVICES = "services"
     COMPUTATIONAL_ASSETS = "computational_assets"
     RESOURCE_BUNDLES = "resource_bundles"
-
     PROJECTS = "projects"
     EVENTS = "events"
     NEWS = "news"
