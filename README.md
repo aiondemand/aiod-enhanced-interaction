@@ -115,7 +115,10 @@ In this file you find the following ENV variables:
     - `CHATBOT__MISTRAL_KEY`: API key required to access the Mistral AI API for chatbot functionality
     - `CHATBOT__MISTRAL_MODEL`: Name of the Mistral AI model to use for chatbot responses
     - `CHATBOT__TOP_K_ASSETS_TO_SEARCH`: Number of top assets to retrieve when searching for assets in chatbot responses
-    - `CHATBOT__MYLIBRARY_URL`: Base URL for the MyLibrary service used to generate links to AIoD assets
+    - `CHATBOT__MYLIBRARY_URL`: Base URL for the MyLibrary service used to generate links to main AIoD assets
+    - `CHATBOT__AIOD_WEBSITE_URL`: Base URL for the AIoD Website used to generate links to other AIoD assets (projects, news, events, ...)
+    - `CHATBOT__AI_ECOSYSTEM_URL`: URL for the AI Ecosystem website we use as a default redirect if a certain organization doesn't provide their own website
+
 - AIoD config (`AIOD__*`):
     - `AIOD__URL`: URL of the AIoD API we use to retrieve information about the assets and assets themselves.
     - `AIOD__COMMA_SEPARATED_ASSET_TYPES`: Comma-separated list of values representing all the asset types we wish to process
