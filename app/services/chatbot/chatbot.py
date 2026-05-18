@@ -259,11 +259,12 @@ def _asset_search(query: str, asset: str) -> str:
                 if name is None or description is None:
                     continue
 
+                separator = "\n===============\n\n"
                 name_str = f"name: {name}"
                 url_str = f", url: {url}" if url else ""
-                content_str = f"\ncontent: {description}\n\n"
+                content_str = f"\ncontent: {description}\n"
 
-                new_addition = name_str + url_str + content_str
+                new_addition = name_str + url_str + content_str + separator
 
                 result += new_addition
                 satisfactory_docs += 1
