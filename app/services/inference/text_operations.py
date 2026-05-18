@@ -236,7 +236,9 @@ class ConvertJsonToString:
         return new_object
 
     @classmethod
-    def _get_text_like_field(cls, data: dict, field: str) -> str | None:
+    def _get_text_like_field(
+        cls, data: dict, field: str, return_plain_when_both_present: bool = False
+    ) -> str | None:
         # TODO: Simplify this logic
         description = data.get(field, None)
         if description is None:
@@ -248,7 +250,10 @@ class ConvertJsonToString:
             html_descr = re.sub(r"<[^>]*>", " ", html_descr)
 
         if plain_descr is not None and html_descr is not None:
-            return f"{plain_descr} {html_descr}"
+            if return_plain_when_both_present:
+                return plain_descr
+            else:
+                return f"{plain_descr} {html_descr}"
         if plain_descr is not None:
             return plain_descr
         if html_descr is not None:

@@ -16,6 +16,7 @@ from app.schemas.enums import SupportedAssetType
 from app.services.aiod import get_aiod_asset
 from app.services.chatbot.prompt_library import *
 from app.services.inference.model import AiModel
+from app.services.inference.text_operations import ConvertJsonToString
 from app.config import settings
 
 # Github issue: https://github.com/aiondemand/aiod-enhanced-interaction/issues/127
@@ -249,11 +250,21 @@ def _asset_search(query: str, asset: str) -> str:
             try:
                 url = generate_asset_url(asset_id, SupportedAssetType(mapped_asset))
                 if url is None:
-                    url = content["same_as"]
-                new_addition = (
-                    f"name: {content['name']}, publication date:{content['date_published']}, url: {url}"  # type: ignore[index]
-                    f"\ncontent: {content['description']['plain']}\n"  # type: ignore[index]
+                    url = content.get("same_as", None)
+
+                name = content.get("name", None)
+                description = ConvertJsonToString._get_text_like_field(
+                    content, "description", return_plain_when_both_present=True
                 )
+                if name is None or description is None:
+                    continue
+
+                name_str = f"name: {name}"
+                url_str = f", url: {url}" if url else ""
+                content_str = f"\ncontent: {description}\n\n"
+
+                new_addition = name_str + url_str + content_str
+
                 result += new_addition
                 satisfactory_docs += 1
                 if satisfactory_docs == settings.CHATBOT.TOP_K_ASSETS_TO_SEARCH:
